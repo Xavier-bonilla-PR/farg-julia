@@ -258,3 +258,16 @@ make_bottom_up_codelet_types() = [CodeletType(n) for n in BOTTOM_UP_CODELET_TYPE
 codelet_type_display(ct::CodeletType) =
     replace(replace(String(ct.name), "_scout_whole_string" => "-scout:whole-string"),
             "_" => "-")
+
+"""The codelet-type registry. Procedures are attached by the codelet layers as
+they are ported, mirroring set-codelet-procedure in the Scheme."""
+const CODELET_TYPES = Dict{Symbol,CodeletType}()
+
+function register_codelet_type!(name::Symbol, proc)
+    ct = get!(CODELET_TYPES, name, CodeletType(name))
+    ct.codelet_proc = proc
+    return ct
+end
+
+"""Run a codelet: apply its type's procedure to its arguments."""
+run_codelet!(ctx, c::Codelet) = c.codelet_type.codelet_proc(ctx, c.arguments)

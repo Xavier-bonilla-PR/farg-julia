@@ -307,3 +307,30 @@ function distinguishing_descriptor(net::Slipnet, g::Group, descriptor::Node)
     end
     return true
 end
+
+"""`(break-group group)` — recursively breaks any enclosing group first, then
+detaches this one and the bonds incident on it. The bridge handling is added
+once the bridge codelets are ported."""
+function break_group!(g::Group, net::Slipnet)
+    s = g.string
+    g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net)
+    i = findfirst(x -> x === g, s.groups)
+    i === nothing || deleteat!(s.groups, i)
+    for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
+                        (g.right_string_pos, s.right_edge_groups))
+        j = findfirst(x -> x === g, list[pos + 1])
+        j === nothing || deleteat!(list[pos + 1], j)
+    end
+    for b in incident_bonds(g)
+        break_bond!(b::Bond)
+    end
+    for o in g.constituent_objects
+        o.enclosing_group = nothing
+    end
+    for b in g.constituent_bonds
+        b.enclosing_group = nothing
+    end
+    spans_whole_string(g) ||
+        delete_invalid_string_position_middle_descriptions!(s, net)
+    return g
+end

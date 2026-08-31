@@ -27,6 +27,8 @@ mutable struct WorkspaceString
     # groups whose left / right edge sits at each position, newest first
     left_edge_groups::Vector{Vector{WSObject}}
     right_edge_groups::Vector{Vector{WSObject}}
+    # proposed (not yet built) bonds, keyed by from/to object id
+    proposed_bonds::Dict{Tuple{Int,Int},Vector{Any}}
     print_name::String
     translated::Bool
     average_intra_string_unhappiness::Int
@@ -406,6 +408,7 @@ function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractS
     n = length(cats)
     s = WorkspaceString(string_type, cats, WSObject[], WSObject[], Any[],
                         [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
+                        Dict{Tuple{Int,Int},Vector{Any}}(),
                         String(sym), false, 0, 0)
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],

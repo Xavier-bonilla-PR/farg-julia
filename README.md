@@ -224,7 +224,8 @@ CPython-compatible MT19937 the Julia side uses. Each layer of the port has a
 pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
-bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges coderack
+bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges \
+                              coderack bondcodelets
 ```
 
 | layer | Julia | verified |
@@ -237,8 +238,21 @@ bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges code
 | groups (and the image structure they build) | `groups.jl`, `images.jl` | 230 lines |
 | bridges (horizontal and vertical) | `bridges.jl` | 304 lines |
 | coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
-| codelet procedures (the scouts and builders) | not yet ported | |
+| bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
+| description, group, bridge and rule codelets | not yet ported | |
 | themes, temporal trace, episodic memory, justification | not yet ported | |
+
+### How much is done
+
+The nine verified layers cover roughly 4,500 of the ~16,000 lines of Metacat's
+non-graphics Scheme. What remains for a run that reaches an answer is the other
+codelet procedures (description, group, bridge, rule), plus `rules.ss`,
+`answers.ss`, `themes.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and
+`justify.ss` — about 11,300 lines. `themes.ss` is on that critical path rather
+than optional: every workspace structure's strength is weighted by its thematic
+compatibility, which is 0 only while no themes exist. The probes here hold that
+condition, so the layers agree; a real run creates themes as soon as bridges
+start boosting them.
 
 Three things about Metacat's Scheme turned out to be load-bearing and are easy
 to lose in a translation:
