@@ -224,7 +224,7 @@ CPython-compatible MT19937 the Julia side uses. Each layer of the port has a
 pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
-bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges
+bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges coderack
 ```
 
 | layer | Julia | verified |
@@ -236,7 +236,8 @@ bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges
 | bonds | `bonds.jl` | 92 lines |
 | groups (and the image structure they build) | `groups.jl`, `images.jl` | 230 lines |
 | bridges (horizontal and vertical) | `bridges.jl` | 304 lines |
-| coderack and codelets | not yet ported | |
+| coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
+| codelet procedures (the scouts and builders) | not yet ported | |
 | themes, temporal trace, episodic memory, justification | not yet ported | |
 
 Three things about Metacat's Scheme turned out to be load-bearing and are easy
