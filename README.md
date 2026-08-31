@@ -175,11 +175,18 @@ untouched:
 
 ## Pathological problems
 
-`axbxcx : axbxdx :: pxqxrx : ?` and `abc : abd :: aababc : ?` do not settle in
-any reasonable time in **either** implementation — they are not port bugs. Both
-run identically codelet for codelet (that is what `bench/verify.py` checks for
-them); they simply need an enormous number of codelets before the rule
-translator fires at a low enough temperature.
+`axbxcx : axbxdx :: pxqxrx : ?` does not settle in any reasonable time in
+**either** implementation — both were left running well past ten minutes. That
+is a property of this Copycat variant, not a port bug: the two run identically
+codelet for codelet, which is what `bench/verify.py` checks for them instead of
+comparing final answers. `abc : abd :: aababc : ?` is verified the same way
+because it is erratic rather than uniformly slow — it finishes in a few hundred
+codelets on some seeds and runs long on others.
+
+Several problems are merely expensive rather than pathological, and are worth
+knowing about before pointing the benchmark at them: `abc : abd :: wyz : ?` and
+`abc : abd :: glz : ?` average hundreds of thousands of codelets per trial, so
+the Python reference takes minutes on them where the Julia port takes seconds.
 
 ## Licence
 
