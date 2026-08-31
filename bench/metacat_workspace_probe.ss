@@ -78,3 +78,5 @@
 (probe-problem 'abc 'cba 'pqrs)
 (probe-problem 'a 'b 'xyz)
 (probe-problem 'abc 'abd 'mrrjjj)
+(probe-problem 'abcde 'abcdf 'pqrst)
+(probe-problem 'abcdefg 'abcdefh 'ijklmno)

@@ -224,15 +224,18 @@ CPython-compatible MT19937 the Julia side uses. Each layer of the port has a
 pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
-bash bench/verify_metacat.sh util slipnet workspace
+bash bench/verify_metacat.sh util slipnet workspace cm bonds groups
 ```
 
 | layer | Julia | verified |
 |---|---|---|
 | numeric tower, stochastic utilities, temperature formulas | `schemenum.jl`, `utilities.jl` | 264 lines |
 | slipnet: 59 nodes, 202 links, activation dynamics | `slipnet.jl` | 538 lines |
-| workspace strings, letters, descriptions | `workspace.jl` | 206 lines |
-| bonds, groups, bridges, concept mappings | not yet ported | |
+| workspace strings, letters, descriptions | `workspace.jl` | 378 lines |
+| concept mappings | `concept_mappings.jl` | 192 lines |
+| bonds | `bonds.jl` | 92 lines |
+| groups (and the image structure they build) | `groups.jl`, `images.jl` | 230 lines |
+| bridges | not yet ported | |
 | coderack and codelets | not yet ported | |
 | themes, temporal trace, episodic memory, justification | not yet ported | |
 

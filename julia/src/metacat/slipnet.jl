@@ -483,3 +483,15 @@ function update_slipnet_activations!(net::Slipnet, rng::PyRandom)
     end
     return net
 end
+
+"""`(relationship-between nodes)` — the single label relating every adjacent
+pair, or nothing if they differ or any is missing."""
+function relationship_between(nodes, identity_node::Node)
+    any(n -> n === nothing, nodes) && return nothing
+    length(nodes) < 2 && return nothing
+    relations = [label_between(nodes[i], nodes[i + 1], identity_node)
+                 for i in 1:(length(nodes) - 1)]
+    any(r -> r === nothing, relations) && return nothing
+    all(r -> r === relations[1], relations) || return nothing
+    return relations[1]
+end

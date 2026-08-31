@@ -24,6 +24,9 @@ mutable struct WorkspaceString
     letters::Vector{WSObject}
     groups::Vector{WSObject}
     bonds::Vector{Any}
+    # groups whose left / right edge sits at each position, newest first
+    left_edge_groups::Vector{Vector{WSObject}}
+    right_edge_groups::Vector{Vector{WSObject}}
     print_name::String
     translated::Bool
     average_intra_string_unhappiness::Int
@@ -82,10 +85,35 @@ string_length(s::WorkspaceString) = length(s.letter_categories)
 leftmost_in_string(o::Letter) = o.string_pos == 0
 rightmost_in_string(o::Letter) = o.string_pos == string_length(o.string) - 1
 spans_whole_string(o::Letter) = string_length(o.string) == 1
-function middle_in_string(o::Letter)
-    n = string_length(o.string)
-    return isodd(n) && o.string_pos == struncate(sdiv(n, 2))
+"""`(middle-in-string?)` — NB this is NOT positional arithmetic. An object is
+"in the middle" when its ungrouped left neighbour is the string's leftmost
+object and its ungrouped right neighbour is its rightmost, which for an
+ungrouped string means only the centre of a three-object string qualifies.
+Shared by letters and groups."""
+function middle_in_string(o::WSObject)
+    left_neighbor = ungrouped_left_neighbor(o)
+    right_neighbor = ungrouped_right_neighbor(o)
+    left_neighbor === nothing && return false
+    right_neighbor === nothing && return false
+    return leftmost_in_string(left_neighbor::WSObject) &&
+           rightmost_in_string(right_neighbor::WSObject)
 end
+
+"""A neighbour counts as ungrouped when it has no enclosing group, or its
+enclosing group already nests this object."""
+function ungrouped_neighbor(o::WSObject, neighbors)
+    for n in neighbors
+        g = n.enclosing_group
+        if g === nothing || nested_member(g::WSObject, o)
+            return n
+        end
+    end
+    return nothing
+end
+ungrouped_left_neighbor(o::WSObject) = ungrouped_neighbor(o, all_left_neighbors(o))
+ungrouped_right_neighbor(o::WSObject) = ungrouped_neighbor(o, all_right_neighbors(o))
+
+nested_member(::Letter, ::WSObject) = false
 
 # --- descriptions -----------------------------------------------------------
 
@@ -196,16 +224,22 @@ function incident_bonds(o::WSObject)
     return bs
 end
 
-"""`(get-all-left-neighbors)` — the letter to the left, plus any groups whose
-right edge is there. Groups are not ported yet, so only the letter."""
+"""`(get-all-left-neighbors)` — the letter immediately to the left, plus any
+groups whose RIGHT edge sits at that position."""
 function all_left_neighbors(o::WSObject)
     leftmost_in_string(o) && return WSObject[]
-    return WSObject[o.string.letters[left_string_pos(o)]]
+    left_pos = left_string_pos(o) - 1
+    return WSObject[o.string.letters[left_pos + 1],
+                    o.string.right_edge_groups[left_pos + 1]...]
 end
 
+"""`(get-all-right-neighbors)` — the letter immediately to the right, plus any
+groups whose LEFT edge sits at that position."""
 function all_right_neighbors(o::WSObject)
     rightmost_in_string(o) && return WSObject[]
-    return WSObject[o.string.letters[right_string_pos(o) + 2]]
+    right_pos = right_string_pos(o) + 1
+    return WSObject[o.string.letters[right_pos + 1],
+                    o.string.left_edge_groups[right_pos + 1]...]
 end
 
 function choose_left_neighbor(rng::PyRandom, o::WSObject)
@@ -351,7 +385,9 @@ end
 """`(make-workspace-string ...)`."""
 function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractString)
     cats = [net[Symbol("plato_", c)] for c in sym]
+    n = length(cats)
     s = WorkspaceString(string_type, cats, WSObject[], WSObject[], Any[],
+                        [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
                         String(sym), false, 0, 0)
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],
@@ -399,7 +435,12 @@ function update_workspace_values!(strings::Vector{WorkspaceString},
                                   rng::Union{Nothing,PyRandom} = nothing,
                                   net::Union{Nothing,Slipnet} = nothing)
     if rng !== nothing && net !== nothing
+        # (tell *workspace* 'get-structures) is bonds, then groups, then
+        # bridges and rules, each gathered across all strings in turn.
         for s in strings, structure in s.bonds
+            update_structure_strength!(structure, net::Slipnet, rng::PyRandom)
+        end
+        for s in strings, structure in s.groups
             update_structure_strength!(structure, net::Slipnet, rng::PyRandom)
         end
     end
