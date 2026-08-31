@@ -91,7 +91,26 @@ The harness asserts that both implementations executed the same number of
 codelets and produced the same answers before it reports any timing, so a
 mismatch fails loudly rather than producing a meaningless speedup number.
 
-RESULTS_PLACEHOLDER
+Measured on Intel(R) Xeon(R) Processor @ 2.10GHz (4 cores), CPython 3.11.15, julia version 1.10.9, 10 iterations per problem, seeds 1, 2, 3. Both implementations execute the identical codelet sequence, so the codelet count is shared.
+
+| problem | codelets | Python | Julia | speedup | Python w/ logging |
+|---|---:|---:|---:|---:|---:|
+| `abc : abd :: ijk : ?` | 17,004 | 0.54 s | 0.143 s | **4.8x** | 0.87 s |
+| `abc : abd :: iijjkk : ?` | 47,229 | 1.83 s | 0.214 s | **9.2x** | 3.08 s |
+| `abc : abd :: mrrjjj : ?` | 148,415 | 6.49 s | 0.566 s | **11.3x** | 9.47 s |
+| `abc : abd :: ppqqrr : ?` | 47,229 | 1.76 s | 0.235 s | **7.5x** | 3.13 s |
+| `abc : abd :: xyz : ?` | 132,306 | 3.77 s | 0.363 s | **10.4x** | 6.40 s |
+| `abc : abd :: kji : ?` | 38,767 | 1.31 s | 0.312 s | **4.0x** | 2.08 s |
+| `abcd : abcde :: ijkl : ?` | 38,557 | 1.33 s | 0.422 s | **3.3x** | 1.99 s |
+| **total** | **1,408,529** | **51.07 s** | **6.77 s** | **7.5x** | **81.07 s** |
+
+Throughput: **27,582 codelets/s** in Python vs **208,090 codelets/s** in Julia.
+
+Caveats worth stating plainly:
+
+- The Julia figures exclude interpreter startup and JIT compilation (both runners take a `--warmup` flag that discards a throwaway trial first). A cold `julia ... bench/run_jl.jl` process averages **5.1 s** wall clock here, most of it compilation, against **3.1 s** for the equivalent Python process. For a single small problem the Python process still finishes first; the Julia advantage is in the work itself, and it pays for its startup within roughly the first second of search.
+- The "Python w/ logging" column is what `main.py` actually does - it calls `logging.basicConfig(level=INFO)`, so every `logging.info` in the codelets formats a string and writes it to disk. That alone costs about 59% on top of the Python runtime. The main comparison disables it, which is the fairer measurement of the algorithm.
+- Copycat is a stochastic search, so absolute times depend heavily on the problem and seed; the per-problem spread above is the point, not any single number.
 
 ## Notes on the translation
 
