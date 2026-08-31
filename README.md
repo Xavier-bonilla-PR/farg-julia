@@ -1,5 +1,10 @@
 # Copycat in Julia
 
+> **Picking this up in a new session?** Read [`CONTINUE.md`](CONTINUE.md) first.
+> It has the environment setup (Julia will not install the obvious way), the
+> one command that verifies everything, the porting method, and the list of
+> Scheme traps already paid for.
+
 A Julia rewrite of **Copycat**, the analogy-making architecture of Douglas
 Hofstadter and Melanie Mitchell, ported from the Python implementation that
 [FARGonautica](https://github.com/fargonauts/FARGonautica) recommends, together
