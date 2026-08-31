@@ -1,0 +1,49 @@
+;; Turns the loaded model into something that can be driven from a script:
+;; stubs the windows, silences the graphics flags, and replaces Metacat's
+;; GUI-oriented stop mechanism with an escape continuation.
+
+(define make-stub-window (lambda (name) (lambda msg (void))))
+
+(for-each
+  (lambda (sym) (set-top-level-value! sym (make-stub-window sym)))
+  '(*workspace-window* *slipnet-window* *coderack-window* *themespace-window*
+    *top-themes-window* *bottom-themes-window* *vertical-themes-window*
+    *memory-window* *comment-window* *trace-window* *temperature-window*
+    *control-panel* *EEG-window*))
+
+(set! %workspace-graphics% #f)
+(set! %slipnet-graphics% #f)
+(set! %coderack-graphics% #f)
+(set! %codelet-count-graphics% #f)
+(set! %highlight-last-codelet% #f)
+(set! %nice-graphics% #f)
+
+;; A few objects captured a window global at construction time, when it was
+;; still #f. Those sends are graphics-only, so route a tell to a non-procedure
+;; to a no-op rather than letting it crash the run.
+(define original-tell tell)
+(set! tell
+  (lambda args
+    (if (procedure? (car args)) (apply original-tell args) (void))))
+
+;; Metacat ends a run with (suspend) -> (break), which hands control back to
+;; the SWL repl. Headless, redirect that to an escape continuation.
+(define *escape* #f)
+(set! break (lambda () (*escape* 'answer)))
+
+(define *codelet-limit* 100000)
+(define original-step-mcat step-mcat)
+(set! step-mcat
+  (lambda ()
+    (if (>= *codelet-count* *codelet-limit*)
+        (*escape* 'limit)
+        (original-step-mcat))))
+
+(define run-problem
+  (lambda (initial modified target seed limit)
+    (set! *codelet-limit* limit)
+    (call/cc
+      (lambda (k)
+        (set! *escape* k)
+        (init-mcat initial modified target #f seed)
+        (run-mcat)))))
