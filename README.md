@@ -188,7 +188,75 @@ knowing about before pointing the benchmark at them: `abc : abd :: wyz : ?` and
 `abc : abd :: glz : ?` average hundreds of thousands of codelets per trial, so
 the Python reference takes minutes on them where the Julia port takes seconds.
 
+## Metacat
+
+The repository also contains work on **Metacat**, Jim Marshall's successor to
+Copycat, which adds *self-watching*: themes, a temporal trace of its own
+processing, an episodic memory of past answers, and the ability to justify and
+compare the analogies it makes.
+
+### The reference implementation runs headless
+
+Metacat 1.0 is written for Chez Scheme 6.9b inside SWL and is driven entirely
+from its GUI, which makes it useless as something to test a port against.
+`scheme/` vendors Marshall's source and adds a harness that loads the model
+under a current Chez with no GUI:
+
+```bash
+apt-get install chezscheme
+scheme --quiet --script bench/run_metacat_scm.ss abc cba pqrs 42
+```
+
+```
+OUTCOME	answer	CODELETS	618	TEMP	4
+ANSWER	abc -> cba, pqrs -> ?	srqp	98	4
+```
+
+See `scheme/README.md` for what the harness stubs and why. Metacat is **GPL-2**,
+unlike Copycat's MIT, so the port inherits GPL-2.
+
+### The port, and how it is checked
+
+As with Copycat, the point is to make "does the port behave the same?" a
+decidable question. Metacat funnels all of its nondeterminism through
+`(random n)`, so `scheme/headless/shared-rng.ss` installs the same
+CPython-compatible MT19937 the Julia side uses. Each layer of the port has a
+pair of probes that dump a canonical trace, and the two must be byte-identical:
+
+```bash
+bash bench/verify_metacat.sh util slipnet workspace
+```
+
+| layer | Julia | verified |
+|---|---|---|
+| numeric tower, stochastic utilities, temperature formulas | `schemenum.jl`, `utilities.jl` | 264 lines |
+| slipnet: 59 nodes, 202 links, activation dynamics | `slipnet.jl` | 538 lines |
+| workspace strings, letters, descriptions | `workspace.jl` | 206 lines |
+| bonds, groups, bridges, concept mappings | not yet ported | |
+| coderack and codelets | not yet ported | |
+| themes, temporal trace, episodic memory, justification | not yet ported | |
+
+Three things about Metacat's Scheme turned out to be load-bearing and are easy
+to lose in a translation:
+
+- **Exact arithmetic.** Metacat computes in exact rationals wherever it can:
+  `(% n)` is `(/ n 100)`, an exact ratio for integer `n`, and those values flow
+  through activations, link lengths and probability thresholds. A port using
+  `Float64` throughout drifts in the low bits and eventually takes a different
+  branch at a stochastic threshold. `schemenum.jl` reproduces the parts of
+  Scheme's numeric tower that Metacat relies on.
+- **Cons ordering.** Links and descriptions are pushed onto the front of their
+  lists, so those lists are in reverse declaration order — and the model reads
+  the first match out of them.
+- **Right-to-left argument evaluation.** Chez evaluates procedure arguments
+  right to left, so a call drawing two random numbers draws the rightmost
+  first.
+
 ## Licence
 
-The vendored Python implementation is MIT licensed (see
-`python/LICENSE.upstream`); the Julia port carries that lineage.
+The vendored Python Copycat is MIT licensed (see `python/LICENSE.upstream`)
+and the Julia Copycat port carries that lineage.
+
+Metacat is **GPL-2** (see `scheme/metacat/LICENSE.upstream`). The Julia Metacat
+port under `julia/src/metacat/` is a derivative work and is therefore GPL-2,
+not MIT — the two ports in this repository are under different licences.
