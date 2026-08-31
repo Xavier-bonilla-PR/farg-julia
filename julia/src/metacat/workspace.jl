@@ -67,11 +67,29 @@ mutable struct Letter <: WSObject
     right_bond::Union{Nothing,Any}
     outgoing_bonds::Vector{Any}
     incoming_bonds::Vector{Any}
+    horizontal_bridge::Union{Nothing,Any}
+    vertical_bridge::Union{Nothing,Any}
     # workspace-structure fields
     time_stamp::Int
     strength::Int
     proposal_level::Int
 end
+
+"""`(get-bridge bridge-orientation)`."""
+get_bridge(o::WSObject, orientation::Symbol) =
+    orientation === :horizontal ? o.horizontal_bridge : o.vertical_bridge
+
+function update_bridge!(o::WSObject, orientation::Symbol, bridge)
+    if orientation === :horizontal
+        o.horizontal_bridge = bridge
+    else
+        o.vertical_bridge = bridge
+    end
+    return o
+end
+
+"""`(get-all-descriptions)` — groups also contribute their bond descriptions."""
+all_descriptions(o::Letter) = o.descriptions
 
 get_string(o::Letter) = o.string
 left_string_pos(o::Letter) = o.string_pos
@@ -392,7 +410,7 @@ function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractS
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],
                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nothing, false,
-                        nothing, nothing, Any[], Any[], 0, 0, 0)
+                        nothing, nothing, Any[], Any[], nothing, nothing, 0, 0, 0)
         # (make-letter ...) attaches these two, in this order
         new_description!(letter, net[:plato_object_category], net[:plato_letter])
         new_description!(letter, net[:plato_letter_category], cat)

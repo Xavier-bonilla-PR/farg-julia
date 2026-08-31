@@ -45,11 +45,20 @@ mutable struct Group <: WSObject
     right_bond::Union{Nothing,Any}
     outgoing_bonds::Vector{Any}
     incoming_bonds::Vector{Any}
+    horizontal_bridge::Union{Nothing,Any}
+    vertical_bridge::Union{Nothing,Any}
     # workspace-structure fields
     time_stamp::Int
     strength::Int
     proposal_level::Int
 end
+
+singleton_group(g::Group) = g.group_length == 1
+singleton_group(::Letter) = false
+top_level_member(g::Group, object::WSObject) = any(o -> o === object, g.constituent_objects)
+all_descriptions(g::Group) = vcat(g.descriptions, g.bond_descriptions)
+get_letter_span(o::Letter) = 1
+get_letter_span(g::Group) = length(g.letters)
 
 get_string(g::Group) = g.string
 left_string_pos(g::Group) = g.left_string_pos
@@ -130,7 +139,7 @@ function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
               middle_idx === nothing ? nothing : objs[middle_idx],
               Description[], nothing, "",
               0, Description[], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              nothing, false, nothing, nothing, Any[], Any[], 0, 0, 0)
+              nothing, false, nothing, nothing, Any[], Any[], nothing, nothing, 0, 0, 0)
 
     new_description!(g, net[:plato_object_category], net[:plato_group])
     new_description!(g, net[:plato_group_category], group_category)
