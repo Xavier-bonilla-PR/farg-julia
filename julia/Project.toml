@@ -1,0 +1,6 @@
+name = "CopycatJL"
+uuid = "d3f9a2c1-6b4e-4f5a-9c37-1e8a5b0d2f64"
+version = "0.1.0"
+
+[compat]
+julia = "1.9"

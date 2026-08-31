@@ -1,0 +1,5 @@
+output/
+*.log
+Manifest.toml
+__pycache__/
+*.pyc
