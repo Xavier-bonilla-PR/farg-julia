@@ -23,6 +23,7 @@ mutable struct WorkspaceString
     letter_categories::Vector{Node}
     letters::Vector{WSObject}
     groups::Vector{WSObject}
+    bonds::Vector{Any}
     print_name::String
     translated::Bool
     average_intra_string_unhappiness::Int
@@ -59,6 +60,10 @@ mutable struct Letter <: WSObject
     average_salience::Int
     enclosing_group::Union{Nothing,WSObject}
     salience_clamped::Bool
+    left_bond::Union{Nothing,Any}
+    right_bond::Union{Nothing,Any}
+    outgoing_bonds::Vector{Any}
+    incoming_bonds::Vector{Any}
     # workspace-structure fields
     time_stamp::Int
     strength::Int
@@ -171,11 +176,52 @@ function update_intra_string_unhappiness!(o::WSObject)
         elseif o.enclosing_group !== nothing
             sub_from_100((o.enclosing_group::WSObject).strength)
         else
-            # no bonds exist yet, so this is the empty-bonds branch
-            100
+            bonds = incident_bonds(o)
+            if isempty(bonds)
+                100
+            elseif leftmost_in_string(o) || rightmost_in_string(o)
+                sub_from_100(sround(1 // 3 * bonds[1].strength))
+            else
+                sub_from_100(sround(1 // 6 * ssum([b.strength for b in bonds])))
+            end
         end
     return o
 end
+
+"""`(get-incident-bonds)` — left bond first, then right, dropping absent ones."""
+function incident_bonds(o::WSObject)
+    bs = Any[]
+    o.left_bond === nothing || push!(bs, o.left_bond)
+    o.right_bond === nothing || push!(bs, o.right_bond)
+    return bs
+end
+
+"""`(get-all-left-neighbors)` — the letter to the left, plus any groups whose
+right edge is there. Groups are not ported yet, so only the letter."""
+function all_left_neighbors(o::WSObject)
+    leftmost_in_string(o) && return WSObject[]
+    return WSObject[o.string.letters[left_string_pos(o)]]
+end
+
+function all_right_neighbors(o::WSObject)
+    rightmost_in_string(o) && return WSObject[]
+    return WSObject[o.string.letters[right_string_pos(o) + 2]]
+end
+
+function choose_left_neighbor(rng::PyRandom, o::WSObject)
+    ns = all_left_neighbors(o)
+    isempty(ns) && return nothing
+    return stochastic_pick(rng, ns, [n.intra_string_salience for n in ns])
+end
+
+function choose_right_neighbor(rng::PyRandom, o::WSObject)
+    ns = all_right_neighbors(o)
+    isempty(ns) && return nothing
+    return stochastic_pick(rng, ns, [n.intra_string_salience for n in ns])
+end
+
+disjoint_objects(a::WSObject, b::WSObject) =
+    right_string_pos(a) < left_string_pos(b) || left_string_pos(a) > right_string_pos(b)
 
 """With no bridges or groups yet, both weaknesses come out at 100. Note that
 each string type assigns only the dimensions that apply to it: a modified
@@ -305,10 +351,12 @@ end
 """`(make-workspace-string ...)`."""
 function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractString)
     cats = [net[Symbol("plato_", c)] for c in sym]
-    s = WorkspaceString(string_type, cats, WSObject[], WSObject[], String(sym), false, 0, 0)
+    s = WorkspaceString(string_type, cats, WSObject[], WSObject[], Any[],
+                        String(sym), false, 0, 0)
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nothing, false, 0, 0, 0)
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nothing, false,
+                        nothing, nothing, Any[], Any[], 0, 0, 0)
         # (make-letter ...) attaches these two, in this order
         new_description!(letter, net[:plato_object_category], net[:plato_letter])
         new_description!(letter, net[:plato_letter_category], cat)
@@ -340,8 +388,21 @@ function add_string_position_descriptions_to_letters!(net::Slipnet, s::Workspace
 end
 
 """`(update-workspace-values)` from run.ss, restricted to the strings that
-exist at this stage of the port."""
-function update_workspace_values!(strings::Vector{WorkspaceString})
+exist at this stage of the port.
+
+NB: this updates the strength of every workspace STRUCTURE first - bonds, and
+later groups, bridges and rules - before touching the objects, because object
+unhappiness is computed from the strengths of the bonds incident on it. Passing
+the rng is what lets a bond's external strength do its stochastic local-density
+walk; it is optional so the pre-bond layers can call this without one."""
+function update_workspace_values!(strings::Vector{WorkspaceString},
+                                  rng::Union{Nothing,PyRandom} = nothing,
+                                  net::Union{Nothing,Slipnet} = nothing)
+    if rng !== nothing && net !== nothing
+        for s in strings, structure in s.bonds
+            update_structure_strength!(structure, net::Slipnet, rng::PyRandom)
+        end
+    end
     objs = vcat((objects(s) for s in strings)...)
     for o in objs
         update_raw_importance!(o)
@@ -380,4 +441,19 @@ function init_workspace(net::Slipnet, initial::AbstractString, modified::Abstrac
         clamp_activation!(n, MAX_ACTIVATION)
     end
     return strings
+end
+
+"""`(distinguishing-descriptor? descriptor)` — whether no other object in the
+same string carries this descriptor. Letters compare against the string's other
+letters; groups have their own rule, added when groups are ported."""
+function distinguishing_descriptor(net::Slipnet, o::Letter, descriptor::Node)
+    (descriptor === net[:plato_letter] || descriptor === net[:plato_group] ||
+     any(n -> n === descriptor, net.numbers)) && return false
+    for other in o.string.letters
+        other === o && continue
+        for d in other.descriptions
+            d.descriptor === descriptor && return false
+        end
+    end
+    return true
 end
