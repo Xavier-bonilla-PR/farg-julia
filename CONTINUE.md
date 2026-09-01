@@ -4,7 +4,9 @@ Everything below assumes a **fresh container with a fresh clone** — no
 toolchain, nothing cached. Start here.
 
 Branch: `claude/continue-previous-e7xo76`
-Last commit at time of writing: the themes port (see `git log -1`).
+Last commit at time of writing: the workspace aggregate (see `git log -1`).
+Four sessions of work sit on this branch: themes, description codelets, group
+codelets, and the workspace aggregate.
 
 ---
 
@@ -40,6 +42,14 @@ Set `JULIA` to the binary path for every command below:
 
 ```bash
 export JULIA=/tmp/julia-1.10.9/bin/julia
+```
+
+The Metacat probes all take `JULIA` as an environment variable, but the Copycat
+verifier in section 2 shells out to a bare `julia`, so it needs the binary on
+`PATH` as well:
+
+```bash
+export PATH="/tmp/julia-1.10.9/bin:$PATH"
 ```
 
 ---
@@ -84,10 +94,23 @@ scheme --quiet --script bench/run_metacat_scm.ss abc cba pqrs 42
 # ANSWER   abc -> cba, pqrs -> ?   srqp   98   4
 ```
 
-The Copycat side (finished, separate from Metacat):
+The Copycat side (finished, separate from Metacat). NB this one needs `julia`
+on `PATH`, not just `$JULIA`:
 
 ```bash
 python3 bench/verify.py --iterations 5 --seeds 1 2 3   # 51/51 must match
+```
+
+A quicker smoke test, enough to confirm nothing in the shared numeric code has
+regressed: `python3 bench/verify.py --iterations 3 --seeds 1 2` → 34/34.
+
+The benchmark harness is also worth running after any port change — the
+checksums must match between the two sides, and a workload that suddenly slows
+down usually means a Julia type went dynamic:
+
+```bash
+scheme --quiet --script bench/metacat_bench.ss
+(cd bench && $JULIA metacat_bench.jl)
 ```
 
 ---
