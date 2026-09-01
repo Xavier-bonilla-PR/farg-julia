@@ -287,13 +287,25 @@ end
 disjoint_objects(a::WSObject, b::WSObject) =
     right_string_pos(a) < left_string_pos(b) || left_string_pos(a) > right_string_pos(b)
 
-"""With no bridges or groups yet, both weaknesses come out at 100. Note that
-each string type assigns only the dimensions that apply to it: a modified
-string never gets a vertical value, and a target string (outside justify mode)
-never gets a horizontal one, so those stay at their initial 0."""
+"""An object's weakness in each direction is the weakness of the bridge it sits
+on; failing that, HALF the strength of its enclosing group's bridge counts for
+it; failing that, 100. Note that each string type assigns only the dimensions
+that apply to it: a modified string never gets a vertical value, and a target
+string (outside justify mode) never gets a horizontal one, so those stay at
+their initial 0."""
+function inter_string_weakness(o::WSObject, orientation::Symbol)
+    own = get_bridge(o, orientation)
+    own === nothing || return sub_from_100(own.strength)
+    g = o.enclosing_group
+    g === nothing && return 100
+    via_group = get_bridge(g::WSObject, orientation)
+    via_group === nothing && return 100
+    return sub_from_100((1 // 2) * via_group.strength)
+end
+
 function update_inter_string_unhappiness!(o::WSObject)
-    horizontal_weakness = 100
-    vertical_weakness = 100
+    horizontal_weakness = inter_string_weakness(o, :horizontal)
+    vertical_weakness = inter_string_weakness(o, :vertical)
     t = o.string.string_type
     if t === :initial
         o.horizontal_inter_string_unhappiness = horizontal_weakness

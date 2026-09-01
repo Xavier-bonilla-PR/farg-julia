@@ -340,6 +340,21 @@ function build_bridge!(b::Bridge, net::Slipnet)
             is_slippage(bond_cm) && add_symmetric_slippage!(b, bond_cm, net)
         end
     end
+    if b.orientation === :horizontal
+        # a Length slippage is added when the lengths differ, but Length itself
+        # is deliberately NOT activated here
+        length1 = get_platonic_length(b.object1, net)
+        length2 = get_platonic_length(b.object2, net)
+        if length1 !== length2 &&
+           !any(cm -> is_cm_type(cm, net[:plato_length]), b.all_concept_mappings)
+            add_concept_mapping!(b,
+                make_concept_mapping(net, b.object1, net[:plato_length], length1,
+                                     b.object2, net[:plato_length], length2))
+        end
+    end
+    for cm in b.concept_mappings
+        activate_label!(cm)
+    end
     b.proposal_level = BUILT
     return b
 end

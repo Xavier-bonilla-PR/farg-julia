@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  desccodelets groupcodelets
+  desccodelets groupcodelets wsvalues
 ```
 
-Expected — twelve layers, **7,725 trace lines byte-identical**:
+Expected — thirteen layers, **7,948 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -69,6 +69,7 @@ ok    bondcodelets (263 lines identical)
 ok    themes (2199 lines identical)
 ok    desccodelets (1181 lines identical)
 ok    groupcodelets (1718 lines identical)
+ok    wsvalues (223 lines identical)
 all probes matched
 ```
 
@@ -100,7 +101,7 @@ Julia (`julia/src/*.jl`). Verified by bit-exact RNG parity: 51/51 comparisons
 byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 (`results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~6,300 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~6,600 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -116,6 +117,7 @@ byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 | themespace: clusters, settling, thematic compatibility | `themes.jl` | `themes` | 2199 |
 | description codelets + coderack eviction bookkeeping | `codelets_descriptions.jl` | `desccodelets` | 1181 |
 | group codelets: scouts, fights, consolidation | `codelets_groups.jl` | `groupcodelets` | 1718 |
+| workspace aggregate: bridge registry, mapping strengths | `context.jl` | `wsvalues` | 223 |
 
 ---
 
@@ -200,6 +202,14 @@ by reading the code.
   soon as a group was built. It cost nothing while no probe printed description
   strengths, and was caught the moment one did. Watch for other stubs written
   "for now" against a layer that has since landed.
+- **Watch for stubs left behind by a layer that has since landed.** Three have
+  now been found this way, each invisible until a probe reached it:
+  `contains?` returning false (written before groups existed),
+  `update-inter-string-unhappiness` hardcoding weakness to 100 (before bridges),
+  and the ctx bridge-strength dispatch passing an empty support list (before the
+  workspace had a bridge registry). Each was correct when written. When you land
+  a layer, grep the earlier files for comments saying "not ported yet", "with no
+  X yet", or a constant standing in for a computation.
 - **Chez's `map` does NOT apply left to right.** It walks the list in PAIRS,
   recursing to the tail first: for 4 elements the order is 3, 4, 1, 2; for 5 it
   is 5, 3, 4, 1, 2; for 8 it is 7, 8, 5, 6, 3, 4, 1, 2. Metacat does not define
@@ -241,14 +251,27 @@ by reading the code.
 **~9,600 lines of Scheme remain.** `themes.ss` and the description and group
 codelets are done. Suggested order:
 
-1. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
-   logic. Once these exist, three deferrals elsewhere can be closed, and each
-   is marked in the code: `thematic-bridge-scout` and
-   `propose-description-based-on-theme` in `themes.ss` (the only parts of that
-   file left out, because they call `propose-bridge`, `bridge-evaluator` and
-   `description-evaluator`); `get-incompatible-bridges` in the group builder;
-   and bridge-breaking in the bond builder. Read the `scheme_map` trap below
-   before porting `thematic-bridge-scout` — it draws through `tell-all`.
+1. **Bridge codelets** (in `bridges.ss`) — `bottom-up-bridge-scout`,
+   `important-object-bridge-scout`, `bridge-evaluator`, `bridge-builder`, plus
+   `propose-bridge`. The workspace aggregate they need is DONE (see below), so
+   what remains is the codelets themselves and the incompatibility machinery:
+   `get-incompatible-bridges` (which needs `group-incompatible-bridges`,
+   `direction-incompatible-bridges` and `get-subobject-bridges`),
+   `get-incompatible-bond`, and `make-flipped-version` for groups. Once these
+   exist, three deferrals elsewhere close, each marked in the code:
+   `thematic-bridge-scout` and `propose-description-based-on-theme` in
+   `themes.ss`; `get-incompatible-bridges` in the group builder; and
+   bridge-breaking in the bond builder. Read the `scheme_map` trap below before
+   porting `thematic-bridge-scout` — it draws through `tell-all`.
+
+   **What is already in place for it:** `context.jl` is now the workspace. It
+   holds the three bridge lists and the proposed-bridge lists, the workspace
+   unhappiness averages, and the mapping strengths the two bottom-up scouts
+   weight their bridge-type choice by (`get_mapping_strength`). It also has
+   `add_bridge!`, `delete_bridge!`, `break_bridge!`, `get_all_slippages`,
+   `spanning_bridge_exists`, `maximal_mapping`, `spanning_group_possible`, and
+   `update_workspace_values!(ctx)` — the full update sequence including bridges,
+   which is what the codelets should call rather than the strings-only version.
 2. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).
