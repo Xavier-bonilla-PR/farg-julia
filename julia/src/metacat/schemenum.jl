@@ -94,6 +94,12 @@ function slog10(x)
     return result + sign(result) * 1e-15
 end
 
+"""Write a Scheme number the way Chez does: a ratio is `400/3`, not Julia's
+`400//3`. Probe output has to go through this wherever an exact rational can
+reach the trace."""
+swrite(x::Rational) = string(numerator(x), "/", denominator(x))
+swrite(x) = string(x)
+
 ssum(l) = isempty(l) ? 0 : reduce(+, l)
 
 function weighted_average(values, weights)

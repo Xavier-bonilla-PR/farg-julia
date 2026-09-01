@@ -495,3 +495,45 @@ function relationship_between(nodes, identity_node::Node)
     all(r -> r === relations[1], relations) || return nothing
     return relations[1]
 end
+
+# --- descriptor predicates --------------------------------------------------
+#
+# slipnet.ss attaches a `descriptor-predicate?` closure to each node that can
+# describe an object; every other node keeps the default, which is false. The
+# table is here rather than on the nodes because it is fixed for the life of
+# the network and reads better as one piece.
+
+"""`(possible-descriptor? object)`."""
+function possible_descriptor(net, node::Node, object)
+    name = node.name
+    name === :plato_one && return group_of_length(object, 1)
+    name === :plato_two && return group_of_length(object, 2)
+    name === :plato_three && return group_of_length(object, 3)
+    name === :plato_four && return group_of_length(object, 4)
+    name === :plato_five && return group_of_length(object, 5)
+    name === :plato_leftmost &&
+        return !string_spanning_group(object) && leftmost_in_string(object)
+    name === :plato_rightmost &&
+        return !string_spanning_group(object) && rightmost_in_string(object)
+    name === :plato_middle && return middle_in_string(object)
+    name === :plato_single && return is_letter(object) && spans_whole_string(object)
+    name === :plato_whole && return string_spanning_group(object)
+    name === :plato_alphabetic_first &&
+        return get_descriptor_for(object, net[:plato_letter_category]) === net[:plato_a]
+    name === :plato_alphabetic_last &&
+        return get_descriptor_for(object, net[:plato_letter_category]) === net[:plato_z]
+    name === :plato_letter && return is_letter(object)
+    name === :plato_group && return !is_letter(object)
+    return false
+end
+
+"""`(get-possible-descriptors object)` for a description-type node."""
+get_possible_descriptors(net, description_type::Node, object) =
+    Node[n for n in instance_nodes(description_type)
+         if possible_descriptor(net, n, object)]
+
+"""`(get-similar-property-links)` — a stochastic filter, so it DRAWS once per
+property link the node has."""
+get_similar_property_links(rng::PyRandom, n::Node) =
+    stochastic_filter(rng, l -> temp_adjusted_probability(pct(link_degree_of_assoc(l))),
+                      n.property_links)

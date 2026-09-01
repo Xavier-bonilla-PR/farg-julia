@@ -230,7 +230,7 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
 bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges \
-                              coderack bondcodelets bridgecodelets
+                              coderack bondcodelets bridgecodelets desccodelets
 ```
 
 | layer | Julia | verified |
@@ -245,16 +245,17 @@ bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges \
 | coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
 | bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
 | bridge codelets, and the workspace bridge bookkeeping they need | `codelets_bridges.jl`, `context.jl` | 955 lines |
-| description, group and rule codelets | not yet ported | |
+| description codelets, and the slipnet's descriptor predicates | `codelets_descriptions.jl` | 1,058 lines |
+| group and rule codelets | not yet ported | |
 | themes, temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The ten verified layers cover roughly 5,200 of the ~16,000 lines of Metacat's
-non-graphics Scheme. What remains for a run that reaches an answer is the other
-codelet procedures (description, group, rule), plus `rules.ss`,
+The eleven verified layers cover roughly 5,400 of the ~16,000 lines of
+Metacat's non-graphics Scheme. What remains for a run that reaches an answer is
+the other codelet procedures (group, rule), plus `rules.ss`,
 `answers.ss`, `themes.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and
-`justify.ss` — about 10,700 lines. `themes.ss` is on that critical path rather
+`justify.ss` — about 10,500 lines. `themes.ss` is on that critical path rather
 than optional: every workspace structure's strength is weighted by its thematic
 compatibility, which is 0 only while no themes exist. The probes here hold that
 condition, so the layers agree; a real run creates themes as soon as bridges

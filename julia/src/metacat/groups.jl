@@ -87,6 +87,10 @@ string_spanning_group(::Letter) = false
 
 """`(nested-member? object)` — whether the object is somewhere inside this
 group's constituent tree."""
+contains_object(g::Group, inner::WSObject) = nested_member(g, inner)
+is_letter(::Group) = false
+group_of_length(g::Group, n::Int) = g.group_length == n
+
 function nested_member(g::Group, object::WSObject)
     for o in g.constituent_objects
         o === object && return true

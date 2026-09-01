@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets \
-  bridgecodelets
+  bridgecodelets desccodelets
 ```
 
-Expected — ten layers, **3,582 trace lines byte-identical**:
+Expected — eleven layers, **4,640 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -67,6 +67,7 @@ ok    bridges (304 lines identical)
 ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
 ok    bridgecodelets (955 lines identical)
+ok    desccodelets (1058 lines identical)
 all probes matched
 ```
 
@@ -98,7 +99,7 @@ Julia (`julia/src/*.jl`). Verified by bit-exact RNG parity: 51/51 comparisons
 byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 (`results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~5,200 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~5,400 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -112,6 +113,7 @@ byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 | coderack | `coderack.jl` | `coderack` | 366 |
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
 | bridge codelet pipeline, workspace bridge bookkeeping, mapping strengths | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 955 |
+| description codelet pipeline, slipnet descriptor predicates | `codelets_descriptions.jl`, `slipnet.jl` | `desccodelets` | 1058 |
 
 ---
 
@@ -181,6 +183,10 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **Scheme rationals normalise; Julia's do not.** `(* 2/3 300)` is the integer
+  `200`, but `2//3 * 300` is `200//1`, and Chez writes `400/3` where Julia
+  writes `400//3`. `snorm` fixes the value, `swrite` (schemenum.jl) fixes the
+  probe output. Any probe that prints a possibly-exact number needs `swrite`.
 - **A bridge's `add-concept-mappings` PREPENDS** (`(append cm-list concept-mappings)`),
   and so do `add-bond-concept-mapping` and `add-symmetric-slippage`. The first
   port used `push!`; the bridge codelet probe caught it.
@@ -217,7 +223,7 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~10,700 lines of Scheme remain.** Suggested order, with the reasoning:
+**~10,500 lines of Scheme remain.** Suggested order, with the reasoning:
 
 1. **`themes.ss` (1,235)** — do this first. It is on the critical path, not
    optional: every workspace structure's strength is weighted by its thematic
@@ -226,18 +232,20 @@ by reading the code.
    themes as soon as bridges start boosting them, so no end-to-end comparison
    means anything until themes are in. Ported layers currently hardcode
    `get_thematic_compatibility(...) = 0` — grep for that and replace.
-2. **Description and group codelets** (`descriptions.ss` 205, plus the codelet
-   bodies in `groups.ss`) — small, and they follow the exact
-   scout → evaluator → builder shape already ported for bonds and bridges in
-   `codelets_bonds.jl` / `codelets_bridges.jl`. Use those as the template.
-   These are now the *only* thing blocking a bridge between objects of
-   different lengths: `propose-bridge` posts a `top-down-description-scout` and
-   a `top-down-group-scout:category` in that case, and both are registered in
-   `codelets_bridges.jl` as stubs that raise. Also bring back
+2. **Group codelets** (the codelet bodies in `groups.ss`, lines 418-793) —
+   they follow the exact scout → evaluator → builder shape already ported for
+   bonds, bridges and descriptions; use those as the template. This is now the
+   *only* thing blocking a bridge between objects of different lengths:
+   `propose-bridge` posts a `top-down-description-scout` (ported) and a
+   `top-down-group-scout:category` (still a stub that raises, registered in
+   `codelets_bridges.jl`) in that case. Also bring back
    `get_incompatible_bridges(::Group, ...)`, which group-builder needs — it was
-   left out here rather than shipped unverified. `propose-singleton-group` and
-   `try-to-propose-singleton-group` in `bridges.ss` have no callers anywhere in
-   the model; they are dead code, not an omission.
+   left out rather than shipped unverified, and add `plato-one` coverage to
+   `desccodelets`, which needs a singleton group to describe and so is the one
+   descriptor predicate no probe can currently reach.
+   `propose-singleton-group` and `try-to-propose-singleton-group` in
+   `bridges.ss` have no callers anywhere in the model; they are dead code, not
+   an omission.
 3. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).

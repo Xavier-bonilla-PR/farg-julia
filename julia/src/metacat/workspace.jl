@@ -135,6 +135,11 @@ ungrouped_right_neighbor(o::WSObject) = ungrouped_neighbor(o, all_right_neighbor
 
 nested_member(::Letter, ::WSObject) = false
 
+# Answers for the slipnet's descriptor predicates. groups.jl adds the group
+# side of each.
+is_letter(::Letter) = true
+group_of_length(::Letter, ::Int) = false
+
 # --- descriptions -----------------------------------------------------------
 
 function make_description(object::WSObject, description_type::Node, descriptor::Node,
@@ -166,10 +171,9 @@ end
 description_type_present(o::WSObject, t::Node) =
     any(d -> d.description_type === t, o.descriptions)
 
-"""`contains?` — whether one object encloses another. With no groups yet, an
-object contains only itself's group chain, so this is false for distinct
-letters."""
-contains_object(outer::WSObject, inner::WSObject) = false
+"""`(contains? object1 object2)` — object1 is a group with object2 somewhere
+inside it. Letters contain nothing; groups.jl adds the group case."""
+contains_object(::Letter, ::WSObject) = false
 
 function calculate_local_support(d::Description)
     n = 0
@@ -213,7 +217,8 @@ get_weakness(s) = sub_from_100(sexpt(s.strength, 0.95))
 
 function update_raw_importance!(o::WSObject)
     result = min(300, ssum([descriptor_activation(d) for d in get_relevant_descriptions(o)]))
-    o.raw_importance = o.enclosing_group !== nothing ? 2 // 3 * result : result
+    # snorm because Scheme's (* 2/3 300) is the integer 200, not the ratio 200/1
+    o.raw_importance = o.enclosing_group !== nothing ? snorm(2 // 3 * result) : result
     return o
 end
 

@@ -454,16 +454,15 @@ function replace_with_flipped_group!(ctx::MetacatCtx, original_group::Group,
     return flipped_group
 end
 
-# `propose-bridge` posts these two when the objects differ in length. Their
-# bodies belong to descriptions.ss and groups.ss and are not ported yet; a
-# stub that raises keeps the gap visible instead of silently diverging.
+# `propose-bridge` also posts a top-down-description-scout, which lives in
+# codelets_descriptions.jl. top-down-group-scout:category belongs to groups.ss
+# and is not ported yet; a stub that raises keeps the gap visible instead of
+# letting it diverge silently.
 not_yet_ported(name) = (ctx, args) -> error("$name is not ported yet")
 
 register_codelet_type!(:bottom_up_bridge_scout, bottom_up_bridge_scout)
 register_codelet_type!(:important_object_bridge_scout, important_object_bridge_scout)
 register_codelet_type!(:bridge_evaluator, bridge_evaluator)
 register_codelet_type!(:bridge_builder, bridge_builder)
-register_codelet_type!(:top_down_description_scout,
-                       not_yet_ported("top-down-description-scout"))
 register_codelet_type!(:top_down_group_scout_category,
                        not_yet_ported("top-down-group-scout:category"))
