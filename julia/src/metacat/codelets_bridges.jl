@@ -10,6 +10,10 @@
 # inter-string salience; `important-object-bridge-scout` picks an important
 # object on one side and then looks for something on the other side carrying
 # the descriptor an existing slippage maps it to.
+#
+# `propose-bridge` also posts a top-down-description-scout and a
+# top-down-group-scout:category when the two objects differ in length; those
+# live in codelets_descriptions.jl and codelets_groups.jl.
 
 """`(bridge-type->orientation bridge-type)`."""
 bridge_type_orientation(bridge_type::Symbol) =
@@ -180,8 +184,17 @@ function get_incompatible_bridges(b::Bond, orientation::Symbol, net::Slipnet)
     return result
 end
 
-# groups.ss has the same method over a group's constituents, used by
-# group-builder. It arrives with the group codelets.
+"""`(get-incompatible-bridges bridge-orientation)` for a group. An undirected
+group has no direction to contradict, so nothing is incompatible with it."""
+function get_incompatible_bridges(g::Group, orientation::Symbol, net::Slipnet)
+    g.direction === nothing && return Any[]
+    result = Any[]
+    for object in g.constituent_objects
+        bridge = get_incompatible_bridge(net, g, g.direction, object, orientation)
+        bridge === nothing || push!(result, bridge)
+    end
+    return result
+end
 
 # --- building and breaking --------------------------------------------------
 
@@ -454,15 +467,7 @@ function replace_with_flipped_group!(ctx::MetacatCtx, original_group::Group,
     return flipped_group
 end
 
-# `propose-bridge` also posts a top-down-description-scout, which lives in
-# codelets_descriptions.jl. top-down-group-scout:category belongs to groups.ss
-# and is not ported yet; a stub that raises keeps the gap visible instead of
-# letting it diverge silently.
-not_yet_ported(name) = (ctx, args) -> error("$name is not ported yet")
-
 register_codelet_type!(:bottom_up_bridge_scout, bottom_up_bridge_scout)
 register_codelet_type!(:important_object_bridge_scout, important_object_bridge_scout)
 register_codelet_type!(:bridge_evaluator, bridge_evaluator)
 register_codelet_type!(:bridge_builder, bridge_builder)
-register_codelet_type!(:top_down_group_scout_category,
-                       not_yet_ported("top-down-group-scout:category"))

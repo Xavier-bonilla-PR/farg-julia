@@ -116,7 +116,8 @@ order groups.ss does, which is the order they come back out in reverse."""
 function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
                     group_bond_facet::Union{Nothing,Node}, direction::Union{Nothing,Node},
                     left_object::WSObject, right_object::WSObject,
-                    objs::Vector{WSObject}, bonds::Vector{Any})
+                    objs::Vector{WSObject}, bonds::Vector{Any},
+                    codelet_count::Int = 0)
     ordered_objects = direction === net[:plato_left] ? reverse(objs) : objs
     initial_letter_category = get_descriptor_for(ordered_objects[1],
                                                  net[:plato_letter_category])
@@ -148,7 +149,8 @@ function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
               middle_idx === nothing ? nothing : objs[middle_idx],
               Description[], nothing, "",
               0, Description[], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              nothing, false, nothing, nothing, Any[], Any[], nothing, nothing, 0, 0, 0)
+              nothing, false, nothing, nothing, Any[], Any[], nothing, nothing,
+              codelet_count, 0, 0)
 
     new_description!(g, net[:plato_object_category], net[:plato_group])
     new_description!(g, net[:plato_group_category], group_category)
@@ -192,6 +194,7 @@ the Scheme are not ported."""
 function build_group!(g::Group, net::Slipnet, ctx = nothing)
     g.id_num = g.string.next_id_num
     g.string.next_id_num += 1
+    g.string.group_vector[g.left_object.id_num] = g
     pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
     pushfirst!(g.string.right_edge_groups[g.right_string_pos + 1], g)
     pushfirst!(g.string.groups, g)
@@ -219,7 +222,7 @@ half, which is what the pre-bridge layers want and is equivalent whenever no
 bridges exist."""
 function delete_invalid_string_position_middle_descriptions!(s::WorkspaceString,
                                                              net::Slipnet, ctx = nothing)
-    for object in objects(s)
+    for object in all_objects(s)
         if descriptor_present(object, net[:plato_middle]) && !middle_in_string(object)
             delete_description_type!(object, net[:plato_string_position_category])
             ctx === nothing && continue
@@ -336,6 +339,7 @@ function break_group!(g::Group, net::Slipnet, ctx = nothing)
     vertical_bridge = g.vertical_bridge
     horizontal_bridge = g.horizontal_bridge
     g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net, ctx)
+    s.group_vector[g.left_object.id_num] = nothing
     i = findfirst(x -> x === g, s.groups)
     i === nothing || deleteat!(s.groups, i)
     for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
@@ -392,4 +396,83 @@ function make_flipped_version(g::Group, net::Slipnet)
     description_type_present(g, net[:plato_length]) &&
         attach_length_description!(flipped, net)
     return flipped
+end
+
+"""`(get-incompatible-groups)` — the groups already enclosing this one's
+constituents. remq-duplicates keeps the LAST of each."""
+get_incompatible_groups(g::Group) =
+    WSObject[other for other in
+             remq_duplicates(WSObject[o.enclosing_group for o in g.constituent_objects
+                                      if o.enclosing_group !== nothing])
+             if other !== g]
+
+same_group_category(g1::Group, g2::Group) = g1.group_category === g2.group_category
+same_group_direction(g1::Group, g2::Group) = g1.direction === g2.direction
+
+"""`(get-equivalent-group group)` — the built group with the same leftmost
+object, category, direction and length.
+
+Only ONE group is filed per leftmost object, so a group that grew out of
+another displaces it: after [abc] is built over [ab], asking for [ab]'s
+equivalent finds [abc] and rejects it on length. Preserved."""
+function get_equivalent_group(s::WorkspaceString, g::Group)
+    any(x -> x === g, s.groups) && return g
+    other = get(s.group_vector, g.left_object.id_num, nothing)
+    other === nothing && return nothing
+    return (same_group_category(g, other::Group) && same_group_direction(g, other::Group) &&
+            g.group_length == (other::Group).group_length) ? other : nothing
+end
+
+group_present(s::WorkspaceString, g::Group) = get_equivalent_group(s, g) !== nothing
+
+function add_proposed_group!(s::WorkspaceString, g::Group)
+    key = (g.left_object.id_num, g.right_object.id_num)
+    pushfirst!(get!(s.proposed_group_table, key, Any[]), g)
+    pushfirst!(s.proposed_groups, g)
+    return s
+end
+
+function delete_proposed_group!(s::WorkspaceString, g::Group)
+    key = (g.left_object.id_num, g.right_object.id_num)
+    if haskey(s.proposed_group_table, key)
+        v = s.proposed_group_table[key]
+        i = findfirst(x -> x === g, v)
+        i === nothing || deleteat!(v, i)
+    end
+    i = findfirst(x -> x === g, s.proposed_groups)
+    i === nothing || deleteat!(s.proposed_groups, i)
+    return s
+end
+
+# --- the group probability formulas, from workspace-structure-formulas.ss ----
+
+"""`(length-description-probability group)` — a group longer than five has no
+platonic length to describe; a singleton always gets one; in between, the more
+active plato-length is the likelier a length description becomes, and the
+shorter the group the likelier still."""
+function length_description_probability(g::Group, net::Slipnet)
+    g.group_length > 5 && return 0
+    g.group_length == 1 && return 1
+    return temp_adjusted_probability(
+        sexpt(0.5, cube(g.group_length) * pct(sub_from_100(net[:plato_length].activation))))
+end
+
+"""`(single-letter-group-probability group)` — a one-letter group has to earn
+its place from local support and from how active Length is, and the exponent
+punishes it hard unless other groups nearby agree."""
+function single_letter_group_probability(rng::PyRandom, g::Group, net::Slipnet)
+    n = get_num_of_local_supporting_groups(g)
+    exponent = n == 1 ? 4 : (n == 2 ? 2 : 1)
+    return temp_adjusted_probability(
+        sexpt(pct(get_local_support(rng, g)) * pct(net[:plato_length].activation),
+              exponent))
+end
+
+"""`(descriptor-support descriptor string)` — what fraction of the string's
+groups carry this descriptor."""
+function descriptor_support(descriptor::Node, s::WorkspaceString)
+    groups = s.groups
+    isempty(groups) && return 0
+    described = count(g -> descriptor_present(g, descriptor), groups)
+    return sround(100 * sdiv(described, length(groups)))
 end

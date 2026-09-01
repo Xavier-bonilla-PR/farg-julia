@@ -100,6 +100,10 @@ reach the trace."""
 swrite(x::Rational) = string(numerator(x), "/", denominator(x))
 swrite(x) = string(x)
 
+"""`(^2 x)` and `(^3 x)`."""
+square(x) = x * x
+cube(x) = x * x * x
+
 ssum(l) = isempty(l) ? 0 : reduce(+, l)
 
 function weighted_average(values, weights)

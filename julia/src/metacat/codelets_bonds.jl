@@ -42,8 +42,6 @@ end
 directed_group(o::WSObject, net::Slipnet) =
     o isa Group && ((o::Group).group_category === net[:plato_succgrp] ||
                     (o::Group).group_category === net[:plato_predgrp])
-same_group_category(g1::Group, g2::Group) = g1.group_category === g2.group_category
-same_group_direction(g1::Group, g2::Group) = g1.direction === g2.direction
 
 """`(incompatible-bond-candidates? object1 object2 bond-facet bond-category)`."""
 function incompatible_bond_candidates(o1::WSObject, o2::WSObject, bond_facet::Node,
@@ -84,23 +82,9 @@ function delete_proposed_bond!(s::WorkspaceString, b::Bond)
     return s
 end
 
-"""`(bond-present? bond)` — an equivalent built bond already exists."""
-function bond_present(s::WorkspaceString, b::Bond)
-    for x in s.bonds
-        other = x::Bond
-        other.from_object === b.from_object && other.to_object === b.to_object &&
-            other.bond_category === b.bond_category &&
-            other.direction === b.direction && return true
-        # sameness bonds are symmetric, so the reverse entry counts too
-        b.bond_category === other.bond_category && b.direction === other.direction &&
-            other.from_object === b.to_object && other.to_object === b.from_object &&
-            b.direction === nothing && return true
-    end
-    return false
-end
-
 """`(break-bond bond)`."""
 function break_bond!(b::Bond)
+    bond_table_set!(b, nothing)
     i = findfirst(x -> x === b, b.string.bonds)
     i === nothing || deleteat!(b.string.bonds, i)
     for (obj, list) in ((b.from_object, b.from_object.outgoing_bonds),

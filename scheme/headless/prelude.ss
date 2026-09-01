@@ -54,6 +54,17 @@
 ;; The EEG display.
 (define *EEG* (lambda msg (void)))
 
+;; --- graphics dispatchers called from the model proper ----------------------
+
+;; groups.ss and bridges.ss call these two directly, and one call - the
+;; (group-graphics 'erase ...) in group-builder's letter-consolidation case -
+;; is NOT wrapped in (if* %workspace-graphics% ...), so the model reaches it
+;; even with graphics off. With the graphics files loaded they only ever touch
+;; the workspace window and a `drawn?` flag that is always false here, so
+;; swallowing the call is exactly what they would do.
+(define group-graphics (lambda args (void)))
+(define bridge-graphics (lambda args (void)))
+
 ;; --- pure helpers reproduced from the graphics files ------------------------
 
 ;; from general-graphics.ss; rules.ss uses these to lay out rule descriptions

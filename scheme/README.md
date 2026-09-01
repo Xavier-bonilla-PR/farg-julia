@@ -38,6 +38,14 @@ model proper — `find-next-space-position`, `separate-into-words`,
 `group-event-pexp-text-string` — it is reproduced verbatim in the prelude
 rather than stubbed, because its result is algorithm-visible.
 
+Two graphics *dispatchers*, `group-graphics` and `bridge-graphics`, are called
+from `groups.ss` and `bridges.ss`. Almost every call sits inside
+`(if* %workspace-graphics% ...)`, but the `(group-graphics 'erase ...)` in
+`group-builder`'s letter-consolidation case does not, so the model reaches it
+with graphics off and the variable unbound. Both are stubbed to swallow their
+arguments: with the graphics files loaded they only ever touch the workspace
+window and a `drawn?` flag that is always false headless.
+
 ## Changes to the vendored Metacat
 
 Kept to the minimum needed to load under Chez 9; the model is untouched.

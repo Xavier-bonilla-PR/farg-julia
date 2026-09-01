@@ -29,6 +29,14 @@ mutable struct WorkspaceString
     right_edge_groups::Vector{Vector{WSObject}}
     # proposed (not yet built) bonds, keyed by from/to object id
     proposed_bonds::Dict{Tuple{Int,Int},Vector{Any}}
+    # built bonds keyed by from/to object id; a sameness bond is filed under
+    # both orders, since it reads the same either way
+    from_to_bond_table::Dict{Tuple{Int,Int},Any}
+    # built groups keyed by the id of their LEFTMOST object. One slot each, so
+    # a nested group displaces the one it grew out of - see get_equivalent_group
+    group_vector::Dict{Int,Any}
+    proposed_groups::Vector{WSObject}
+    proposed_group_table::Dict{Tuple{Int,Int},Vector{Any}}
     print_name::String
     translated::Bool
     average_intra_string_unhappiness::Int
@@ -100,6 +108,9 @@ print_name(o::Letter) = o.letter_category.lowercase_name
 ascii_name(o::Letter) = string(print_name(o), ":", o.string_pos)
 
 objects(s::WorkspaceString) = vcat(s.letters, s.groups)
+"""`(get-all-objects)` — proposed groups count too, and a few passes over the
+string (the "middle" description cleanup, for one) reach them."""
+all_objects(s::WorkspaceString) = vcat(s.letters, s.groups, s.proposed_groups)
 string_length(s::WorkspaceString) = length(s.letter_categories)
 
 leftmost_in_string(o::Letter) = o.string_pos == 0
@@ -448,6 +459,26 @@ function choose_object(rng::PyRandom, s::WorkspaceString, getter)
     return stochastic_pick(rng, objs, temp_adjusted_values([getter(o) for o in objs]))
 end
 
+"""`(choose-leftmost-object)` — among the objects actually DESCRIBED as
+leftmost, weighted by relative importance and with no temperature adjustment."""
+function choose_leftmost_object(rng::PyRandom, s::WorkspaceString, net::Slipnet)
+    leftmost_objects =
+        WSObject[o for o in objects(s)
+                 if get_descriptor_for(o, net[:plato_string_position_category]) ===
+                    net[:plato_leftmost]]
+    return stochastic_pick(rng, leftmost_objects,
+                           [o.relative_importance for o in leftmost_objects])
+end
+
+"""`(get-num-of-bonds-to-scan)` — 0..n-1 weighted by the square of the value,
+so a scout usually reaches for a long run of bonds and sometimes gives up at
+once."""
+function num_of_bonds_to_scan(rng::PyRandom, s::WorkspaceString)
+    n = string_length(s)
+    values = collect(0:(n - 1))
+    return stochastic_pick(rng, values, [v * v for v in values])::Int
+end
+
 """`(spanning-group-possible? string)` — could a single group cover the whole
 string? True if one already does, or if some bond facet relates every adjacent
 pair of top-level objects the same way."""
@@ -500,6 +531,8 @@ function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractS
     s = WorkspaceString(string_type, cats, WSObject[], WSObject[], Any[],
                         [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
                         Dict{Tuple{Int,Int},Vector{Any}}(),
+                        Dict{Tuple{Int,Int},Any}(), Dict{Int,Any}(),
+                        WSObject[], Dict{Tuple{Int,Int},Vector{Any}}(),
                         String(sym), false, 0, 0)
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],

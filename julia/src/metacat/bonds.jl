@@ -110,6 +110,7 @@ end
 
 """`(build-bond proposed-bond)` — attaches the bond to its string and objects."""
 function build_bond!(b::Bond)
+    bond_table_set!(b, b)
     pushfirst!(b.string.bonds, b)
     pushfirst!(b.from_object.outgoing_bonds, b)
     pushfirst!(b.to_object.incoming_bonds, b)
@@ -126,6 +127,50 @@ descriptors are the same node, otherwise the slipnet label relating them (which
 may be nothing, meaning no bond is possible)."""
 get_bond_category_between(d1::Node, d2::Node, net::Slipnet) =
     d1 === d2 ? net[:plato_sameness] : label_between(d1, d2, net[:plato_identity])
+
+"""`(add-bond)` / `(delete-bond)` file a bond under its from/to ids, and a
+sameness bond under both orders because it reads the same either way."""
+function bond_table_set!(b::Bond, value)
+    i = b.from_object.id_num
+    j = b.to_object.id_num
+    b.string.from_to_bond_table[(i, j)] = value
+    directed(b) || (b.string.from_to_bond_table[(j, i)] = value)
+    return b
+end
+
+same_bond_category(b1::Bond, b2::Bond) = b1.bond_category === b2.bond_category
+same_bond_direction(b1::Bond, b2::Bond) = b1.direction === b2.direction
+opposite_bond_category(b1::Bond, b2::Bond, net::Slipnet) =
+    directed(b1) && directed(b2) &&
+    b1.bond_category === get_related_node(b2.bond_category, net[:plato_opposite],
+                                          net[:plato_identity])
+opposite_bond_direction(b1::Bond, b2::Bond, net::Slipnet) =
+    directed(b1) && directed(b2) &&
+    b1.direction === get_related_node((b2.direction)::Node, net[:plato_opposite],
+                                      net[:plato_identity])
+
+"""`(get-equivalent-bond bond)` — the built bond between the same two objects,
+the same way round, with the same category and direction. NB the bond FACET is
+not compared, so a Length bond can stand in for a LettCtgy one."""
+function get_equivalent_bond(s::WorkspaceString, b::Bond)
+    other = get(s.from_to_bond_table, (b.from_object.id_num, b.to_object.id_num), nothing)
+    other === nothing && return nothing
+    return (same_bond_category(b, other::Bond) && same_bond_direction(b, other::Bond)) ?
+           other : nothing
+end
+
+"""`(get-equivalent-flipped-bond bond)` — the built bond running the other way,
+with the opposite category and direction."""
+function get_equivalent_flipped_bond(s::WorkspaceString, b::Bond, net::Slipnet)
+    other = get(s.from_to_bond_table, (b.to_object.id_num, b.from_object.id_num), nothing)
+    other === nothing && return nothing
+    return (opposite_bond_category(b, other::Bond, net) &&
+            opposite_bond_direction(b, other::Bond, net)) ? other : nothing
+end
+
+bond_present(s::WorkspaceString, b::Bond) = get_equivalent_bond(s, b) !== nothing
+flipped_bond_present(s::WorkspaceString, b::Bond, net::Slipnet) =
+    get_equivalent_flipped_bond(s, b, net) !== nothing
 
 """`(bonded? object1 object2)`."""
 function bonded(o1::WSObject, o2::WSObject)
