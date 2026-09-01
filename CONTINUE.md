@@ -50,10 +50,11 @@ From the repo root. This is the single most useful command in the project:
 
 ```bash
 JULIA=$JULIA bash bench/verify_metacat.sh \
-  util slipnet workspace cm bonds groups bridges coderack bondcodelets themes
+  util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
+  desccodelets
 ```
 
-Expected — ten layers, **4,826 trace lines byte-identical**:
+Expected — eleven layers, **6,007 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -66,6 +67,7 @@ ok    bridges (304 lines identical)
 ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
 ok    themes (2199 lines identical)
+ok    desccodelets (1181 lines identical)
 all probes matched
 ```
 
@@ -97,7 +99,7 @@ Julia (`julia/src/*.jl`). Verified by bit-exact RNG parity: 51/51 comparisons
 byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 (`results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~5,700 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~6,000 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -111,6 +113,7 @@ byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 | coderack | `coderack.jl` | `coderack` | 366 |
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
 | themespace: clusters, settling, thematic compatibility | `themes.jl` | `themes` | 2199 |
+| description codelets + coderack eviction bookkeeping | `codelets_descriptions.jl` | `desccodelets` | 1181 |
 
 ---
 
@@ -195,6 +198,22 @@ by reading the code.
   soon as a group was built. It cost nothing while no probe printed description
   strengths, and was caught the moment one did. Watch for other stubs written
   "for now" against a layer that has since landed.
+- **Two Julia methods with the same signature SILENTLY REPLACE each other.**
+  `f(x) = ...` followed by `f(::Any) = false` leaves one method, not two — the
+  first is gone with no warning. The coderack had exactly this, so
+  `is_proposed_structure` always returned false and evicted codelets never
+  unregistered the structure they carried. Julia is not Scheme here: overloads
+  must differ in their argument *types*.
+- **A codelet carrying a proposed structure is almost never evicted in a normal
+  run**, so that path needs a probe that drives it deliberately. High urgency
+  puts such a codelet in the top bin, and removal weight favours old,
+  low-urgency codelets, so it gets chosen to RUN long before it is old enough
+  to be a victim. A 72-configuration sweep of ordinary runs produced zero such
+  evictions. The `desccodelets` probe parks bond-evaluators at the lowest
+  urgency and floods the rack to force it.
+- **Metacat's `if*` is a `when`, not an `if`.** `(if* test A B)` runs BOTH A
+  and B when the test is true, and neither when it is false. Writing an
+  if/else with it silently changes what a probe does.
 - **A theme's activation stays an exact integer even though the settling maths
   is inexact.** `net-effect` runs a Float64 `tanh`, but Metacat redefines
   `round` as `inexact->exact`, so the step lands back on an integer. If theme
@@ -204,15 +223,17 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~10,100 lines of Scheme remain.** `themes.ss` is done, which clears the one
-item that blocked everything downstream. Suggested order:
+**~9,900 lines of Scheme remain.** `themes.ss` and the description codelets
+are done. Suggested order:
 
-1. **Description and group codelets** (`descriptions.ss` 205, plus the codelet
-   bodies in `groups.ss`) — small, and they follow the exact
-   scout → evaluator → builder shape already ported for bonds in
-   `codelets_bonds.jl`. Use that file as the template. `themes.jl` already
-   provides `get_possible_descriptors` / `description_possible`, which the
-   description codelets need.
+1. **Group codelets** — the five codelet bodies in `groups.ss`
+   (`top-down-group-scout:category`, `:direction`, `group-scout:whole-string`,
+   `group-evaluator`, `group-builder`). Same scout → evaluator → builder shape
+   as `codelets_bonds.jl` and `codelets_descriptions.jl`. Two things to wire
+   while you are there: `WorkspaceString` needs a `proposed_groups` list (it
+   only has `proposed_bonds`), and `delete_proposed_structure!` needs its
+   `Group` method so coderack eviction unregisters proposed groups the way it
+   now does proposed bonds.
 2. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
    logic. Once these exist, port `thematic-bridge-scout` and
    `propose-description-based-on-theme` from `themes.ss`; they are the only

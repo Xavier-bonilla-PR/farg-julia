@@ -14,7 +14,14 @@ mutable struct MetacatCtx
     target_string::WorkspaceString
     temperature::Int
     codelet_count::Int
+    themespace::Union{Nothing,Themespace}
 end
+
+"""A context with no themespace: structure strengths then use the
+workspace-structure default of 0 thematic compatibility, which is what the
+pre-themes layers assume."""
+MetacatCtx(net, rng, coderack, i, m, t, temperature, codelet_count) =
+    MetacatCtx(net, rng, coderack, i, m, t, temperature, codelet_count, nothing)
 
 """`*non-answer-strings*` — the three strings a non-justify-mode run works on."""
 all_strings(ctx::MetacatCtx) =
@@ -39,5 +46,9 @@ function update_structure_strength!(g::Group, ctx::MetacatCtx)
 end
 function update_structure_strength!(b::Bridge, ctx::MetacatCtx)
     TEMPERATURE[] = ctx.temperature
-    return update_structure_strength!(b, ctx.net, Bridge[])
+    return update_structure_strength!(b, ctx.net, Bridge[], ctx.themespace)
+end
+function update_structure_strength!(d::Description, ctx::MetacatCtx)
+    TEMPERATURE[] = ctx.temperature
+    return update_strength!(d, ctx.themespace, ctx.net)
 end

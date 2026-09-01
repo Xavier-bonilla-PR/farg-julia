@@ -75,6 +75,9 @@ function add_proposed_bond!(s::WorkspaceString, b::Bond)
     return s
 end
 
+"""The `delete-proposed-structure` case for bonds; see coderack.jl."""
+delete_proposed_structure!(b::Bond) = delete_proposed_bond!(b.string, b)
+
 function delete_proposed_bond!(s::WorkspaceString, b::Bond)
     key = (b.from_object.id_num, b.to_object.id_num)
     haskey(s.proposed_bonds, key) || return s
@@ -252,7 +255,7 @@ function bond_builder(ctx::MetacatCtx, args::Vector{Any})
         directed(b) && activate_from_workspace!(b.direction::Node)
         return
     end
-    incompatible_bonds = getIncompatible = get_incompatible_bonds(b)
+    incompatible_bonds = get_incompatible_bonds(b)
     if !isempty(incompatible_bonds) &&
        !wins_all_fights(ctx.rng, ctx, b, 1, incompatible_bonds, 1)
         return

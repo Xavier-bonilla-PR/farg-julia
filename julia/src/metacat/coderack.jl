@@ -74,7 +74,13 @@ end
 bridge - descriptions do not count, since they are not stored in the
 workspace."""
 is_proposed_structure(x) = x isa Bond || x isa Group || x isa Bridge
-is_proposed_structure(::Any) = false
+
+"""`(delete-proposed-structure struc)` — removing a codelet from the coderack
+also unregisters the structure it was carrying, so an evicted proposal does not
+linger in its string's proposed list. Each codelet layer adds the method for its
+own structure type; a type whose pipeline is not ported yet has no registry to
+remove it from, which is what this fallback means."""
+delete_proposed_structure!(::Any) = nothing
 
 function make_codelet(ct::CodeletType, urgency::Real, arguments::Vector{Any} = Any[])
     relative_urgency = ct.urgency_clamped ? ct.clamped_relative_urgency : urgency
@@ -192,6 +198,7 @@ function delete_codelets!(cr::Coderack, num_to_delete::Int, codelet_count::Int,
     for _ in 1:num_to_delete
         weights = [removal_weight(c, cr, codelet_count, temperature) for c in cr.codelet_list]
         c = stochastic_pick(rng, cr.codelet_list, weights)::Codelet
+        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1])
         remove_codelet!(cr.bins[c.coderack_bin + 1], c)
         i = findfirst(x -> x === c, cr.codelet_list)
         i === nothing || deleteat!(cr.codelet_list, i)
