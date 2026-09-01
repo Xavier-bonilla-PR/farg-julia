@@ -116,8 +116,8 @@ function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
     ordered_objects = direction === net[:plato_left] ? reverse(objs) : objs
     initial_letter_category = get_descriptor_for(ordered_objects[1],
                                                  net[:plato_letter_category])
-    bond_category = getRelated = get_related_node(group_category, net[:plato_bond_category],
-                                                  net[:plato_identity])::Node
+    bond_category = get_related_node(group_category, net[:plato_bond_category],
+                                     net[:plato_identity])::Node
     group_length = length(objs)
     middle_idx = findfirst(o -> get_descriptor_for(o, net[:plato_string_position_category]) ===
                                 net[:plato_middle], objs)
@@ -188,6 +188,7 @@ the Scheme are not ported."""
 function build_group!(g::Group, net::Slipnet)
     g.id_num = g.string.next_id_num
     g.string.next_id_num += 1
+    g.string.group_by_leftmost_id[g.left_object.id_num] = g
     pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
     pushfirst!(g.string.right_edge_groups[g.right_string_pos + 1], g)
     pushfirst!(g.string.groups, g)
@@ -319,6 +320,7 @@ once the bridge codelets are ported."""
 function break_group!(g::Group, net::Slipnet)
     s = g.string
     g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net)
+    delete!(s.group_by_leftmost_id, g.left_object.id_num)
     i = findfirst(x -> x === g, s.groups)
     i === nothing || deleteat!(s.groups, i)
     for (pos, list) in ((g.left_string_pos, s.left_edge_groups),

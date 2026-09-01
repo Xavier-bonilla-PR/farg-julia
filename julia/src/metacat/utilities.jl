@@ -104,3 +104,59 @@ function temp_adjusted_values(value_list)
     exponent = sdiv(sub_from_100(TEMPERATURE[]), 30) + 0.5
     return [sround(sexpt(v, exponent)) for v in value_list]
 end
+
+# --- Chez's `map` application order -----------------------------------------
+#
+# Metacat does not define its own `map`, so `map`, and everything built on it
+# (`tell-all`, `flatmap`, `adjacency-map`), gets Chez's. Chez does NOT apply the
+# procedure left to right: it walks the list in PAIRS, recursing to the tail
+# first, so for a 4-element list the order is 3, 4, 1, 2, and for 5 elements it
+# is 5, 3, 4, 1, 2. (Metacat's own `filter`, `filter-out` and `stochastic-filter`
+# ARE hand-written left-to-right recursions, and so is `for-each`; only `map` is
+# affected.)
+#
+# This is invisible for a pure procedure, and it changes the answer for one that
+# draws random numbers or mutates shared state. The group builder's
+# constituent-bond reconciliation is the first place it bites: it decides the
+# order bonds are pushed onto the string's bond list.
+
+"""`(map proc l)` with Chez's application order. Results come back in list
+order; only the order in which `f` is APPLIED differs."""
+function scheme_map(f, l)
+    n = length(l)
+    results = Vector{Any}(undef, n)
+    function walk(i)
+        remaining = n - i + 1
+        remaining <= 0 && return
+        if remaining > 2
+            walk(i + 2)
+        end
+        results[i] = f(l[i])
+        remaining >= 2 && (results[i + 1] = f(l[i + 1]))
+        return
+    end
+    walk(1)
+    return results
+end
+
+"""`(map proc l1 l2)`, two lists, same application order."""
+function scheme_map(f, l1, l2)
+    n = min(length(l1), length(l2))
+    results = Vector{Any}(undef, n)
+    function walk(i)
+        remaining = n - i + 1
+        remaining <= 0 && return
+        if remaining > 2
+            walk(i + 2)
+        end
+        results[i] = f(l1[i], l2[i])
+        remaining >= 2 && (results[i + 1] = f(l1[i + 1], l2[i + 1]))
+        return
+    end
+    walk(1)
+    return results
+end
+
+"""`(adjacency-map f l)` = `(map f (all-but-last 1 l) (rest l))`, and so it
+inherits Chez's application order too."""
+adjacency_map(f, l) = scheme_map(f, l[1:(end - 1)], l[2:end])

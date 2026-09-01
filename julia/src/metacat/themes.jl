@@ -20,6 +20,13 @@
 # Deferred, and marked where it arises: the `thematic-bridge-scout` codelet,
 # which needs the bridge and description codelets (not yet ported), and the
 # save/restore-state machinery, which only the GUI and the memory layer use.
+#
+# WHEN PORTING `thematic-bridge-scout`: its line
+#   (themes (tell-all clusters 'pick-positive-theme))
+# is the ONE place in Metacat where a random-consuming procedure goes through
+# `tell-all`, and therefore through Chez's `map`, whose application order is NOT
+# left to right. Use `scheme_map` (utilities.jl) for it, or the draw order will
+# silently diverge.
 
 const MAX_THEME_ACTIVATION = 100
 const DOMINANT_THEME_MARGIN = 90

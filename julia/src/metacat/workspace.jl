@@ -29,6 +29,14 @@ mutable struct WorkspaceString
     right_edge_groups::Vector{Vector{WSObject}}
     # proposed (not yet built) bonds, keyed by from/to object id
     proposed_bonds::Dict{Tuple{Int,Int},Vector{Any}}
+    # proposed (not yet built) groups, newest first
+    proposed_groups::Vector{WSObject}
+    # built groups by the id-num of their leftmost object. NB this is the
+    # Scheme's `group-vector`, and it is NOT the same as searching `groups`:
+    # two groups can share a leftmost object (`ab` inside `abc`, and `abc`),
+    # and add-group OVERWRITES the slot while delete-group CLEARS it, so
+    # deleting the outer one leaves no equivalent for the inner.
+    group_by_leftmost_id::Dict{Int,WSObject}
     print_name::String
     translated::Bool
     average_intra_string_unhappiness::Int
@@ -411,6 +419,7 @@ function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractS
     s = WorkspaceString(string_type, cats, WSObject[], WSObject[], Any[],
                         [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
                         Dict{Tuple{Int,Int},Vector{Any}}(),
+                        WSObject[], Dict{Int,WSObject}(),
                         String(sym), false, 0, 0)
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],

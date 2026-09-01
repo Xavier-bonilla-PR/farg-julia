@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  desccodelets
+  desccodelets groupcodelets
 ```
 
-Expected — eleven layers, **6,007 trace lines byte-identical**:
+Expected — twelve layers, **7,725 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -68,6 +68,7 @@ ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
 ok    themes (2199 lines identical)
 ok    desccodelets (1181 lines identical)
+ok    groupcodelets (1718 lines identical)
 all probes matched
 ```
 
@@ -99,7 +100,7 @@ Julia (`julia/src/*.jl`). Verified by bit-exact RNG parity: 51/51 comparisons
 byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 (`results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~6,000 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~6,300 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -114,6 +115,7 @@ byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
 | themespace: clusters, settling, thematic compatibility | `themes.jl` | `themes` | 2199 |
 | description codelets + coderack eviction bookkeeping | `codelets_descriptions.jl` | `desccodelets` | 1181 |
+| group codelets: scouts, fights, consolidation | `codelets_groups.jl` | `groupcodelets` | 1718 |
 
 ---
 
@@ -198,6 +200,19 @@ by reading the code.
   soon as a group was built. It cost nothing while no probe printed description
   strengths, and was caught the moment one did. Watch for other stubs written
   "for now" against a layer that has since landed.
+- **Chez's `map` does NOT apply left to right.** It walks the list in PAIRS,
+  recursing to the tail first: for 4 elements the order is 3, 4, 1, 2; for 5 it
+  is 5, 3, 4, 1, 2; for 8 it is 7, 8, 5, 6, 3, 4, 1, 2. Metacat does not define
+  its own `map`, so `map`, `tell-all`, `flatmap` and `adjacency-map` all inherit
+  this. It is invisible for a pure procedure and changes the answer for one that
+  draws random numbers or mutates shared state — it decided which bonds the
+  group builder pushed onto the string's bond list first. `scheme_map` in
+  `utilities.jl` reproduces it. NB Metacat's OWN `filter`, `filter-out` and
+  `stochastic-filter` are hand-written left-to-right recursions, and `for-each`
+  is left to right, so only `map` is affected. An audit of the ported Scheme
+  found exactly one remaining site that matters, and it is flagged in
+  `themes.jl`: `thematic-bridge-scout`'s
+  `(tell-all clusters 'pick-positive-theme)`, which draws.
 - **Two Julia methods with the same signature SILENTLY REPLACE each other.**
   `f(x) = ...` followed by `f(::Any) = false` leaves one method, not two — the
   first is gone with no warning. The coderack had exactly this, so
@@ -223,28 +238,23 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~9,900 lines of Scheme remain.** `themes.ss` and the description codelets
-are done. Suggested order:
+**~9,600 lines of Scheme remain.** `themes.ss` and the description and group
+codelets are done. Suggested order:
 
-1. **Group codelets** — the five codelet bodies in `groups.ss`
-   (`top-down-group-scout:category`, `:direction`, `group-scout:whole-string`,
-   `group-evaluator`, `group-builder`). Same scout → evaluator → builder shape
-   as `codelets_bonds.jl` and `codelets_descriptions.jl`. Two things to wire
-   while you are there: `WorkspaceString` needs a `proposed_groups` list (it
-   only has `proposed_bonds`), and `delete_proposed_structure!` needs its
-   `Group` method so coderack eviction unregisters proposed groups the way it
-   now does proposed bonds.
-2. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
-   logic. Once these exist, port `thematic-bridge-scout` and
-   `propose-description-based-on-theme` from `themes.ss`; they are the only
-   parts of that file deliberately left out, because they call
-   `propose-bridge`, `bridge-evaluator` and `description-evaluator`.
-3. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
+1. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
+   logic. Once these exist, three deferrals elsewhere can be closed, and each
+   is marked in the code: `thematic-bridge-scout` and
+   `propose-description-based-on-theme` in `themes.ss` (the only parts of that
+   file left out, because they call `propose-bridge`, `bridge-evaluator` and
+   `description-evaluator`); `get-incompatible-bridges` in the group builder;
+   and bridge-breaking in the bond builder. Read the `scheme_map` trap below
+   before porting `thematic-bridge-scout` — it draws through `tell-all`.
+2. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).
-4. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
+3. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
    `justify.ss` (352)** — the self-watching layers the paper is actually about.
-5. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
+4. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
    possible, and `bench/metacat_bench.{ss,jl}` becomes meaningful.
 
 `breakers.ss` (47) can go in any time.

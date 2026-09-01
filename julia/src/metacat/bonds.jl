@@ -108,6 +108,15 @@ function calculate_internal_strength(b::Bond, net::Slipnet)
                   bond_degree_of_assoc(b.bond_category))
 end
 
+"""`(make-flipped-version)` — the same bond running the other way, with the
+opposite bond category. The descriptors swap along with the objects."""
+make_flipped_bond(b::Bond, net::Slipnet, codelet_count::Int = 0) =
+    make_bond(net, b.to_object, b.from_object,
+              get_related_node(b.bond_category, net[:plato_opposite],
+                               net[:plato_identity])::Node,
+              b.bond_facet, b.to_object_descriptor, b.from_object_descriptor,
+              codelet_count)
+
 """`(build-bond proposed-bond)` — attaches the bond to its string and objects."""
 function build_bond!(b::Bond)
     pushfirst!(b.string.bonds, b)

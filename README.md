@@ -230,7 +230,8 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
 bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges \
-                              coderack bondcodelets themes desccodelets
+                              coderack bondcodelets themes desccodelets \
+                              groupcodelets
 ```
 
 | layer | Julia | verified |
@@ -246,16 +247,16 @@ bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges \
 | bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
 | themespace: clusters, settling, thematic compatibility | `themes.jl` | 2,199 lines |
 | description codelets, and coderack eviction bookkeeping | `codelets_descriptions.jl` | 1,181 lines |
-| group, bridge and rule codelets | not yet ported | |
+| group codelets: scouts, fights, consolidation | `codelets_groups.jl` | 1,718 lines |
+| bridge and rule codelets | not yet ported | |
 | temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The eleven verified layers cover roughly 6,000 of the ~16,000 lines of
+The twelve verified layers cover roughly 6,300 of the ~16,000 lines of
 Metacat's non-graphics Scheme. What remains for a run that reaches an answer is
-the other codelet procedures (group, bridge, rule), plus `rules.ss`,
-`answers.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about
-9,900 lines.
+the bridge and rule codelets, plus `rules.ss`, `answers.ss`, `trace.ss`,
+`memory.ss`, `jootsing.ss` and `justify.ss` — about 9,600 lines.
 
 `themes.ss` was the one piece of that list on the critical path rather than a
 later concern, and it is now in: every workspace structure's strength is
@@ -264,7 +265,7 @@ The earlier probes held that condition, which is why they agreed; with the
 themespace ported, bridges and descriptions take their real strengths and an
 end-to-end comparison becomes meaningful once the remaining codelets land.
 
-Three things about Metacat's Scheme turned out to be load-bearing and are easy
+Four things about Metacat's Scheme turned out to be load-bearing and are easy
 to lose in a translation:
 
 - **Exact arithmetic.** Metacat computes in exact rationals wherever it can:
@@ -276,6 +277,11 @@ to lose in a translation:
 - **Cons ordering.** Links and descriptions are pushed onto the front of their
   lists, so those lists are in reverse declaration order — and the model reads
   the first match out of them.
+- **Chez's `map` is not left-to-right.** It walks the list in pairs, tail
+  first, so a 4-element list is processed 3, 4, 1, 2. Metacat uses the builtin,
+  so `tell-all`, `flatmap` and `adjacency-map` inherit it. Harmless for a pure
+  procedure; it changes the answer for one that draws random numbers or mutates
+  shared state.
 - **Right-to-left argument evaluation.** Chez evaluates procedure arguments
   right to left, so a call drawing two random numbers draws the rightmost
   first.
