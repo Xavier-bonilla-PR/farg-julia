@@ -111,8 +111,38 @@
     (+ (sum (tell-all (tell *workspace* 'get-bonds) 'get-strength))
        (sum (tell-all (tell *workspace* 'get-groups) 'get-strength)))))
 
+;;--- workload 5: themespace settling ---------------------------------------
+(define theme-specs
+  (list
+    (list 'top-bridge plato-letter-category plato-successor 100)
+    (list 'top-bridge plato-letter-category plato-identity 40)
+    (list 'top-bridge plato-letter-category #f -60)
+    (list 'top-bridge plato-string-position-category plato-identity 75)
+    (list 'top-bridge plato-string-position-category plato-opposite -30)
+    (list 'top-bridge plato-length plato-successor 65)
+    (list 'vertical-bridge plato-letter-category plato-successor 90)
+    (list 'vertical-bridge plato-letter-category plato-predecessor -55)
+    (list 'vertical-bridge plato-object-category #f 55)
+    (list 'vertical-bridge plato-group-category plato-identity 80)
+    (list 'vertical-bridge plato-length plato-predecessor -100)
+    (list 'bottom-bridge plato-direction-category plato-opposite 65)))
+
+(define themespace-workload
+  (lambda ()
+    (tell *themespace* 'delete-everything)
+    (tell *themespace* 'unfreeze-everything)
+    (tell *themespace* 'thematic-pressure-on)
+    (for-each
+      (lambda (spec)
+        (tell *themespace* 'set-theme-activation
+          (1st spec) (2nd spec) (3rd spec) (4th spec)))
+      theme-specs)
+    (repeat* 20 times (tell *themespace* 'spread-activation))
+    (sum (tell-all (tell *themespace* 'get-all-themes) 'get-activation))))
+
 (timeit "slipnet-50-cycles" 400 slipnet-cycle-workload)
 (timeit "workspace-init" 2000 workspace-init-workload)
 (workspace-init-workload)
 (timeit "concept-mappings" 2000 cm-workload)
 (timeit "bonds-and-groups" 2000 bonds-groups-workload)
+(timeit "themespace-settling" 2000 themespace-workload)

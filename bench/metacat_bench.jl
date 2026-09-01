@@ -9,6 +9,8 @@ include("../julia/src/metacat/concept_mappings.jl")
 include("../julia/src/metacat/images.jl")
 include("../julia/src/metacat/bonds.jl")
 include("../julia/src/metacat/groups.jl")
+include("../julia/src/metacat/bridges.jl")
+include("../julia/src/metacat/themes.jl")
 
 const net = build_slipnet()
 current_strings = WorkspaceString[]
@@ -115,8 +117,38 @@ function bonds_groups_workload()
            ssum([g.strength for s in strings for g in s.groups])
 end
 
+#--- workload 5: themespace settling ---------------------------------------
+const themespace = make_themespace(net)
+const theme_specs = (
+    (:top_bridge, net[:plato_letter_category], net[:plato_successor], 100),
+    (:top_bridge, net[:plato_letter_category], net[:plato_identity], 40),
+    (:top_bridge, net[:plato_letter_category], nothing, -60),
+    (:top_bridge, net[:plato_string_position_category], net[:plato_identity], 75),
+    (:top_bridge, net[:plato_string_position_category], net[:plato_opposite], -30),
+    (:top_bridge, net[:plato_length], net[:plato_successor], 65),
+    (:vertical_bridge, net[:plato_letter_category], net[:plato_successor], 90),
+    (:vertical_bridge, net[:plato_letter_category], net[:plato_predecessor], -55),
+    (:vertical_bridge, net[:plato_object_category], nothing, 55),
+    (:vertical_bridge, net[:plato_group_category], net[:plato_identity], 80),
+    (:vertical_bridge, net[:plato_length], net[:plato_predecessor], -100),
+    (:bottom_bridge, net[:plato_direction_category], net[:plato_opposite], 65))
+
+function themespace_workload()
+    delete_everything!(themespace)
+    unfreeze_everything!(themespace)
+    thematic_pressure_on!(themespace)
+    for (tt, dim, rel, act) in theme_specs
+        set_theme_activation!(themespace, tt, dim, rel, act)
+    end
+    for _ in 1:20
+        spread_theme_activation!(themespace)
+    end
+    return ssum([get_activation(t) for t in get_all_themes(themespace)])
+end
+
 timeit("slipnet-50-cycles", 400, slipnet_cycle_workload)
 timeit("workspace-init", 2000, workspace_init_workload)
 workspace_init_workload()
 timeit("concept-mappings", 2000, cm_workload)
 timeit("bonds-and-groups", 2000, bonds_groups_workload)
+timeit("themespace-settling", 2000, themespace_workload)

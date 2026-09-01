@@ -101,3 +101,22 @@ function weighted_average(values, weights)
     s == 0 && return 0
     return sdiv(ssum(map(*, weights, values)), s)
 end
+
+"""Scheme's `*`, for the one case Julia disagrees on: an EXACT zero operand
+makes the product exact zero even when the other operand is a float —
+`(* 0.02 0)` is `0`, not `0.0`. Julia gives `0.0`, which prints differently and
+would carry inexactness onward."""
+smul(a, b) = ((is_exact(a) && a == 0) || (is_exact(b) && b == 0)) ? 0 : a * b
+
+"""Scheme's `exp`: `(exp 0)` on an exact zero is the exact `1`."""
+sexp_e(x) = (is_exact(x) && x == 0) ? 1 : exp(float(x))
+
+"""Scheme's `tanh`: `(tanh 0)` on an exact zero is the exact `0`."""
+stanh(x) = (is_exact(x) && x == 0) ? 0 : tanh(float(x))
+
+"""`(maximum l)` / `(minimum l)` from utilities.ss — 0 for the empty list.
+NB Scheme's `max` returns the winning element unchanged, while Julia's
+`maximum` promotes the whole collection to a common type, turning an integer
+`1` drawn from a rational list into `1//1`. `snorm` undoes that."""
+smaximum(l) = isempty(l) ? 0 : snorm(maximum(l))
+sminimum(l) = isempty(l) ? 0 : snorm(minimum(l))

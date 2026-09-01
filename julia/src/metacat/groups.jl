@@ -90,6 +90,11 @@ function nested_member(g::Group, object::WSObject)
     return false
 end
 
+"""`contains?` for a group — this is the method workspace.jl's fallback stands
+in for. It matters as soon as any group exists: a group and its own letters
+must not count as local support for each other's descriptions."""
+contains_object(g::Group, inner::WSObject) = nested_member(g, inner)
+
 """`(number->platonic-number n)`."""
 number_to_platonic_number(net::Slipnet, n::Int) =
     n > length(net.numbers) ? nothing : net.numbers[n]

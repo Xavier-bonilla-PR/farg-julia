@@ -166,9 +166,9 @@ end
 description_type_present(o::WSObject, t::Node) =
     any(d -> d.description_type === t, o.descriptions)
 
-"""`contains?` — whether one object encloses another. With no groups yet, an
-object contains only itself's group chain, so this is false for distinct
-letters."""
+"""`contains?` — `(and (group? object1) (tell object1 'nested-member? object2))`.
+Only a group can enclose anything, so the fallback is false; groups.jl adds the
+method that actually walks the constituent tree."""
 contains_object(outer::WSObject, inner::WSObject) = false
 
 function calculate_local_support(d::Description)
@@ -191,16 +191,18 @@ calculate_internal_strength(d::Description) = d.descriptor.conceptual_depth
 calculate_external_strength(d::Description) =
     sdiv(calculate_local_support(d) + d.description_type.activation, 2)
 
-"""Themes are not ported yet; with no active themes `(maximum '())` is 0,
-which is what the Scheme returns here too."""
-get_thematic_compatibility(::Description) = 0
+"""With no themespace there are no active themes, and `(maximum '())` is 0 —
+which is exactly what the Scheme returns while the themespace is empty. The
+real per-structure methods live in themes.jl."""
+get_thematic_compatibility(_, ::Nothing, _) = 0
 
-"""`(update-strength)` from workspace-structures.ss."""
-function update_strength!(s)
+"""`(update-strength)` from workspace-structures.ss. The themespace is optional
+so the pre-themes layers can call this unchanged."""
+function update_strength!(s, themespace = nothing, net = nothing)
     internal = calculate_internal_strength(s)
     external = calculate_external_strength(s)
     intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
-    compatibility = get_thematic_compatibility(s)
+    compatibility = get_thematic_compatibility(s, themespace, net)
     thematic_weight = abs(compatibility)
     s.strength = sround(weighted_average([compatibility > 0 ? 100 : 0, intrinsic],
                                          [thematic_weight, sub_from_1(thematic_weight)]))
@@ -358,7 +360,7 @@ function update_average_salience!(o::WSObject)
     return o
 end
 
-function update_object_values!(o::WSObject)
+function update_object_values!(o::WSObject, themespace = nothing, net = nothing)
     update_intra_string_unhappiness!(o)
     update_inter_string_unhappiness!(o)
     update_average_unhappiness!(o)
@@ -366,7 +368,7 @@ function update_object_values!(o::WSObject)
     update_inter_string_salience!(o)
     update_average_salience!(o)
     for d in o.descriptions
-        update_strength!(d)
+        update_strength!(d, themespace, net)
     end
     return o
 end
@@ -454,7 +456,8 @@ the rng is what lets a bond's external strength do its stochastic local-density
 walk; it is optional so the pre-bond layers can call this without one."""
 function update_workspace_values!(strings::Vector{WorkspaceString},
                                   rng::Union{Nothing,PyRandom} = nothing,
-                                  net::Union{Nothing,Slipnet} = nothing)
+                                  net::Union{Nothing,Slipnet} = nothing,
+                                  themespace = nothing)
     if rng !== nothing && net !== nothing
         # (tell *workspace* 'get-structures) is bonds, then groups, then
         # bridges and rules, each gathered across all strings in turn.
@@ -473,7 +476,7 @@ function update_workspace_values!(strings::Vector{WorkspaceString},
         update_all_relative_importances!(s)
     end
     for o in objs
-        update_object_values!(o)
+        update_object_values!(o, themespace, net)
     end
     for s in strings
         update_average_intra_string_unhappiness!(s)
