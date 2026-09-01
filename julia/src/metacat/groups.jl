@@ -32,8 +32,8 @@ mutable struct Group <: WSObject
     raw_importance::Union{Int,Rational{Int}}
     relative_importance::Int
     intra_string_unhappiness::Int
-    horizontal_inter_string_unhappiness::Int
-    vertical_inter_string_unhappiness::Int
+    horizontal_inter_string_unhappiness::Union{Int,Rational{Int}}
+    vertical_inter_string_unhappiness::Union{Int,Rational{Int}}
     average_unhappiness::Int
     intra_string_salience::Int
     horizontal_inter_string_salience::Int
@@ -57,6 +57,11 @@ singleton_group(g::Group) = g.group_length == 1
 singleton_group(::Letter) = false
 top_level_member(g::Group, object::WSObject) = any(o -> o === object, g.constituent_objects)
 all_descriptions(g::Group) = vcat(g.descriptions, g.bond_descriptions)
+
+"""`(get-subobject-bridges bridge-orientation)`."""
+get_subobject_bridges(g::Group, orientation::Symbol) =
+    Any[b for b in (get_bridge(o, orientation) for o in g.constituent_objects)
+        if b !== nothing]
 get_letter_span(o::Letter) = 1
 get_letter_span(g::Group) = length(g.letters)
 
@@ -180,7 +185,7 @@ end
 and its constituents, activates its descriptors, and invalidates any "middle"
 descriptions the new grouping has made false. The trace and graphics parts of
 the Scheme are not ported."""
-function build_group!(g::Group, net::Slipnet)
+function build_group!(g::Group, net::Slipnet, ctx = nothing)
     g.id_num = g.string.next_id_num
     g.string.next_id_num += 1
     pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
@@ -197,21 +202,31 @@ function build_group!(g::Group, net::Slipnet)
     end
     g.proposal_level = BUILT
     spans_whole_string(g) ||
-        delete_invalid_string_position_middle_descriptions!(g.string, net)
+        delete_invalid_string_position_middle_descriptions!(g.string, net, ctx)
     return g
 end
 
 """Building a non-spanning group can make an object no longer "middle"; those
-descriptions are removed. The bridge cleanup in the Scheme applies once bridges
-are ported."""
+descriptions are removed, and so is any StrPosCtgy concept mapping resting on
+them - a bridge left with no concept mappings at all is broken outright.
+
+`ctx` carries the workspace's bridge lists. Passing `nothing` skips the bridge
+half, which is what the pre-bridge layers want and is equivalent whenever no
+bridges exist."""
 function delete_invalid_string_position_middle_descriptions!(s::WorkspaceString,
-                                                             net::Slipnet)
+                                                             net::Slipnet, ctx = nothing)
     for object in objects(s)
-        if any(d -> d.descriptor === net[:plato_middle], object.descriptions) &&
-           !middle_in_string(object)
-            idx = findfirst(d -> d.description_type === net[:plato_string_position_category],
-                            object.descriptions)
-            idx === nothing || deleteat!(object.descriptions, idx)
+        if descriptor_present(object, net[:plato_middle]) && !middle_in_string(object)
+            delete_description_type!(object, net[:plato_string_position_category])
+            ctx === nothing && continue
+            for orientation in (:vertical, :horizontal)
+                b = get_bridge(object, orientation)
+                b === nothing && continue
+                cm_type_present(b::Bridge, net[:plato_string_position_category]) || continue
+                delete_concept_mapping_type!(b::Bridge,
+                                             net[:plato_string_position_category])
+                isempty((b::Bridge).all_concept_mappings) && break_bridge!(ctx, b::Bridge)
+            end
         end
     end
     return s
@@ -309,11 +324,14 @@ function distinguishing_descriptor(net::Slipnet, g::Group, descriptor::Node)
 end
 
 """`(break-group group)` — recursively breaks any enclosing group first, then
-detaches this one and the bonds incident on it. The bridge handling is added
-once the bridge codelets are ported."""
-function break_group!(g::Group, net::Slipnet)
+detaches this one, the bonds incident on it, and its own two bridges. As in
+`delete-invalid-string-position-middle-descriptions`, `ctx` may be `nothing`
+where no bridges can exist."""
+function break_group!(g::Group, net::Slipnet, ctx = nothing)
     s = g.string
-    g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net)
+    vertical_bridge = g.vertical_bridge
+    horizontal_bridge = g.horizontal_bridge
+    g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net, ctx)
     i = findfirst(x -> x === g, s.groups)
     i === nothing || deleteat!(s.groups, i)
     for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
@@ -324,6 +342,11 @@ function break_group!(g::Group, net::Slipnet)
     for b in incident_bonds(g)
         break_bond!(b::Bond)
     end
+    if ctx !== nothing
+        delete_proposed_bridges_for!(ctx, g)
+        vertical_bridge === nothing || break_bridge!(ctx, vertical_bridge::Bridge)
+        horizontal_bridge === nothing || break_bridge!(ctx, horizontal_bridge::Bridge)
+    end
     for o in g.constituent_objects
         o.enclosing_group = nothing
     end
@@ -331,6 +354,38 @@ function break_group!(g::Group, net::Slipnet)
         b.enclosing_group = nothing
     end
     spans_whole_string(g) ||
-        delete_invalid_string_position_middle_descriptions!(s, net)
+        delete_invalid_string_position_middle_descriptions!(s, net, ctx)
     return g
+end
+
+"""`(attach-length-description group)` — groups longer than five objects have
+no platonic length, and get no description."""
+function attach_length_description!(g::Group, net::Slipnet)
+    get_descriptor_for(g, net[:plato_length]) === nothing || return g
+    g.platonic_length === nothing && return g
+    new_description!(g, net[:plato_length], g.platonic_length::Node)
+    return g
+end
+
+"""`(make-flipped-version)` — a same-group is its own flip; a successor or
+predecessor group flips into the other category, with the opposite direction
+and flipped constituent bonds.
+
+The flipped group KEEPS the original's id-num, so that bridges to it land in
+the same slot of the proposed-bridge table as bridges to the unflipped one."""
+function make_flipped_version(g::Group, net::Slipnet)
+    g.group_category === net[:plato_samegrp] && return g
+    flipped_bonds = Any[make_flipped_version(b::Bond, net) for b in g.constituent_bonds]
+    flipped = make_group(net, g.string,
+                         get_related_node(g.group_category, net[:plato_opposite],
+                                          net[:plato_identity])::Node,
+                         g.group_bond_facet,
+                         get_related_node(g.direction::Node, net[:plato_opposite],
+                                          net[:plato_identity]),
+                         g.left_object, g.right_object, g.constituent_objects,
+                         flipped_bonds)
+    flipped.id_num = g.id_num
+    description_type_present(g, net[:plato_length]) &&
+        attach_length_description!(flipped, net)
+    return flipped
 end

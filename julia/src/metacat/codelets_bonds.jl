@@ -153,14 +153,6 @@ get_bond_category_relevance(s::WorkspaceString, category::Node) =
 get_direction_relevance(s::WorkspaceString, direction::Node) =
     get_relevance(s, b -> b.direction, direction)
 
-"""`(choose-object message)` — pick an object weighted by a
-temperature-adjusted attribute."""
-function choose_object(rng::PyRandom, s::WorkspaceString, attribute::Symbol)
-    objs = objects(s)
-    weights = temp_adjusted_values([getfield(o, attribute) for o in objs])
-    return stochastic_pick(rng, objs, weights)
-end
-
 # --- the codelets -----------------------------------------------------------
 
 """`(propose-bond ...)` — activate the concepts involved, register the bond as
@@ -252,7 +244,7 @@ function bond_builder(ctx::MetacatCtx, args::Vector{Any})
         directed(b) && activate_from_workspace!(b.direction::Node)
         return
     end
-    incompatible_bonds = getIncompatible = get_incompatible_bonds(b)
+    incompatible_bonds = get_incompatible_bonds(b)
     if !isempty(incompatible_bonds) &&
        !wins_all_fights(ctx.rng, ctx, b, 1, incompatible_bonds, 1)
         return
@@ -262,12 +254,24 @@ function bond_builder(ctx::MetacatCtx, args::Vector{Any})
         max_span = maximum(get_letter_span(g) for g in incompatible_groups)
         wins_all_fights(ctx.rng, ctx, b, 1, incompatible_groups, max_span) || return
     end
-    # bridges are not broken by bonds until the bridge codelets are ported
+    # An edge bond can contradict the direction mapping of a bridge that
+    # reaches past it, but only a directed bond at an edge of its string can.
+    incompatible_bridges_ =
+        (directed(b) && (bond_leftmost_in_string(b) || bond_rightmost_in_string(b))) ?
+        vcat(get_incompatible_bridges(b, :horizontal, ctx.net),
+             get_incompatible_bridges(b, :vertical, ctx.net)) : Any[]
+    if !isempty(incompatible_bridges_) &&
+       !wins_all_fights(ctx.rng, ctx, b, 2, incompatible_bridges_, 3)
+        return
+    end
     for g in incompatible_groups
-        object_exists(ctx, g) && break_group!(g, ctx.net)
+        object_exists(ctx, g) && break_group!(g, ctx.net, ctx)
     end
     for other in incompatible_bonds
         break_bond!(other::Bond)
+    end
+    for bridge in incompatible_bridges_
+        break_bridge!(ctx, bridge::Bridge)
     end
     build_bond!(b)
     return

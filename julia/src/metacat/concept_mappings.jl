@@ -6,10 +6,12 @@
 # slippability drive most of the mapping decisions the program makes.
 
 mutable struct ConceptMapping
-    object1::Union{Nothing,WSObject,Symbol}   # Symbol for the 'coattail marker
+    # a workspace object, or a bond or group whose direction is being mapped,
+    # or the 'coattail marker symbol
+    object1::Any
     description_type1::Node
     descriptor1::Node
-    object2::Union{Nothing,WSObject,Symbol}
+    object2::Any
     description_type2::Node
     descriptor2::Node
     label::Union{Nothing,Node}

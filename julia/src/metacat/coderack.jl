@@ -254,10 +254,17 @@ const BOTTOM_UP_CODELET_TYPE_NAMES = [
 
 make_bottom_up_codelet_types() = [CodeletType(n) for n in BOTTOM_UP_CODELET_TYPE_NAMES]
 
-"""The Scheme prints codelet type names with hyphens and a colon."""
-codelet_type_display(ct::CodeletType) =
-    replace(replace(String(ct.name), "_scout_whole_string" => "-scout:whole-string"),
-            "_" => "-")
+"""The Scheme prints codelet type names with hyphens, and a colon before the
+qualifier of a scout that has one."""
+function codelet_type_display(ct::CodeletType)
+    name = String(ct.name)
+    for (suffix, replacement) in ("_scout_whole_string" => "-scout:whole-string",
+                                  "_scout_category" => "-scout:category",
+                                  "_scout_direction" => "-scout:direction")
+        name = replace(name, suffix => replacement)
+    end
+    return replace(name, "_" => "-")
+end
 
 """The codelet-type registry. Procedures are attached by the codelet layers as
 they are ported, mirroring set-codelet-procedure in the Scheme."""

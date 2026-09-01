@@ -104,3 +104,53 @@ function temp_adjusted_values(value_list)
     exponent = sdiv(sub_from_100(TEMPERATURE[]), 30) + 0.5
     return [sround(sexpt(v, exponent)) for v in value_list]
 end
+
+# --- list utilities ---------------------------------------------------------
+#
+# These are exactly as picky about ordering as the Scheme originals, because
+# the model reads the first (or the longest) match out of them.
+
+"""`(product l)` — 1 for the empty list, as `(apply * '())` gives."""
+product(l) = isempty(l) ? 1 : reduce(*, l)
+
+"""`(remq-duplicates l)` — keeps the LAST of each duplicate group, not the
+first, because the Scheme drops an element whenever it recurs in the tail."""
+function remq_duplicates(l)
+    result = eltype(l)[]
+    for (i, x) in enumerate(l)
+        any(y -> y === x, @view l[i+1:end]) && continue
+        push!(result, x)
+    end
+    return result
+end
+
+"""`(intersect l1 l2)` — the elements of l1 that are eq? to something in l2,
+in l1's order."""
+intersect_eq(l1, l2) = eltype(l1)[x for x in l1 if any(y -> y === x, l2)]
+
+"""`(remq-elements elements l)`."""
+remq_elements(elements, l) = eltype(l)[x for x in l if !any(y -> y === x, elements)]
+
+"""`(partition pred? l)` — groups l into classes, each of whose members the
+new element relates to under `pred`. The Scheme builds the classes from the
+END of the list backwards, and inserts into the first class every one of whose
+members satisfies the predicate; both matter for which partition comes out."""
+function partition_by(pred, l)
+    classes = Vector{eltype(l)}[]
+    for x in Iterators.reverse(l)
+        i = findfirst(c -> all(y -> pred(x, y), c), classes)
+        if i === nothing
+            push!(classes, eltype(l)[x])
+        else
+            pushfirst!(classes[i], x)
+        end
+    end
+    return classes
+end
+
+"""`(select-longest-list l)` — the FIRST longest sublist, or empty."""
+function select_longest_list(l)
+    isempty(l) && return []
+    lengths = [length(x) for x in l]
+    return l[findfirst(==(maximum(lengths)), lengths)]
+end

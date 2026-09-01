@@ -3,8 +3,8 @@
 Everything below assumes a **fresh container with a fresh clone** — no
 toolchain, nothing cached. Start here.
 
-Branch: `claude/copycat-python-julia-rewrite-0bw3lu`
-Last commit at time of writing: `6a4b9c2`
+Branch: `claude/quirky-ptolemy-91zvuu`
+Last commit at time of writing: the bridge codelet commit.
 
 ---
 
@@ -50,10 +50,11 @@ From the repo root. This is the single most useful command in the project:
 
 ```bash
 JULIA=$JULIA bash bench/verify_metacat.sh \
-  util slipnet workspace cm bonds groups bridges coderack bondcodelets
+  util slipnet workspace cm bonds groups bridges coderack bondcodelets \
+  bridgecodelets
 ```
 
-Expected — nine layers, **2,627 trace lines byte-identical**:
+Expected — ten layers, **3,582 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -65,6 +66,7 @@ ok    groups (230 lines identical)
 ok    bridges (304 lines identical)
 ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
+ok    bridgecodelets (955 lines identical)
 all probes matched
 ```
 
@@ -96,7 +98,7 @@ Julia (`julia/src/*.jl`). Verified by bit-exact RNG parity: 51/51 comparisons
 byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 (`results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~4,500 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~5,200 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -109,6 +111,7 @@ byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 | bridges (horizontal + vertical) | `bridges.jl` | `bridges` | 304 |
 | coderack | `coderack.jl` | `coderack` | 366 |
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
+| bridge codelet pipeline, workspace bridge bookkeeping, mapping strengths | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 955 |
 
 ---
 
@@ -178,12 +181,43 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **A bridge's `add-concept-mappings` PREPENDS** (`(append cm-list concept-mappings)`),
+  and so do `add-bond-concept-mapping` and `add-symmetric-slippage`. The first
+  port used `push!`; the bridge codelet probe caught it.
+- **`delete-concept-mapping-type` selects the mapping out of ALL-CMs but
+  removes it only from all-CMs and concept-mappings** — a bond CM deleted this
+  way stays in `bond-concept-mappings`. Preserved as-is.
+- **An enclosing group's bridge discharges half an object's inter-string
+  unhappiness EXACTLY**: `(100- (* 1/2 strength))` is a rational, so the
+  unhappiness fields cannot be `Int`.
+- **Mapping strengths can be INEXACT.** `(100* (tanh (* 1/40 raw)))` is
+  `(round (* 100 <flonum>))`, which in Scheme is a flonum. Convert the exact
+  ratio (`float(raw // 40)`) rather than multiplying by a float `1/40`; the two
+  differ in the last bit. Probe output has to normalise the exactness
+  (`inexact->exact`) or the two sides print `93.0` against `93`.
+- **`stochastic-pick-by-method` does NOT temperature-adjust its weights**,
+  unlike a string's `choose-object`. `important-object-bridge-scout` uses both,
+  three lines apart.
+- **`propose-bridge` uses ALL of a string-spanning group's descriptions** and
+  only the relevant ones for anything else. This is a deliberate hack, commented
+  at length in `bridges.ss`: without it an inactive Direction-Category leaves a
+  spanning bridge with no direction mapping, so it is not judged incompatible
+  with the sub-bridges it contradicts and both survive.
+- **A flipped group keeps the original's id-num** so bridges to it hash to the
+  same slot of the proposed-bridge table — but `add-group` assigns a fresh one
+  when the flipped group is actually built.
+- **`reverse-direction-orientation?` needs EVERY reversible CM to be Opposite.**
+  Between two spanning groups that means opposite group category *and* opposite
+  direction, which only happens when one group was scanned right-to-left. A
+  probe that builds both groups left-to-right never reaches the flip path at
+  all — `bench/metacat_bridgecodelets_probe.*` builds the target string's group
+  backwards for exactly this reason.
 
 ---
 
 ## 6. What's next, in order
 
-**~11,300 lines of Scheme remain.** Suggested order, with the reasoning:
+**~10,700 lines of Scheme remain.** Suggested order, with the reasoning:
 
 1. **`themes.ss` (1,235)** — do this first. It is on the critical path, not
    optional: every workspace structure's strength is weighted by its thematic
@@ -194,16 +228,22 @@ by reading the code.
    `get_thematic_compatibility(...) = 0` — grep for that and replace.
 2. **Description and group codelets** (`descriptions.ss` 205, plus the codelet
    bodies in `groups.ss`) — small, and they follow the exact
-   scout → evaluator → builder shape already ported for bonds in
-   `codelets_bonds.jl`. Use that file as the template.
-3. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
-   logic.
-4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
+   scout → evaluator → builder shape already ported for bonds and bridges in
+   `codelets_bonds.jl` / `codelets_bridges.jl`. Use those as the template.
+   These are now the *only* thing blocking a bridge between objects of
+   different lengths: `propose-bridge` posts a `top-down-description-scout` and
+   a `top-down-group-scout:category` in that case, and both are registered in
+   `codelets_bridges.jl` as stubs that raise. Also bring back
+   `get_incompatible_bridges(::Group, ...)`, which group-builder needs — it was
+   left out here rather than shipped unverified. `propose-singleton-group` and
+   `try-to-propose-singleton-group` in `bridges.ss` have no callers anywhere in
+   the model; they are dead code, not an omission.
+3. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).
-5. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
+4. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
    `justify.ss` (352)** — the self-watching layers the paper is actually about.
-6. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
+5. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
    possible, and `bench/metacat_bench.{ss,jl}` becomes meaningful.
 
 `breakers.ss` (47) can go in any time.

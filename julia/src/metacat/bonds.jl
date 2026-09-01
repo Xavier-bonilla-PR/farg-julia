@@ -146,3 +146,10 @@ function update_structure_strength!(b::Bond, net::Slipnet, rng::PyRandom)
     b.strength = sround(weighted_average([0, intrinsic], [0, 1]))
     return b
 end
+
+"""`(make-flipped-version)` — the same relation read the other way round."""
+make_flipped_version(b::Bond, net::Slipnet) =
+    make_bond(net, b.to_object, b.from_object,
+              get_related_node(b.bond_category, net[:plato_opposite],
+                               net[:plato_identity])::Node,
+              b.bond_facet, b.to_object_descriptor, b.from_object_descriptor)

@@ -10,8 +10,8 @@
 # genuinely differ dispatch on it.
 #
 # Deferred, and marked where they arise: theme boosting (themes are not ported,
-# and an empty themespace contributes 0), the flipped-group and translated-rule
-# machinery, and graphics.
+# and an empty themespace contributes 0), the translated-rule machinery, and
+# graphics.
 
 mutable struct Bridge
     orientation::Symbol                # :horizontal | :vertical
@@ -26,6 +26,8 @@ mutable struct Bridge
     group_spanning_bridge::Bool
     flipped_group1::Bool
     flipped_group2::Bool
+    original_group1::Union{Nothing,WSObject}
+    original_group2::Union{Nothing,WSObject}
     translated_rule_bridge::Bool
     # workspace-structure fields
     time_stamp::Int
@@ -53,7 +55,7 @@ function make_bridge(orientation::Symbol, object1::WSObject, object2::WSObject,
                   ConceptMapping[],
                   spans_whole_string(object1) && spans_whole_string(object2),
                   string_spanning_group(object1) && string_spanning_group(object2),
-                  false, false, false, codelet_count, 0, 0, nothing)
+                  false, false, nothing, nothing, false, codelet_count, 0, 0, nothing)
 end
 
 """`(set-concept-mappings CM-list)` — splits the bond CMs out, keeps the rest,
@@ -70,20 +72,66 @@ function set_concept_mappings!(b::Bridge, cm_list::Vector{ConceptMapping}, net::
     return b
 end
 
-function add_concept_mapping!(b::Bridge, cm::ConceptMapping)
-    push!(b.concept_mappings, cm)
-    push!(b.all_concept_mappings, cm)
+"""`(add-concept-mappings cm-list)` — the new mappings go on the FRONT of
+both lists, and the model reads the first match out of them."""
+function add_concept_mappings!(b::Bridge, cms::Vector{ConceptMapping})
+    prepend!(b.concept_mappings, cms)
+    prepend!(b.all_concept_mappings, cms)
     return b
 end
 
+add_concept_mapping!(b::Bridge, cm::ConceptMapping) =
+    add_concept_mappings!(b, ConceptMapping[cm])
+
 function add_bond_concept_mapping!(b::Bridge, cm::ConceptMapping)
-    push!(b.bond_concept_mappings, cm)
-    push!(b.all_concept_mappings, cm)
+    pushfirst!(b.bond_concept_mappings, cm)
+    pushfirst!(b.all_concept_mappings, cm)
     return b
 end
 
 add_symmetric_slippage!(b::Bridge, cm::ConceptMapping, net::Slipnet) =
-    (push!(b.symmetric_slippages, cm_symmetric_mapping(cm, net)); b)
+    (pushfirst!(b.symmetric_slippages, cm_symmetric_mapping(cm, net)); b)
+
+"""`(CM-type-present? type)` / `(concept-mapping-present? cm)`."""
+cm_type_present(b::Bridge, t::Node) = any(cm -> is_cm_type(cm, t), b.all_concept_mappings)
+concept_mapping_present(b::Bridge, cm::ConceptMapping) =
+    any(other -> cms_equal(other, cm), b.all_concept_mappings)
+
+get_concept_mapping_types(b::Bridge) = Node[cm_type(cm) for cm in b.all_concept_mappings]
+
+"""`(delete-concept-mapping-type type)` — drops the first mapping of that type
+and, if there is one, the symmetric slippage of the same type."""
+function delete_concept_mapping_type!(b::Bridge, t::Node)
+    i = findfirst(cm -> is_cm_type(cm, t), b.all_concept_mappings)
+    if i !== nothing
+        cm = b.all_concept_mappings[i]
+        deleteat!(b.all_concept_mappings, i)
+        j = findfirst(x -> x === cm, b.concept_mappings)
+        j === nothing || deleteat!(b.concept_mappings, j)
+    end
+    k = findfirst(cm -> is_cm_type(cm, t), b.symmetric_slippages)
+    k === nothing || deleteat!(b.symmetric_slippages, k)
+    return b
+end
+
+"""`(get-original-object1)` — the group as it stood before the bridge flipped
+it, which is the object the workspace still holds."""
+original_object1(b::Bridge) =
+    b.flipped_group1 ? (b.original_group1)::WSObject : b.object1
+original_object2(b::Bridge) =
+    b.flipped_group2 ? (b.original_group2)::WSObject : b.object2
+
+function mark_flipped_group1!(b::Bridge, original_group::WSObject)
+    b.flipped_group1 = true
+    b.original_group1 = original_group
+    return b
+end
+
+function mark_flipped_group2!(b::Bridge, original_group::WSObject)
+    b.flipped_group2 = true
+    b.original_group2 = original_group
+    return b
+end
 
 get_concept_mapping(b::Bridge, description_type::Node) =
     (i = findfirst(cm -> is_cm_type(cm, description_type), b.all_concept_mappings);
@@ -280,7 +328,7 @@ end
 
 """`(calculate-external-strength)` — the summed strength of every other bridge
 of the same type that supports this one."""
-function calculate_external_strength(b::Bridge, all_bridges::Vector{Bridge}, net::Slipnet)
+function calculate_external_strength(b::Bridge, all_bridges, net::Slipnet)
     ((b.object1 isa Letter && spans_whole_string(b.object1)) ||
      (b.object2 isa Letter && spans_whole_string(b.object2))) && return 100
     total = 0
@@ -296,7 +344,7 @@ end
 workspace-structure default."""
 get_thematic_compatibility(::Bridge) = 0
 
-function update_structure_strength!(b::Bridge, net::Slipnet, all_bridges::Vector{Bridge})
+function update_structure_strength!(b::Bridge, net::Slipnet, all_bridges)
     internal = calculate_internal_strength(b, net)
     external = calculate_external_strength(b, all_bridges, net)
     intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
@@ -306,11 +354,12 @@ end
 
 # --- building ---------------------------------------------------------------
 
-"""`(build-bridge bridge-orientation bridge)`, minus the length-description and
-translated-rule handling, which belong with rules."""
-function build_bridge!(b::Bridge, net::Slipnet)
+"""`(build-bridge bridge-orientation bridge)`, minus the translated-rule
+handling, which belongs with rules."""
+function build_bridge!(ctx, b::Bridge, net::Slipnet)
     update_bridge!(b.object1, b.orientation, b)
     update_bridge!(b.object2, b.orientation, b)
+    add_bridge!(ctx, b)
     if b.orientation === :horizontal
         # every horizontal bridge needs an ObjCtgy CM, relevant or not, so that
         # rule abstraction does not go wrong later
@@ -336,6 +385,21 @@ function build_bridge!(b::Bridge, net::Slipnet)
             add_bond_concept_mapping!(b, bond_cm)
             is_slippage(bond_cm) && add_symmetric_slippage!(b, bond_cm, net)
         end
+    end
+    if b.orientation === :horizontal
+        # A Length slippage goes on when the two sides differ in length, but
+        # plato-length itself is deliberately NOT activated here.
+        length1 = get_platonic_length(b.object1, net)
+        length2 = get_platonic_length(b.object2, net)
+        if length1 !== length2 && !cm_type_present(b, net[:plato_length])
+            add_concept_mapping!(b, make_concept_mapping(net, b.object1,
+                                                         net[:plato_length], length1,
+                                                         b.object2,
+                                                         net[:plato_length], length2))
+        end
+    end
+    for cm in b.concept_mappings
+        activate_label!(cm)
     end
     b.proposal_level = BUILT
     return b

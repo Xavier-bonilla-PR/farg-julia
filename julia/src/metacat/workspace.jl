@@ -56,8 +56,8 @@ mutable struct Letter <: WSObject
     raw_importance::Union{Int,Rational{Int}}
     relative_importance::Int
     intra_string_unhappiness::Int
-    horizontal_inter_string_unhappiness::Int
-    vertical_inter_string_unhappiness::Int
+    horizontal_inter_string_unhappiness::Union{Int,Rational{Int}}
+    vertical_inter_string_unhappiness::Union{Int,Rational{Int}}
     average_unhappiness::Int
     intra_string_salience::Int
     horizontal_inter_string_salience::Int
@@ -277,13 +277,24 @@ end
 disjoint_objects(a::WSObject, b::WSObject) =
     right_string_pos(a) < left_string_pos(b) || left_string_pos(a) > right_string_pos(b)
 
-"""With no bridges or groups yet, both weaknesses come out at 100. Note that
-each string type assigns only the dimensions that apply to it: a modified
-string never gets a vertical value, and a target string (outside justify mode)
-never gets a horizontal one, so those stay at their initial 0."""
+"""An object is unhappy in a direction to the extent that it has no bridge in
+it. Its own bridge discharges the unhappiness fully; an enclosing group's
+bridge discharges half of it, EXACTLY - `(100- (* 1/2 strength))` is a
+rational, and rounding it here would drift.
+
+Note that each string type assigns only the dimensions that apply to it: a
+modified string never gets a vertical value, and a target string (outside
+justify mode) never gets a horizontal one, so those stay at their initial 0."""
 function update_inter_string_unhappiness!(o::WSObject)
-    horizontal_weakness = 100
-    vertical_weakness = 100
+    function weakness(own_bridge, orientation::Symbol)
+        own_bridge !== nothing && return sub_from_100(own_bridge.strength)
+        g = o.enclosing_group
+        g === nothing && return 100
+        gb = get_bridge(g::WSObject, orientation)
+        return gb === nothing ? 100 : sub_from_100(1 // 2 * gb.strength)
+    end
+    horizontal_weakness = weakness(o.horizontal_bridge, :horizontal)
+    vertical_weakness = weakness(o.vertical_bridge, :vertical)
     t = o.string.string_type
     if t === :initial
         o.horizontal_inter_string_unhappiness = horizontal_weakness
@@ -377,7 +388,82 @@ function choose_relevant_description_by_activation(rng::PyRandom, o::WSObject)
     return stochastic_pick(rng, ds, [descriptor_activation(d) for d in ds])
 end
 
+"""`(descriptor-present? descriptor)` — over ALL descriptions, so a group's
+bond descriptions count too."""
+descriptor_present(o::WSObject, descriptor::Node) =
+    any(d -> d.descriptor === descriptor, all_descriptions(o))
+
+"""`(delete-description-type description-type)`."""
+function delete_description_type!(o::WSObject, description_type::Node)
+    i = findfirst(d -> d.description_type === description_type, o.descriptions)
+    i === nothing || deleteat!(o.descriptions, i)
+    return o
+end
+
+get_distinguishing_descriptions(o::WSObject, net::Slipnet) =
+    Description[d for d in o.descriptions if distinguishing_descriptor(net, o, d.descriptor)]
+
+get_relevant_distinguishing_descriptions(o::WSObject, net::Slipnet) =
+    Description[d for d in get_distinguishing_descriptions(o, net) if relevant(d)]
+
+"""`(choose-relevant-distinguishing-description-by-depth)` — NB a plain
+stochastic pick, with no temperature adjustment."""
+function choose_relevant_distinguishing_description_by_depth(rng::PyRandom, o::WSObject,
+                                                             net::Slipnet)
+    ds = get_relevant_distinguishing_descriptions(o, net)
+    isempty(ds) && return nothing
+    return stochastic_pick(rng, ds, [conceptual_depth(d) for d in ds])
+end
+
+"""`(lone-spanning-object? object1 object2)` — exactly one of the two spans
+its whole string, so there is nothing sensible to map between them."""
+lone_spanning_object(o1::WSObject, o2::WSObject) =
+    spans_whole_string(o1) != spans_whole_string(o2)
+
+"""`(both-spanning-groups? object1 object2)`."""
+both_spanning_groups(o1::WSObject, o2::WSObject) =
+    string_spanning_group(o1) && string_spanning_group(o2)
+
 # --- strings ----------------------------------------------------------------
+
+"""`(get-top-level-objects)` — the objects not swallowed by a group."""
+top_level_objects(s::WorkspaceString) =
+    WSObject[o for o in objects(s) if o.enclosing_group === nothing]
+
+"""`(get-constituent-objects)` — the top-level objects, left to right."""
+constituent_objects(s::WorkspaceString) =
+    sort(top_level_objects(s); by = left_string_pos, alg = MergeSort)
+
+spanning_group_exists(s::WorkspaceString) = any(spans_whole_string, s.groups)
+
+"""`(choose-object message)` — pick an object weighted by a
+temperature-adjusted attribute."""
+function choose_object(rng::PyRandom, s::WorkspaceString, getter)
+    objs = objects(s)
+    return stochastic_pick(rng, objs, temp_adjusted_values([getter(o) for o in objs]))
+end
+
+"""`(spanning-group-possible? string)` — could a single group cover the whole
+string? True if one already does, or if some bond facet relates every adjacent
+pair of top-level objects the same way."""
+function spanning_group_possible(s::WorkspaceString, net::Slipnet)
+    spanning_group_exists(s) && return true
+    objs = constituent_objects(s)
+    for bond_facet in instance_nodes(net[:plato_bond_facet])
+        relations = Any[]
+        for i in 1:(length(objs) - 1)
+            d1 = get_descriptor_for(objs[i], bond_facet)
+            d2 = get_descriptor_for(objs[i + 1], bond_facet)
+            push!(relations, (d1 === nothing || d2 === nothing) ? nothing :
+                             label_between(d1, d2, net[:plato_identity]))
+        end
+        # `all-same?` is vacuously true of the empty list, so a one-object
+        # string counts as spannable.
+        all(r -> r !== nothing, relations) &&
+            (isempty(relations) || all(r -> r === relations[1], relations)) && return true
+    end
+    return false
+end
 
 """`(update-all-relative-importances)`."""
 function update_all_relative_importances!(s::WorkspaceString)

@@ -13,6 +13,7 @@ include("../julia/src/metacat/bridges.jl")
 include("../julia/src/metacat/coderack.jl")
 include("../julia/src/metacat/context.jl")
 include("../julia/src/metacat/codelets_bonds.jl")
+include("../julia/src/metacat/codelets_bridges.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name
 net = build_slipnet()
@@ -38,7 +39,7 @@ function probe(i, m, t, seed, n, temp)
     rng = PyRandom(0)   # reseeded below, after the workspace values pass
     ctx = MetacatCtx(net, rng, Coderack(), strings[1], strings[2], strings[3], temp, 0)
     TEMPERATURE[] = temp
-    update_workspace_values!(strings)
+    update_workspace_values!(ctx)
     ctx.rng = PyRandom(seed)
     for _ in 1:20
         post!(ctx.coderack,
@@ -52,7 +53,7 @@ function probe(i, m, t, seed, n, temp)
         println("RUN\t", c, "\t", codelet_type_display(codelet.codelet_type), "\t",
                 sround(codelet.relative_urgency), "\t", ctx.coderack.current_num)
         run_codelet!(ctx, codelet)
-        update_workspace_values!(strings, ctx.rng, net)
+        update_workspace_values!(ctx)
         c += 1
     end
     for s in strings
