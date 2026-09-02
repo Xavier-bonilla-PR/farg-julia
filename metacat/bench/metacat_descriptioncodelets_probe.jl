@@ -1,5 +1,5 @@
-# Julia counterpart of metacat/bench/metacat_bondcodelets_probe.ss: the bond
-# codelet pipeline driven through the real coderack.
+# Julia counterpart of metacat/bench/metacat_descriptioncodelets_probe.ss: the
+# description codelet pipeline driven through the real coderack.
 include("../../copycat/julia/src/pyrandom.jl")  # shared MT19937 (Copycat side)
 include("../julia/src/schemenum.jl")
 include("../julia/src/utilities.jl")
@@ -14,8 +14,14 @@ include("../julia/src/coderack.jl")
 include("../julia/src/themes.jl")
 include("../julia/src/context.jl")
 include("../julia/src/codelets_bonds.jl")
+include("../julia/src/codelets_descriptions.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name
+
+"""raw importance is an exact rational whenever the object sits inside a group"""
+num(v) = (x = snorm(v); x isa Integer ? string(x) :
+                        string(numerator(x), "/", denominator(x)))
+
 net = build_slipnet()
 
 function probe(i, m, t, seed, n, temp)
@@ -31,20 +37,28 @@ function probe(i, m, t, seed, n, temp)
         set_activation!(d.descriptor, MAX_ACTIVATION)
     end
     for nd in (net[:plato_object_category], net[:plato_letter_category],
-               net[:plato_string_position_category], net[:plato_successor],
-               net[:plato_predecessor], net[:plato_sameness], net[:plato_bond_facet],
-               net[:plato_bond_category], net[:plato_length])
+               net[:plato_string_position_category],
+               net[:plato_alphabetic_position_category],
+               net[:plato_length], net[:plato_alphabetic_first],
+               net[:plato_alphabetic_last])
         set_activation!(nd, MAX_ACTIVATION)
     end
-    rng = PyRandom(0)   # reseeded below, after the workspace values pass
-    ctx = MetacatCtx(net, rng, Coderack(), make_themespace(net),
+    ctx = MetacatCtx(net, PyRandom(0), Coderack(), make_themespace(net),
                      strings[1], strings[2], strings[3], temp, 0)
     TEMPERATURE[] = temp
     update_workspace_values!(strings, nothing, nothing, ctx.themespace)
     ctx.rng = PyRandom(seed)
-    for _ in 1:20
+    for _ in 1:10
         post!(ctx.coderack,
-              make_codelet(CODELET_TYPES[:bottom_up_bond_scout], VERY_LOW_URGENCY),
+              make_codelet(CODELET_TYPES[:bottom_up_description_scout], VERY_LOW_URGENCY),
+              ctx.codelet_count, ctx.rng, ctx.temperature)
+        post!(ctx.coderack,
+              make_codelet(CODELET_TYPES[:top_down_description_scout], LOW_URGENCY,
+                           Any[net[:plato_alphabetic_position_category], nothing]),
+              ctx.codelet_count, ctx.rng, ctx.temperature)
+        post!(ctx.coderack,
+              make_codelet(CODELET_TYPES[:top_down_description_scout], MEDIUM_URGENCY,
+                           Any[net[:plato_string_position_category], strings[3]]),
               ctx.codelet_count, ctx.rng, ctx.temperature)
     end
     c = 0
@@ -57,24 +71,23 @@ function probe(i, m, t, seed, n, temp)
         update_workspace_values!(strings, ctx.rng, net, ctx.themespace)
         c += 1
     end
-    for s in strings
-        for b in reverse(s.bonds)
-            bb = b::Bond
-            println("BOND\t", s.string_type, "\t", ascii_name(bb.left_object), "\t",
-                    ascii_name(bb.right_object), "\t", nm(bb.bond_category), "\t",
-                    nm(bb.direction), "\t", nm(bb.bond_facet), "\t", bb.strength)
+    for s in strings, o in objects(s)
+        for d in all_descriptions(o)
+            println("DESCR\t", s.string_type, "\t", ascii_name(o), "\t",
+                    descr_print_name(d), "\t", d.proposal_level, "\t", d.strength)
         end
-        for o in objects(s)
-            println("OBJ\t", s.string_type, "\t", ascii_name(o), "\t",
-                    o.intra_string_unhappiness, "\t", o.intra_string_salience, "\t",
-                    o.relative_importance)
-        end
+        println("OBJ\t", s.string_type, "\t", ascii_name(o), "\t",
+                num(o.raw_importance), "\t", o.relative_importance, "\t",
+                o.average_salience)
     end
     for node in net.nodes
         node.activation == 0 || println("ACT\t", nm(node), "\t", node.activation)
     end
 end
 
-probe("abc", "abd", "ijk", 1234, 60, 50)
-probe("abc", "abd", "mrrjjj", 5678, 80, 40)
-probe("abcde", "abcdf", "pqrst", 9012, 100, 70)
+descr_print_name(d::Description) = string(d.description_type.short_name, ":",
+                                          d.descriptor.short_name)
+
+probe("abc", "abd", "ijk", 2001, 60, 50)
+probe("abc", "abd", "mrrjjj", 2002, 90, 30)
+probe("abcde", "abcdf", "pqrst", 2003, 120, 80)

@@ -252,7 +252,7 @@ function bond_builder(ctx::MetacatCtx, args::Vector{Any})
         directed(b) && activate_from_workspace!(b.direction::Node)
         return
     end
-    incompatible_bonds = getIncompatible = get_incompatible_bonds(b)
+    incompatible_bonds = get_incompatible_bonds(b)
     if !isempty(incompatible_bonds) &&
        !wins_all_fights(ctx.rng, ctx, b, 1, incompatible_bonds, 1)
         return
