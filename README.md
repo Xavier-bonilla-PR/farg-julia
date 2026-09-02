@@ -23,7 +23,7 @@ randomness as coherent structure emerges.
 Lisp and Scott Boland's Java port; its `copycat.md` names the maintained Python 3
 version as the recommended one. That Python code (`fargonauts/copycat`, MIT
 licensed, the `co.py.cat` lineage: Lisp → Java → Python) is vendored here under
-`python/` and is the source this port was translated from.
+`copycat/python/` and is the source this port was translated from.
 
 ```
 Mitchell (Lisp) → Boland (Java) → J Alan Brogan (Python) → LSaldyt/fargonauts (Python 3) → this port (Julia)
@@ -31,21 +31,31 @@ Mitchell (Lisp) → Boland (Java) → J Alan Brogan (Python) → LSaldyt/fargona
 
 ## Layout
 
+The two models live in separate trees, each self-contained and under its own
+licence (MIT for Copycat, GPL-2 for Metacat — see below):
+
 ```
-julia/src/         the Julia port (module CopycatJL)
-python/copycat/    the vendored Python reference implementation
-bench/             runners, verifier and benchmark harness
-results/           benchmark and verification output
+copycat/julia/src/       the Julia port (module CopycatJL)
+copycat/python/copycat/  the vendored Python reference implementation
+copycat/bench/           runners, verifier and benchmark harness
+copycat/results/         benchmark and verification output
+
+metacat/julia/src/       the Julia port (in progress)
+metacat/scheme/metacat/  the vendored Scheme reference implementation
+metacat/scheme/headless/ makes that reference run without its SWL GUI
+metacat/bench/           probe pairs, verifier and benchmark harness
 ```
+
+All commands below are run from the repository root.
 
 ## Running it
 
 ```bash
 # Julia
-julia --project=julia bench/run_jl.jl abc abd ppqqrr 10 --seed 1
+julia --project=copycat/julia copycat/bench/run_jl.jl abc abd ppqqrr 10 --seed 1
 
 # Python reference
-python3 bench/run_py.py abc abd ppqqrr 10 --seed 1
+python3 copycat/bench/run_py.py abc abd ppqqrr 10 --seed 1
 ```
 
 Both print one line per distinct answer — `answer, count, average final
@@ -67,10 +77,10 @@ end
 
 Copycat is stochastic, so comparing two implementations by eyeballing answer
 distributions is weak evidence. Instead the Julia port includes a bit-exact
-reimplementation of CPython's `random.Random` in `julia/src/pyrandom.jl`: the
-MT19937 state, CPython's `init_by_array` integer seeding, the `genrand_res53`
-double conversion, and the `getrandbits`/`_randbelow` rejection sampling used by
-`random.choice`.
+reimplementation of CPython's `random.Random` in
+`copycat/julia/src/pyrandom.jl`: the MT19937 state, CPython's `init_by_array`
+integer seeding, the `genrand_res53` double conversion, and the
+`getrandbits`/`_randbelow` rejection sampling used by `random.choice`.
 
 Seeded with the same integer, the two implementations therefore consume the
 identical stream of random numbers and must run the identical codelet sequence
@@ -79,7 +89,7 @@ bug rather than noise, and the benchmark compares exactly the same work rather
 than two different random walks.
 
 ```bash
-python3 bench/verify.py --iterations 5 --seeds 1 2 3
+python3 copycat/bench/verify.py --iterations 5 --seeds 1 2 3
 ```
 
 The verifier compares full answer distributions per problem and seed, and for
@@ -89,7 +99,7 @@ compares the first few thousand codelets of the execution trace instead.
 ## Benchmark
 
 ```bash
-python3 bench/benchmark.py --iterations 10 --seeds 1 2 3
+python3 copycat/bench/benchmark.py --iterations 10 --seeds 1 2 3
 ```
 
 The harness asserts that both implementations executed the same number of
@@ -113,7 +123,7 @@ Throughput: **27,582 codelets/s** in Python vs **208,090 codelets/s** in Julia.
 
 Caveats worth stating plainly:
 
-- The Julia figures exclude interpreter startup and JIT compilation (both runners take a `--warmup` flag that discards a throwaway trial first). A cold `julia ... bench/run_jl.jl` process averages **5.1 s** wall clock here, most of it compilation, against **3.1 s** for the equivalent Python process. For a single small problem the Python process still finishes first; the Julia advantage is in the work itself, and it pays for its startup within roughly the first second of search.
+- The Julia figures exclude interpreter startup and JIT compilation (both runners take a `--warmup` flag that discards a throwaway trial first). A cold `julia ... copycat/bench/run_jl.jl` process averages **5.1 s** wall clock here, most of it compilation, against **3.1 s** for the equivalent Python process. For a single small problem the Python process still finishes first; the Julia advantage is in the work itself, and it pays for its startup within roughly the first second of search.
 - The "Python w/ logging" column is what `main.py` actually does - it calls `logging.basicConfig(level=INFO)`, so every `logging.info` in the codelets formats a string and writes it to disk. That alone costs about 59% on top of the Python runtime. The main comparison disables it, which is the fairer measurement of the algorithm.
 - Copycat is a stochastic search, so absolute times depend heavily on the problem and seed; the per-problem spread above is the point, not any single number.
 
@@ -183,10 +193,10 @@ untouched:
 `axbxcx : axbxdx :: pxqxrx : ?` does not settle in any reasonable time in
 **either** implementation — both were left running well past ten minutes. That
 is a property of this Copycat variant, not a port bug: the two run identically
-codelet for codelet, which is what `bench/verify.py` checks for them instead of
-comparing final answers. `abc : abd :: aababc : ?` is verified the same way
-because it is erratic rather than uniformly slow — it finishes in a few hundred
-codelets on some seeds and runs long on others.
+codelet for codelet, which is what `copycat/bench/verify.py` checks for them
+instead of comparing final answers. `abc : abd :: aababc : ?` is verified the
+same way because it is erratic rather than uniformly slow — it finishes in a
+few hundred codelets on some seeds and runs long on others.
 
 Several problems are merely expensive rather than pathological, and are worth
 knowing about before pointing the benchmark at them: `abc : abd :: wyz : ?` and
@@ -204,12 +214,12 @@ compare the analogies it makes.
 
 Metacat 1.0 is written for Chez Scheme 6.9b inside SWL and is driven entirely
 from its GUI, which makes it useless as something to test a port against.
-`scheme/` vendors Marshall's source and adds a harness that loads the model
-under a current Chez with no GUI:
+`metacat/scheme/` vendors Marshall's source and adds a harness that loads the
+model under a current Chez with no GUI:
 
 ```bash
 apt-get install chezscheme
-scheme --quiet --script bench/run_metacat_scm.ss abc cba pqrs 42
+scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42
 ```
 
 ```
@@ -217,20 +227,20 @@ OUTCOME	answer	CODELETS	618	TEMP	4
 ANSWER	abc -> cba, pqrs -> ?	srqp	98	4
 ```
 
-See `scheme/README.md` for what the harness stubs and why. Metacat is **GPL-2**,
-unlike Copycat's MIT, so the port inherits GPL-2.
+See `metacat/scheme/README.md` for what the harness stubs and why. Metacat is
+**GPL-2**, unlike Copycat's MIT, so the port inherits GPL-2.
 
 ### The port, and how it is checked
 
 As with Copycat, the point is to make "does the port behave the same?" a
 decidable question. Metacat funnels all of its nondeterminism through
-`(random n)`, so `scheme/headless/shared-rng.ss` installs the same
+`(random n)`, so `metacat/scheme/headless/shared-rng.ss` installs the same
 CPython-compatible MT19937 the Julia side uses. Each layer of the port has a
 pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
-bash bench/verify_metacat.sh util slipnet workspace cm bonds groups bridges \
-                              coderack bondcodelets
+bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
+                                     bridges coderack bondcodelets
 ```
 
 | layer | Julia | verified |
@@ -277,9 +287,11 @@ to lose in a translation:
 
 ## Licence
 
-The vendored Python Copycat is MIT licensed (see `python/LICENSE.upstream`)
-and the Julia Copycat port carries that lineage.
+The vendored Python Copycat is MIT licensed
+(see `copycat/python/LICENSE.upstream`) and the Julia Copycat port carries that
+lineage.
 
-Metacat is **GPL-2** (see `scheme/metacat/LICENSE.upstream`). The Julia Metacat
-port under `julia/src/metacat/` is a derivative work and is therefore GPL-2,
-not MIT — the two ports in this repository are under different licences.
+Metacat is **GPL-2** (see `metacat/scheme/metacat/LICENSE.upstream`). The Julia
+Metacat port under `metacat/julia/src/` is a derivative work and is therefore
+GPL-2, not MIT — the two ports in this repository are under different licences,
+which is why they sit in separate top-level trees.

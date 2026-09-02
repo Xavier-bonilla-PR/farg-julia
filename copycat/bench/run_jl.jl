@@ -1,10 +1,10 @@
 #!/usr/bin/env julia
 # Benchmark/verification runner for the Julia Copycat port.
 #
-# Usage: julia --project=julia bench/run_jl.jl <initial> <modified> <target>
+# Usage: julia --project=copycat/julia copycat/bench/run_jl.jl <initial> <modified> <target>
 #                                              <iterations> [--seed N] [--json]
 #
-# Prints the same canonical result block as bench/run_py.py.
+# Prints the same canonical result block as copycat/bench/run_py.py.
 
 using Printf
 using CopycatJL

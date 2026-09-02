@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Renders results/benchmark.json into the results table embedded in README.md."""
+"""Renders copycat/results/benchmark.json into the table embedded in README.md."""
 import json
 import os
 import platform
@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(ROOT)
 
 
 def main():
@@ -52,7 +53,8 @@ def main():
     out.append('')
     out.append('- The Julia figures exclude interpreter startup and JIT '
                'compilation (both runners take a `--warmup` flag that discards '
-               'a throwaway trial first). A cold `julia ... bench/run_jl.jl` '
+               'a throwaway trial first). A cold '
+               '`julia ... copycat/bench/run_jl.jl` '
                'process averages **%.1f s** wall clock here, most of it '
                'compilation, against **%.1f s** for the equivalent Python '
                'process. For a single small problem the Python process still '
@@ -71,7 +73,7 @@ def main():
                'the point, not any single number.')
 
     table = '\n'.join(out)
-    readme = os.path.join(ROOT, 'README.md')
+    readme = os.path.join(REPO_ROOT, 'README.md')
     with open(readme) as fh:
         s = fh.read()
     marker = 'RESULTS_PLACEHOLDER'

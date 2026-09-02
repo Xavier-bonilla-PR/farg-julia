@@ -1,8 +1,8 @@
-# Julia counterpart of bench/metacat_slipnet_probe.ss: same dump, same order.
-include("../julia/src/pyrandom.jl")
-include("../julia/src/metacat/schemenum.jl")
-include("../julia/src/metacat/utilities.jl")
-include("../julia/src/metacat/slipnet.jl")
+# Julia counterpart of metacat/bench/metacat_slipnet_probe.ss: same dump, same order.
+include("../../copycat/julia/src/pyrandom.jl")  # shared MT19937 (Copycat side)
+include("../julia/src/schemenum.jl")
+include("../julia/src/utilities.jl")
+include("../julia/src/slipnet.jl")
 
 numstr(v) = v isa AbstractFloat ? string(v) :
             (v isa Rational ? string(numerator(v), "/", denominator(v)) : string(v))

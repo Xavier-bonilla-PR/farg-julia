@@ -1,11 +1,11 @@
-# Julia counterpart of bench/metacat_bonds_probe.ss.
-include("../julia/src/pyrandom.jl")
-include("../julia/src/metacat/schemenum.jl")
-include("../julia/src/metacat/utilities.jl")
-include("../julia/src/metacat/slipnet.jl")
-include("../julia/src/metacat/workspace.jl")
-include("../julia/src/metacat/concept_mappings.jl")
-include("../julia/src/metacat/bonds.jl")
+# Julia counterpart of metacat/bench/metacat_bonds_probe.ss.
+include("../../copycat/julia/src/pyrandom.jl")  # shared MT19937 (Copycat side)
+include("../julia/src/schemenum.jl")
+include("../julia/src/utilities.jl")
+include("../julia/src/slipnet.jl")
+include("../julia/src/workspace.jl")
+include("../julia/src/concept_mappings.jl")
+include("../julia/src/bonds.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name
 yn(b) = b ? "y" : "n"

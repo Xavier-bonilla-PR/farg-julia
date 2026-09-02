@@ -1,10 +1,10 @@
 ;; Runs the bond codelet pipeline through the real coderack for N codelets,
 ;; dumping every codelet run and the resulting workspace state.
-(define *metacat-source-dir* "scheme/metacat/")
-(load "scheme/headless/prelude.ss")
-(load "scheme/headless/shared-rng.ss")
-(load "scheme/headless/load-core.ss")
-(load "scheme/headless/harness.ss")
+(define *metacat-source-dir* "metacat/scheme/metacat/")
+(load "metacat/scheme/headless/prelude.ss")
+(load "metacat/scheme/headless/shared-rng.ss")
+(load "metacat/scheme/headless/load-core.ss")
+(load "metacat/scheme/headless/harness.ss")
 
 (define nm (lambda (n) (if (exists? n) (tell n 'get-lowercase-name) "-")))
 

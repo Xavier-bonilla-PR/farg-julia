@@ -1,10 +1,10 @@
 ;; Prints a canonical trace of Metacat's numeric/stochastic helpers so the
 ;; Julia port can be diffed against it. Values are tagged E (exact) or F
 ;; (inexact) so the comparator can check exactness as well as magnitude.
-(define *metacat-source-dir* "scheme/metacat/")
-(load "scheme/headless/prelude.ss")
-(load "scheme/headless/shared-rng.ss")
-(load "scheme/headless/load-core.ss")
+(define *metacat-source-dir* "metacat/scheme/metacat/")
+(load "metacat/scheme/headless/prelude.ss")
+(load "metacat/scheme/headless/shared-rng.ss")
+(load "metacat/scheme/headless/load-core.ss")
 
 (define emit
   (lambda (label v)

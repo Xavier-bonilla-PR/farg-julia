@@ -49,7 +49,7 @@ export JULIA=/tmp/julia-1.10.9/bin/julia
 From the repo root. This is the single most useful command in the project:
 
 ```bash
-JULIA=$JULIA bash bench/verify_metacat.sh \
+JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets
 ```
 
@@ -74,7 +74,7 @@ fix that before writing new code.
 The reference implementation also runs standalone:
 
 ```bash
-scheme --quiet --script bench/run_metacat_scm.ss abc cba pqrs 42
+scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42
 # OUTCOME  answer  CODELETS  618  TEMP  4
 # ANSWER   abc -> cba, pqrs -> ?   srqp   98   4
 ```
@@ -82,7 +82,7 @@ scheme --quiet --script bench/run_metacat_scm.ss abc cba pqrs 42
 The Copycat side (finished, separate from Metacat):
 
 ```bash
-python3 bench/verify.py --iterations 5 --seeds 1 2 3   # 51/51 must match
+python3 copycat/bench/verify.py --iterations 5 --seeds 1 2 3  # 51/51 must match
 ```
 
 ---
@@ -91,10 +91,10 @@ python3 bench/verify.py --iterations 5 --seeds 1 2 3   # 51/51 must match
 
 ### Copycat — **complete**
 
-Python reference (`python/`, MIT, vendored from `fargonauts/copycat`) ported to
-Julia (`julia/src/*.jl`). Verified by bit-exact RNG parity: 51/51 comparisons
-byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
-(`results/benchmark.json`). Nothing outstanding.
+Python reference (`copycat/python/`, MIT, vendored from `fargonauts/copycat`)
+ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
+51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
+over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
 ### Metacat — **~4,500 of ~16,000 lines of non-graphics Scheme**
 
@@ -114,22 +114,26 @@ byte-identical. Benchmarked at **7.5x** faster than Python over 1.4M codelets
 
 ## 4. The method — follow this exactly
 
-Every layer is verified by a **probe pair**: `bench/metacat_<name>_probe.ss` and
-`bench/metacat_<name>_probe.jl`, which print the same canonical trace. They must
-be **byte-identical**. Do not accept "close enough".
+Every layer is verified by a **probe pair**:
+`metacat/bench/metacat_<name>_probe.ss` and
+`metacat/bench/metacat_<name>_probe.jl`, which print the same canonical trace.
+They must be **byte-identical**. Do not accept "close enough".
 
 This works because both sides run the **same generator**:
-`scheme/headless/shared-rng.ss` installs a CPython-compatible MT19937 over
-Chez's `random`, matching `julia/src/pyrandom.jl`. All of Metacat's
-nondeterminism funnels through `(random n)`, so seeded runs agree draw for draw.
+`metacat/scheme/headless/shared-rng.ss` installs a CPython-compatible MT19937
+over Chez's `random`, matching `copycat/julia/src/pyrandom.jl` (the one file
+the Metacat probes borrow from the Copycat side; it is MIT, so the borrow is
+fine). All of Metacat's nondeterminism funnels through `(random n)`, so seeded
+runs agree draw for draw.
 
 To add a layer:
 
 1. Read the Scheme file. Note every `random` call and its **order**.
-2. Write the Julia port in `julia/src/metacat/`.
+2. Write the Julia port in `metacat/julia/src/`.
 3. Write the two probes, dumping every field you can reach. Tag exact vs
    inexact numbers (`E`/`F`) — exactness is a real signal, see below.
-4. `JULIA=$JULIA bash bench/verify_metacat.sh <name>` and fix until identical.
+4. `JULIA=$JULIA bash metacat/bench/verify_metacat.sh <name>` and fix until
+   identical.
 5. Re-run **all** probes before committing; later layers change earlier ones.
 6. Commit with what the differential test caught.
 
@@ -204,7 +208,7 @@ by reading the code.
 5. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
    `justify.ss` (352)** — the self-watching layers the paper is actually about.
 6. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
-   possible, and `bench/metacat_bench.{ss,jl}` becomes meaningful.
+   possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
 
 `breakers.ss` (47) can go in any time.
 
@@ -213,22 +217,26 @@ by reading the code.
 ## 7. Repo map
 
 ```
-julia/src/            Copycat port (complete)
-julia/src/metacat/    Metacat port (in progress)
-python/               Copycat reference, MIT, vendored
-scheme/metacat/       Metacat reference, GPL-2, vendored
-scheme/headless/      makes Metacat run without its SWL GUI
-bench/                runners, probe pairs, verifiers, benchmarks
-results/              Copycat benchmark + verification output
-README.md             project overview and results
-scheme/README.md      how the headless harness works and why
+copycat/julia/src/        Copycat port (complete)
+copycat/python/           Copycat reference, MIT, vendored
+copycat/bench/            runners, verifier, benchmark
+copycat/results/          Copycat benchmark + verification output
+
+metacat/julia/src/        Metacat port (in progress)
+metacat/scheme/metacat/   Metacat reference, GPL-2, vendored
+metacat/scheme/headless/  makes Metacat run without its SWL GUI
+metacat/bench/            probe pairs, verifier, benchmark
+
+README.md                 project overview and results
+metacat/scheme/README.md  how the headless harness works and why
 ```
 
 ### Licences — they differ
 
-Copycat is **MIT** (`python/LICENSE.upstream`); the Julia Copycat port carries
-that. Metacat is **GPL-2** (`scheme/metacat/LICENSE.upstream`), so
-`julia/src/metacat/` is a derivative work and is **GPL-2**. Keep them distinct.
+Copycat is **MIT** (`copycat/python/LICENSE.upstream`); the Julia Copycat port
+carries that. Metacat is **GPL-2** (`metacat/scheme/metacat/LICENSE.upstream`),
+so `metacat/julia/src/` is a derivative work and is **GPL-2**. The top-level
+`copycat/` and `metacat/` split is what keeps them distinct.
 
 ### Two mechanical patches to the vendored Metacat
 
@@ -244,10 +252,10 @@ Needed to load under Chez 9; the model is otherwise untouched.
 
 ## 8. Benchmarks
 
-Copycat is fully benchmarked (`results/benchmark.json`, table in `README.md`):
-**7.5x** over 1.4M codelets, range 3.3x–11.3x per problem.
+Copycat is fully benchmarked (`copycat/results/benchmark.json`, table in
+`README.md`): **7.5x** over 1.4M codelets, range 3.3x–11.3x per problem.
 
-Metacat has a harness (`bench/metacat_bench.{ss,jl}`) covering the ported
-layers with matching checksums, but the numbers are **micro-benchmarks of
-layers, not of the model**, and should not be quoted as "Metacat in Julia is
+Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`) covering the
+ported layers with matching checksums, but the numbers are **micro-benchmarks
+of layers, not of the model**, and should not be quoted as "Metacat in Julia is
 Nx faster". Wait for the run loop.

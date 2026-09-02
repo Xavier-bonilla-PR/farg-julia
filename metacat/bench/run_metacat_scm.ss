@@ -1,13 +1,13 @@
 ;; Reference-implementation runner: runs one Metacat problem headless and
 ;; prints a canonical result block.
 ;;
-;;   scheme --script bench/run_metacat_scm.ss <initial> <modified> <target> <seed> [limit]
+;;   scheme --script metacat/bench/run_metacat_scm.ss <initial> <modified> <target> <seed> [limit]
 
-(define *metacat-source-dir* "scheme/metacat/")
-(load "scheme/headless/prelude.ss")
-(load "scheme/headless/shared-rng.ss")   ;; must precede the model
-(load "scheme/headless/load-core.ss")
-(load "scheme/headless/harness.ss")
+(define *metacat-source-dir* "metacat/scheme/metacat/")
+(load "metacat/scheme/headless/prelude.ss")
+(load "metacat/scheme/headless/shared-rng.ss")   ;; must precede the model
+(load "metacat/scheme/headless/load-core.ss")
+(load "metacat/scheme/headless/harness.ss")
 
 (let* ((args (command-line-arguments))
        (initial (string->symbol (list-ref args 0)))

@@ -1,18 +1,18 @@
-# Julia counterpart of bench/metacat_bondcodelets_probe.ss: the bond codelet
-# pipeline driven through the real coderack.
-include("../julia/src/pyrandom.jl")
-include("../julia/src/metacat/schemenum.jl")
-include("../julia/src/metacat/utilities.jl")
-include("../julia/src/metacat/slipnet.jl")
-include("../julia/src/metacat/workspace.jl")
-include("../julia/src/metacat/concept_mappings.jl")
-include("../julia/src/metacat/images.jl")
-include("../julia/src/metacat/bonds.jl")
-include("../julia/src/metacat/groups.jl")
-include("../julia/src/metacat/bridges.jl")
-include("../julia/src/metacat/coderack.jl")
-include("../julia/src/metacat/context.jl")
-include("../julia/src/metacat/codelets_bonds.jl")
+# Julia counterpart of metacat/bench/metacat_bondcodelets_probe.ss: the bond
+# codelet pipeline driven through the real coderack.
+include("../../copycat/julia/src/pyrandom.jl")  # shared MT19937 (Copycat side)
+include("../julia/src/schemenum.jl")
+include("../julia/src/utilities.jl")
+include("../julia/src/slipnet.jl")
+include("../julia/src/workspace.jl")
+include("../julia/src/concept_mappings.jl")
+include("../julia/src/images.jl")
+include("../julia/src/bonds.jl")
+include("../julia/src/groups.jl")
+include("../julia/src/bridges.jl")
+include("../julia/src/coderack.jl")
+include("../julia/src/context.jl")
+include("../julia/src/codelets_bonds.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name
 net = build_slipnet()

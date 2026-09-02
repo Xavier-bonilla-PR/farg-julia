@@ -1,10 +1,10 @@
-# Julia counterpart of bench/metacat_cm_probe.ss.
-include("../julia/src/pyrandom.jl")
-include("../julia/src/metacat/schemenum.jl")
-include("../julia/src/metacat/utilities.jl")
-include("../julia/src/metacat/slipnet.jl")
-include("../julia/src/metacat/workspace.jl")
-include("../julia/src/metacat/concept_mappings.jl")
+# Julia counterpart of metacat/bench/metacat_cm_probe.ss.
+include("../../copycat/julia/src/pyrandom.jl")  # shared MT19937 (Copycat side)
+include("../julia/src/schemenum.jl")
+include("../julia/src/utilities.jl")
+include("../julia/src/slipnet.jl")
+include("../julia/src/workspace.jl")
+include("../julia/src/concept_mappings.jl")
 
 numstr(v) = v isa AbstractFloat ? string(v) :
             (v isa Rational ? string(numerator(v), "/", denominator(v)) : string(v))

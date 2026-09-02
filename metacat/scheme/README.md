@@ -5,12 +5,12 @@ inside **SWL**, the Scheme Widget Library, and is normally driven entirely from
 its GUI. That makes it hard to use as a reference implementation: you cannot
 script it, and SWL no longer builds against current toolchains.
 
-`scheme/headless/` makes the model run under a modern Chez Scheme with no GUI,
-so it can be driven from a shell script and compared against a port.
+`metacat/scheme/headless/` makes the model run under a modern Chez Scheme with
+no GUI, so it can be driven from a shell script and compared against a port.
 
 ```bash
 apt-get install chezscheme
-scheme --quiet --script bench/run_metacat_scm.ss abc cba pqrs 42
+scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42
 ```
 
 ```
@@ -59,7 +59,8 @@ behave the same?" into a decidable question rather than a statistical one. Only
 the source of the numbers changes, not their distributions, so the model
 behaves as before on a different stream.
 
-`bench/run_metacat_scm.ss` loads it; drop that one `load` line to run on Chez's
+`metacat/bench/run_metacat_scm.ss` loads it; drop that one `load` line to run on
+Chez's
 own generator instead.
 
 ## A note on evaluation order

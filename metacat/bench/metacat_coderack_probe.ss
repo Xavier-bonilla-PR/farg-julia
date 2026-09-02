@@ -1,10 +1,10 @@
 ;; Exercises the coderack: urgency table, bin assignment, posting, overflow
 ;; deletion, selection probabilities, and the two-stage codelet choice.
-(define *metacat-source-dir* "scheme/metacat/")
-(load "scheme/headless/prelude.ss")
-(load "scheme/headless/shared-rng.ss")
-(load "scheme/headless/load-core.ss")
-(load "scheme/headless/harness.ss")
+(define *metacat-source-dir* "metacat/scheme/metacat/")
+(load "metacat/scheme/headless/prelude.ss")
+(load "metacat/scheme/headless/shared-rng.ss")
+(load "metacat/scheme/headless/load-core.ss")
+(load "metacat/scheme/headless/harness.ss")
 
 ;; the urgency value table across bins and temperatures
 (let loop ((b 0))

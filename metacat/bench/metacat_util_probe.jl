@@ -1,7 +1,7 @@
-# Julia counterpart of bench/metacat_util_probe.ss: same trace, same order.
-include("../julia/src/pyrandom.jl")
-include("../julia/src/metacat/schemenum.jl")
-include("../julia/src/metacat/utilities.jl")
+# Julia counterpart of metacat/bench/metacat_util_probe.ss: same trace, same order.
+include("../../copycat/julia/src/pyrandom.jl")  # shared MT19937 (Copycat side)
+include("../julia/src/schemenum.jl")
+include("../julia/src/utilities.jl")
 
 fmtnum(v) = v isa AbstractFloat ? string(v) :
             (v isa Rational ? string(numerator(v), "/", denominator(v)) : string(v))
