@@ -42,7 +42,7 @@ function probe(i, m, t, seed)
                 println("NOBOND\t", s.string_type, "\t", ascii_name(o1), "\t", ascii_name(o2))
             else
                 b = make_bond(net, o1, o2, cat::Node, net[:plato_letter_category], d1, d2)
-                build_bond!(b)
+                build_bond!(b, net)
                 println("BOND\t", s.string_type, "\t", ascii_name(o1), "\t", ascii_name(o2),
                         "\t", nm(cat), "\t", nm(b.direction), "\t",
                         yn(bond_leftmost_in_string(b)), "\t", yn(bond_rightmost_in_string(b)),

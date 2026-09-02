@@ -197,7 +197,7 @@ function build_chain_and_group!(s::WorkspaceString)
         cat = get_bond_category_between(d1, d2, net)
         cat === nothing && continue
         b = make_bond(net, o1, o2, cat::Node, net[:plato_letter_category], d1, d2)
-        build_bond!(b)
+        build_bond!(b, net)
         push!(bonds, b)
     end
     (isempty(bonds) || length(bonds) != n - 1) && return

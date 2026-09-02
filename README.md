@@ -240,7 +240,8 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
 bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
-                                     bridges coderack bondcodelets themes
+                                     bridges coderack bondcodelets themes \
+                                     descriptioncodelets groupcodelets
 ```
 
 | layer | Julia | verified |
@@ -255,16 +256,17 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
 | bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
 | themespace: clusters, activation dynamics, theme support | `themes.jl` | 2,049 lines |
-| description, group, bridge and rule codelets | not yet ported | |
+| description codelets | `codelets_descriptions.jl` | 321 lines |
+| group codelets: scouts, evaluator, builder, consolidation | `codelets_groups.jl` | 4,854 lines |
+| bridge and rule codelets | not yet ported | |
 | temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The ten verified layers cover roughly 5,300 of the ~16,000 lines of Metacat's
-non-graphics Scheme. What remains for a run that reaches an answer is the other
-codelet procedures (description, group, bridge, rule), plus `rules.ss`,
-`answers.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about
-10,100 lines.
+The twelve verified layers cover roughly 6,000 of the ~16,000 lines of Metacat's
+non-graphics Scheme. What remains for a run that reaches an answer is the bridge
+and rule codelets, plus `rules.ss`, `answers.ss`, `trace.ss`, `memory.ss`,
+`jootsing.ss` and `justify.ss` — about 9,400 lines.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
@@ -291,12 +293,15 @@ to lose in a translation:
   right to left, so a call drawing two random numbers draws the rightmost
   first.
 
-The differential test keeps earning its keep: adding the themespace surfaced a
-bug in a layer that had been passing for four commits. `contains?` was stubbed
-to `false` back when no groups existed, which was correct then and silently
-wrong the moment a group was built — it inflated every description's local
-support. Nothing in the earlier probes printed a description strength after
-grouping, so nothing caught it until theme-weighted strengths did.
+The differential test keeps earning its keep, and what it catches is mostly in
+layers that were already passing. Adding the themespace surfaced `contains?`,
+stubbed to `false` back when no groups existed — correct then, silently wrong
+the moment a group was built, and it inflated every description's local support.
+Adding the group codelets surfaced two more: a codelet's "carries a proposed
+structure" flag that was always false, because an untyped predicate and an
+`::Any` fallback are the same Julia method signature and the second silently
+replaced the first; and the right-to-left evaluation trap finally biting, in a
+group's local-density walk. None of the three was visible by reading the code.
 
 ## Licence
 

@@ -75,6 +75,23 @@ function add_proposed_bond!(s::WorkspaceString, b::Bond)
     return s
 end
 
+"""`(delete-proposed-bonds object)` — clears the proposed-bond table's row and
+column for an object that is going away. Nothing in the model ever reads that
+table back (only add/delete touch it), so this is bookkeeping rather than
+behaviour, but leaving it out would be a silent divergence for any later layer
+that does read it."""
+function delete_proposed_bonds!(s::WorkspaceString, o::WSObject)
+    for key in collect(keys(s.proposed_bonds))
+        (key[1] == o.id_num || key[2] == o.id_num) && delete!(s.proposed_bonds, key)
+    end
+    return s
+end
+
+delete_proposed_structure!(b::Bond) = delete_proposed_bond!(b.string, b)
+"""Bridges are not registered in the workspace until the bridge codelets are
+ported, so there is nothing to remove for one yet."""
+delete_proposed_structure!(::Bridge) = nothing
+
 function delete_proposed_bond!(s::WorkspaceString, b::Bond)
     key = (b.from_object.id_num, b.to_object.id_num)
     haskey(s.proposed_bonds, key) || return s
@@ -84,23 +101,45 @@ function delete_proposed_bond!(s::WorkspaceString, b::Bond)
     return s
 end
 
-"""`(bond-present? bond)` — an equivalent built bond already exists."""
-function bond_present(s::WorkspaceString, b::Bond)
-    for x in s.bonds
-        other = x::Bond
-        other.from_object === b.from_object && other.to_object === b.to_object &&
-            other.bond_category === b.bond_category &&
-            other.direction === b.direction && return true
-        # sameness bonds are symmetric, so the reverse entry counts too
-        b.bond_category === other.bond_category && b.direction === other.direction &&
-            other.from_object === b.to_object && other.to_object === b.from_object &&
-            b.direction === nothing && return true
-    end
-    return false
+"""`(get-equivalent-bond bond)` — the built bond running the same way between
+the same two objects, if it also agrees on category and direction."""
+function get_equivalent_bond(s::WorkspaceString, b::Bond)
+    other = get(s.from_to_bond, (b.from_object.id_num, b.to_object.id_num), nothing)
+    other === nothing && return nothing
+    return (other::Bond).bond_category === b.bond_category &&
+           (other::Bond).direction === b.direction ? other : nothing
 end
 
+"""`(opposite-bond-category? b1 b2)` / `(opposite-bond-direction? b1 b2)`.
+NB both require BOTH bonds to be DIRECTED. Without that guard two sameness
+bonds would compare equal-and-opposite, since an undirected bond has neither a
+direction nor an opposite category."""
+opposite_bond_category(b1::Bond, b2::Bond, net::Slipnet) =
+    directed(b1) && directed(b2) &&
+    b1.bond_category === get_related_node(b2.bond_category, net[:plato_opposite],
+                                          net[:plato_identity])
+opposite_bond_direction(b1::Bond, b2::Bond, net::Slipnet) =
+    directed(b1) && directed(b2) &&
+    b1.direction === get_related_node(b2.direction::Node, net[:plato_opposite],
+                                      net[:plato_identity])
+
+"""`(get-equivalent-flipped-bond bond)` — the built bond running the OTHER way
+between the same two objects, saying the opposite thing. A group whose bonds
+point the wrong way has to break these before it can build."""
+function get_equivalent_flipped_bond(s::WorkspaceString, b::Bond, net::Slipnet)
+    other = get(s.from_to_bond, (b.to_object.id_num, b.from_object.id_num), nothing)
+    other === nothing && return nothing
+    return opposite_bond_category(b, other::Bond, net) &&
+           opposite_bond_direction(b, other::Bond, net) ? other : nothing
+end
+
+bond_present(s::WorkspaceString, b::Bond) = get_equivalent_bond(s, b) !== nothing
+flipped_bond_present(s::WorkspaceString, b::Bond, net::Slipnet) =
+    get_equivalent_flipped_bond(s, b, net) !== nothing
+
 """`(break-bond bond)`."""
-function break_bond!(b::Bond)
+function break_bond!(b::Bond, net::Slipnet)
+    delete_bond_from_table!(b.string, b, net)
     i = findfirst(x -> x === b, b.string.bonds)
     i === nothing || deleteat!(b.string.bonds, i)
     for (obj, list) in ((b.from_object, b.from_object.outgoing_bonds),
@@ -267,9 +306,9 @@ function bond_builder(ctx::MetacatCtx, args::Vector{Any})
         object_exists(ctx, g) && break_group!(g, ctx.net)
     end
     for other in incompatible_bonds
-        break_bond!(other::Bond)
+        break_bond!(other::Bond, ctx.net)
     end
-    build_bond!(b)
+    build_bond!(b, ctx.net)
     return
 end
 

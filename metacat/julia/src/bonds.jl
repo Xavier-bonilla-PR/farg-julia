@@ -108,8 +108,37 @@ function calculate_internal_strength(b::Bond, net::Slipnet)
                   bond_degree_of_assoc(b.bond_category))
 end
 
+"""`(make-flipped-version)` — the same bond read the other way round: ends
+swapped and the bond category replaced by its opposite. A sameness bond has no
+opposite, so this is only ever called on successor/predecessor bonds."""
+make_flipped_version(b::Bond, net::Slipnet) =
+    make_bond(net, b.to_object, b.from_object,
+              get_related_node(b.bond_category, net[:plato_opposite],
+                               net[:plato_identity])::Node,
+              b.bond_facet, b.to_object_descriptor, b.from_object_descriptor)
+
+"""`(add-bond bond)` — registers the bond in the string's from/to table. A
+sameness bond goes in under both orderings, since it reads the same either
+way."""
+function add_bond_to_table!(s::WorkspaceString, b::Bond, net::Slipnet)
+    s.from_to_bond[(b.from_object.id_num, b.to_object.id_num)] = b
+    if b.bond_category === net[:plato_sameness]
+        s.from_to_bond[(b.to_object.id_num, b.from_object.id_num)] = b
+    end
+    return s
+end
+
+function delete_bond_from_table!(s::WorkspaceString, b::Bond, net::Slipnet)
+    delete!(s.from_to_bond, (b.from_object.id_num, b.to_object.id_num))
+    if b.bond_category === net[:plato_sameness]
+        delete!(s.from_to_bond, (b.to_object.id_num, b.from_object.id_num))
+    end
+    return s
+end
+
 """`(build-bond proposed-bond)` — attaches the bond to its string and objects."""
-function build_bond!(b::Bond)
+function build_bond!(b::Bond, net::Slipnet)
+    add_bond_to_table!(b.string, b, net)
     pushfirst!(b.string.bonds, b)
     pushfirst!(b.from_object.outgoing_bonds, b)
     pushfirst!(b.to_object.incoming_bonds, b)

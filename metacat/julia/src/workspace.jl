@@ -29,6 +29,19 @@ mutable struct WorkspaceString
     right_edge_groups::Vector{Vector{WSObject}}
     # proposed (not yet built) bonds, keyed by from/to object id
     proposed_bonds::Dict{Tuple{Int,Int},Vector{Any}}
+    # `from-to-bond-table`: the built bond running from one object id to
+    # another. A sameness bond is registered under both orderings, since it is
+    # symmetric. This is a lookup, not a list — at most one bond per ordered
+    # pair — which is what makes `bond-present?` exact rather than a scan.
+    from_to_bond::Dict{Tuple{Int,Int},Any}
+    # `group-vector`: the built group whose LEFTMOST object has this id. The
+    # Scheme indexes a vector of `max-object-capacity` and grows it, so its
+    # bounds check can never fire for an object that has an id at all; a Dict
+    # models the same thing without the capacity bookkeeping.
+    group_by_leftmost_id::Dict{Int,Any}
+    # `proposed-group-list`. The Scheme also keeps a proposed-group TABLE, but
+    # nothing ever reads it — only this list is read, through `get-all-objects`.
+    proposed_groups::Vector{Any}
     print_name::String
     translated::Bool
     average_intra_string_unhappiness::Int
@@ -100,6 +113,10 @@ print_name(o::Letter) = o.letter_category.lowercase_name
 ascii_name(o::Letter) = string(print_name(o), ":", o.string_pos)
 
 objects(s::WorkspaceString) = vcat(s.letters, s.groups)
+"""`(get-all-objects)` — includes groups that are only PROPOSED. The
+middle-description cleanup walks this, not `get-objects`, so a proposed group
+can lose a description it never had a chance to build on."""
+all_objects(s::WorkspaceString) = vcat(s.letters, s.groups, s.proposed_groups)
 string_length(s::WorkspaceString) = length(s.letter_categories)
 
 leftmost_in_string(o::Letter) = o.string_pos == 0
@@ -163,8 +180,10 @@ function get_descriptor_for(o::WSObject, description_type::Node)
     return idx === nothing ? nothing : o.descriptions[idx].descriptor
 end
 
+"""`(description-type-present? description-type)` — NB this looks at ALL
+descriptions, so a group's bond descriptions count too."""
 description_type_present(o::WSObject, t::Node) =
-    any(d -> d.description_type === t, o.descriptions)
+    any(d -> d.description_type === t, all_descriptions(o))
 
 """`(contains? object1 object2)` — whether the first object is a group that has
 the second somewhere inside it. Only groups can contain anything, and
@@ -411,6 +430,7 @@ function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractS
     s = WorkspaceString(string_type, cats, WSObject[], WSObject[], Any[],
                         [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
                         Dict{Tuple{Int,Int},Vector{Any}}(),
+                        Dict{Tuple{Int,Int},Any}(), Dict{Int,Any}(), Any[],
                         String(sym), false, 0, 0)
     for (position, cat) in enumerate(cats)
         letter = Letter(s, cat, position - 1, 0, Description[],

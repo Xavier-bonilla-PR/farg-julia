@@ -115,8 +115,8 @@ function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
     ordered_objects = direction === net[:plato_left] ? reverse(objs) : objs
     initial_letter_category = get_descriptor_for(ordered_objects[1],
                                                  net[:plato_letter_category])
-    bond_category = getRelated = get_related_node(group_category, net[:plato_bond_category],
-                                                  net[:plato_identity])::Node
+    bond_category = get_related_node(group_category, net[:plato_bond_category],
+                                     net[:plato_identity])::Node
     group_length = length(objs)
     middle_idx = findfirst(o -> get_descriptor_for(o, net[:plato_string_position_category]) ===
                                 net[:plato_middle], objs)
@@ -189,6 +189,7 @@ function build_group!(g::Group, net::Slipnet)
     g.string.next_id_num += 1
     pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
     pushfirst!(g.string.right_edge_groups[g.right_string_pos + 1], g)
+    g.string.group_by_leftmost_id[g.left_object.id_num] = g
     pushfirst!(g.string.groups, g)
     for o in g.constituent_objects
         o.enclosing_group = g
@@ -210,7 +211,7 @@ descriptions are removed. The bridge cleanup in the Scheme applies once bridges
 are ported."""
 function delete_invalid_string_position_middle_descriptions!(s::WorkspaceString,
                                                              net::Slipnet)
-    for object in objects(s)
+    for object in all_objects(s)
         if any(d -> d.descriptor === net[:plato_middle], object.descriptions) &&
            !middle_in_string(object)
             idx = findfirst(d -> d.description_type === net[:plato_string_position_category],
@@ -250,8 +251,14 @@ function get_local_density(rng::PyRandom, g::Group)
         end
         return result
     end
-    other_objects = vcat(neighbors(g, choose_left_neighbor),
-                         neighbors(g, choose_right_neighbor))
+    # NB the Scheme builds this with (append (neighbors ... left) (neighbors ...
+    # right)), and Chez evaluates procedure arguments RIGHT TO LEFT — so the
+    # RIGHT walk draws first, even though the result lists left first. The bond
+    # version of this walk uses let*, which is sequential, and so goes left
+    # first; the two are genuinely different orders.
+    right_side = neighbors(g, choose_right_neighbor)
+    left_side = neighbors(g, choose_left_neighbor)
+    other_objects = vcat(left_side, right_side)
     num_of_objects = length(other_objects)
     num_of_similar_groups = count(other_objects) do o
         o isa Group && disjoint_objects(g, o) &&
@@ -320,13 +327,15 @@ function break_group!(g::Group, net::Slipnet)
     g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net)
     i = findfirst(x -> x === g, s.groups)
     i === nothing || deleteat!(s.groups, i)
+    delete!(s.group_by_leftmost_id, g.left_object.id_num)
+    delete_proposed_bonds!(s, g)
     for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
                         (g.right_string_pos, s.right_edge_groups))
         j = findfirst(x -> x === g, list[pos + 1])
         j === nothing || deleteat!(list[pos + 1], j)
     end
     for b in incident_bonds(g)
-        break_bond!(b::Bond)
+        break_bond!(b::Bond, net)
     end
     for o in g.constituent_objects
         o.enclosing_group = nothing

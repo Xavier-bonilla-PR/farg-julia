@@ -50,10 +50,11 @@ From the repo root. This is the single most useful command in the project:
 
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
-  util slipnet workspace cm bonds groups bridges coderack bondcodelets themes
+  util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
+  descriptioncodelets groupcodelets
 ```
 
-Expected — ten layers, **4,676 trace lines byte-identical**:
+Expected — twelve layers, **9,851 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -66,6 +67,8 @@ ok    bridges (304 lines identical)
 ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
 ok    themes (2049 lines identical)
+ok    descriptioncodelets (321 lines identical)
+ok    groupcodelets (4854 lines identical)
 all probes matched
 ```
 
@@ -97,7 +100,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~5,300 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~6,000 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -111,6 +114,8 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | coderack | `coderack.jl` | `coderack` | 366 |
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
 | themespace: clusters, dynamics, theme support | `themes.jl` | `themes` | 2049 |
+| description codelets | `codelets_descriptions.jl` | `descriptioncodelets` | 321 |
+| group codelets, incl. consolidation | `codelets_groups.jl` | `groupcodelets` | 4854 |
 
 ---
 
@@ -190,6 +195,33 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **Right-to-left argument evaluation finally bit.** A group's
+  `get-local-density` builds its neighbour list with
+  `(append (neighbors self 'choose-left-neighbor) (neighbors self 'choose-right-neighbor))`.
+  That is a procedure call, so Chez runs the RIGHT walk first even though the
+  result lists left first — and both walks draw. The BOND version of the same
+  walk uses `let*`, which is sequential, so it really does go left first. Two
+  near-identical functions, two different draw orders. Whenever both arguments
+  of a call have side effects, check which Chez runs first.
+- **In Julia, an untyped predicate and an `::Any` fallback are the SAME method.**
+  `is_proposed_structure(x) = ...` followed by `is_proposed_structure(::Any) =
+  false` does not define a fallback; the second silently replaces the first, and
+  the flag was always false. Nothing read it until proposed groups needed
+  cleaning up when their codelet was culled. Dispatch on
+  `::Union{Bond,Group,Bridge}` instead.
+- **Culling a codelet deletes its proposed structure.** `delete-codelets` calls
+  `delete-proposed-structure` before removing the codelet, so a bond or group
+  whose codelet is culled leaves the workspace too.
+- **`100*` is `(round (* 100 x))`,** not a bare multiply. `%`, `1-`, `10-` and
+  `100-` are all not what they look like either; `1+` genuinely is `add1`.
+- **`description-type-present?` reads ALL descriptions** (a group's bond
+  descriptions included), while `get-descriptor-for` reads only the plain ones.
+- **`(tell string 'get-all-objects)` includes PROPOSED groups**, and the
+  middle-description cleanup walks that, not `get-objects`.
+- **`group-builder` may REBUILD its group before building it.** A letter-sameness
+  group containing other letter-sameness groups, or a length-sameness group
+  containing length groups, is flattened over its letters and re-made; the
+  object that gets built is not the one that was proposed.
 - **`contains?` is group nesting, not position arithmetic** — and a stub of
   `false` is correct exactly until the first group is built. This one sat in
   `workspace.jl` for four commits: `calculate-local-support` excludes objects
@@ -236,15 +268,20 @@ by reading the code.
    `propose-description-based-on-theme`, `look-for-auxiliary-slippages` and
    `conditions-for-bridge`/`flipped`. Do those with step 3 below. Also skipped:
    themespace state save/restore, which only the GUI's history browser uses.
-1. **Description and group codelets** (`descriptions.ss` 205, plus the codelet
-   bodies in `groups.ss`) — small, and they follow the exact
-   scout → evaluator → builder shape already ported for bonds in
-   `codelets_bonds.jl`. Use that file as the template.
+1. ~~Description and group codelets~~ — **done**, as `codelets_descriptions.jl`
+   and `codelets_groups.jl`. The group builder's fight-and-consolidate logic is
+   the hairiest thing in the port so far; its probe reseeds the coderack every
+   `%update-cycle-length%` codelets, mimicking `add-bottom-up-codelets`, because
+   without that the rack drains after the seed batch and the builders barely
+   run. Deferred there: incompatible BRIDGES, which the builder is supposed to
+   fight and break — grep `get_incompatible_bridges` in `codelets_groups.jl`.
 3. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
-   logic. Take the four deferred `themes.ss` codelet procedures listed above at
-   the same time; they are bridge codelets in all but name, and
-   `conditions-for-bridge` needs `make-flipped-version` on groups, which is
-   also still unported.
+   logic, and now the next thing on the critical path. Take the four deferred
+   `themes.ss` codelet procedures listed above at the same time; they are bridge
+   codelets in all but name, and `conditions-for-bridge` needs
+   `make-flipped-version` on GROUPS, which is still unported (the BOND version
+   is, in `bonds.jl`). Doing this also lets `group_builder` stop returning an
+   empty list from `get_incompatible_bridges`.
 4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).
@@ -290,6 +327,12 @@ Needed to load under Chez 9; the model is otherwise untouched.
   prelude.
 - Chez 9's reader rejects `#` inside symbols. The five affected symbols all
   ended in `id#` and were renamed to `id-num` throughout.
+
+The harness also stubs `group-graphics`. `group-builder` calls
+`(group-graphics 'erase ...)` UNGUARDED in each of its two consolidation
+branches (`groups.ss` 727 and 765), unlike every other graphics call in that
+file, which sits behind `%workspace-graphics%`. Headless, `group-graphics.ss`
+is never loaded, so those two calls raise the moment a group consolidates.
 
 ---
 

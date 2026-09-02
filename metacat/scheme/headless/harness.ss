@@ -11,6 +11,13 @@
     *memory-window* *comment-window* *trace-window* *temperature-window*
     *control-panel* *EEG-window*))
 
+;; group-builder calls (group-graphics 'erase ...) UNGUARDED in each of its two
+;; consolidation branches (groups.ss lines 727 and 765), unlike every other
+;; graphics call in that file, which sits behind %workspace-graphics%. Headless,
+;; group-graphics.ss is never loaded, so those two calls raise as soon as a
+;; group consolidates. Stub the dispatcher rather than patch the model.
+(set-top-level-value! 'group-graphics (lambda args (void)))
+
 (set! %workspace-graphics% #f)
 (set! %slipnet-graphics% #f)
 (set! %coderack-graphics% #f)

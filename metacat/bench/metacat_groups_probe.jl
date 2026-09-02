@@ -24,7 +24,7 @@ function build_bond_chain(s::WorkspaceString)
             push!(result, nothing)
         else
             b = make_bond(net, o1, o2, cat::Node, net[:plato_letter_category], d1, d2)
-            build_bond!(b)
+            build_bond!(b, net)
             push!(result, b)
         end
     end

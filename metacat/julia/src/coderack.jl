@@ -72,8 +72,10 @@ end
 
 """A codelet argument is a "proposed structure" when it is a bond, group or
 bridge - descriptions do not count, since they are not stored in the
-workspace."""
-is_proposed_structure(x) = x isa Bond || x isa Group || x isa Bridge
+workspace. NB both methods must be dispatched on, not written as an untyped
+predicate plus an `::Any` fallback: those are the same signature, and the
+second silently replaces the first."""
+is_proposed_structure(::Union{Bond,Group,Bridge}) = true
 is_proposed_structure(::Any) = false
 
 function make_codelet(ct::CodeletType, urgency::Real, arguments::Vector{Any} = Any[])
@@ -187,11 +189,17 @@ removal_weight(c::Codelet, cr::Coderack, codelet_count::Int, temperature::Int) =
     (codelet_count - c.time_stamp) *
     (1 + (highest_bin_urgency(cr, temperature) - bin_urgency(c.coderack_bin, temperature)))
 
+"""`(delete-proposed-structure struc)` from workspace.ss — when a codelet
+carrying a proposed structure is culled, the structure goes with it. The
+methods live with their structure layers, which load after this file."""
+function delete_proposed_structure! end
+
 function delete_codelets!(cr::Coderack, num_to_delete::Int, codelet_count::Int,
                           rng::PyRandom, temperature::Int)
     for _ in 1:num_to_delete
         weights = [removal_weight(c, cr, codelet_count, temperature) for c in cr.codelet_list]
         c = stochastic_pick(rng, cr.codelet_list, weights)::Codelet
+        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1])
         remove_codelet!(cr.bins[c.coderack_bin + 1], c)
         i = findfirst(x -> x === c, cr.codelet_list)
         i === nothing || deleteat!(cr.codelet_list, i)
@@ -254,10 +262,18 @@ const BOTTOM_UP_CODELET_TYPE_NAMES = [
 
 make_bottom_up_codelet_types() = [CodeletType(n) for n in BOTTOM_UP_CODELET_TYPE_NAMES]
 
-"""The Scheme prints codelet type names with hyphens and a colon."""
-codelet_type_display(ct::CodeletType) =
-    replace(replace(String(ct.name), "_scout_whole_string" => "-scout:whole-string"),
-            "_" => "-")
+"""The Scheme prints codelet type names with hyphens, and a colon before the
+qualifier on the scouts that have one."""
+function codelet_type_display(ct::CodeletType)
+    name = String(ct.name)
+    for (suffix, replacement) in ("_scout_whole_string" => "-scout:whole-string",
+                                  "_scout_category" => "-scout:category",
+                                  "_scout_direction" => "-scout:direction")
+        endswith(name, suffix) &&
+            return replace(name[1:(end - length(suffix))], "_" => "-") * replacement
+    end
+    return replace(name, "_" => "-")
+end
 
 """The codelet-type registry. Procedures are attached by the codelet layers as
 they are ported, mirroring set-codelet-procedure in the Scheme."""
