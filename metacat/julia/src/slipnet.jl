@@ -460,9 +460,55 @@ end
 
 reset_slipnet!(net::Slipnet) = (foreach(reset!, net.nodes); net)
 
-"""`(update-slipnet-activations)` minus the theme contribution, which is a
-no-op until themes exist."""
-function update_slipnet_activations!(net::Slipnet, rng::PyRandom)
+"""`(possible-descriptor? object)` — whether this node could describe the
+object. Only the nodes with a `define-descriptor-predicate` in slipnet.ss can;
+every other node answers no, which is the default predicate there."""
+function possible_descriptor(n::Node, o, net::Slipnet)
+    name = n.name
+    if name === :plato_one || name === :plato_two || name === :plato_three ||
+       name === :plato_four || name === :plato_five
+        len = name === :plato_one ? 1 : name === :plato_two ? 2 :
+              name === :plato_three ? 3 : name === :plato_four ? 4 : 5
+        return is_group(o) && group_length(o) == len
+    elseif name === :plato_leftmost
+        return !string_spanning_group(o) && leftmost_in_string(o)
+    elseif name === :plato_rightmost
+        return !string_spanning_group(o) && rightmost_in_string(o)
+    elseif name === :plato_middle
+        return middle_in_string(o)
+    elseif name === :plato_single
+        return !is_group(o) && spans_whole_string(o)
+    elseif name === :plato_whole
+        return string_spanning_group(o)
+    elseif name === :plato_alphabetic_first
+        return get_descriptor_for(o, net[:plato_letter_category]) === net[:plato_a]
+    elseif name === :plato_alphabetic_last
+        return get_descriptor_for(o, net[:plato_letter_category]) === net[:plato_z]
+    elseif name === :plato_letter
+        return !is_group(o)
+    elseif name === :plato_group
+        return is_group(o)
+    end
+    return false
+end
+
+"""`(get-possible-descriptors object)` — the instances of this category node
+that could describe the object. Instance links are CONSed, so this walks them
+in reverse declaration order."""
+get_possible_descriptors(n::Node, o, net::Slipnet) =
+    Node[d for d in instance_nodes(n) if possible_descriptor(d, o, net)]
+
+description_possible(n::Node, o, net::Slipnet) =
+    any(d -> possible_descriptor(d, o, net), instance_nodes(n))
+
+"""`(update-slipnet-activations)`. Active themes get first say: each one tries
+to keep its own dimension and relation alive before the network decays."""
+function update_slipnet_activations!(net::Slipnet, rng::PyRandom, ts = nothing)
+    if ts !== nothing
+        for theme in get_all_active_themes(ts)
+            spread_activation_to_slipnet!(theme, rng)
+        end
+    end
     for n in net.nodes
         decay_activation!(n)
     end

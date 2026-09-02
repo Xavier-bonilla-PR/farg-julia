@@ -9,6 +9,7 @@ mutable struct MetacatCtx
     net::Slipnet
     rng::PyRandom
     coderack::Coderack
+    themespace::Themespace
     initial_string::WorkspaceString
     modified_string::WorkspaceString
     target_string::WorkspaceString
@@ -31,13 +32,13 @@ object_exists(ctx::MetacatCtx, o::WSObject) = any(x -> x === o, workspace_object
 # one call shape. TEMPERATURE is the global the formulas read.
 function update_structure_strength!(b::Bond, ctx::MetacatCtx)
     TEMPERATURE[] = ctx.temperature
-    return update_structure_strength!(b, ctx.net, ctx.rng)
+    return update_structure_strength!(b, ctx.net, ctx.rng, ctx.themespace)
 end
 function update_structure_strength!(g::Group, ctx::MetacatCtx)
     TEMPERATURE[] = ctx.temperature
-    return update_structure_strength!(g, ctx.net, ctx.rng)
+    return update_structure_strength!(g, ctx.net, ctx.rng, ctx.themespace)
 end
 function update_structure_strength!(b::Bridge, ctx::MetacatCtx)
     TEMPERATURE[] = ctx.temperature
-    return update_structure_strength!(b, ctx.net, Bridge[])
+    return update_structure_strength!(b, ctx.net, Bridge[], ctx.themespace)
 end

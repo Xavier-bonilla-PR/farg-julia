@@ -111,8 +111,30 @@
     (+ (sum (tell-all (tell *workspace* 'get-bonds) 'get-strength))
        (sum (tell-all (tell *workspace* 'get-groups) 'get-strength)))))
 
+;; workload 5: themespace activation cycles
+(define themespace-workload
+  (lambda ()
+    (tell *themespace* 'initialize)
+    (for* each type in '(top-bridge bottom-bridge vertical-bridge) do
+      (tell *themespace* 'set-theme-type-activations type 60))
+    (tell *themespace* 'set-theme-activation 'top-bridge
+      (1st (tell *themespace* 'get-dimensions)) plato-identity 100)
+    ;; accumulate across cycles: the activations decay to zero by the end, so
+    ;; only the trajectory is a checksum worth comparing.
+    (let loop ((i 0) (acc 0))
+      (if (= i 50)
+        acc
+        (begin
+          (tell *themespace* 'spread-activation)
+          (loop (add1 i)
+            (+ acc
+               (sum (tell-all (tell *themespace* 'get-all-themes)
+                      'get-absolute-activation))
+               (count-meth (tell *themespace* 'get-all-themes) 'dominant?))))))))
+
 (timeit "slipnet-50-cycles" 400 slipnet-cycle-workload)
 (timeit "workspace-init" 2000 workspace-init-workload)
 (workspace-init-workload)
 (timeit "concept-mappings" 2000 cm-workload)
 (timeit "bonds-and-groups" 2000 bonds-groups-workload)
+(timeit "themespace-50-cycles" 200 themespace-workload)

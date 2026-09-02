@@ -240,7 +240,7 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 
 ```bash
 bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
-                                     bridges coderack bondcodelets
+                                     bridges coderack bondcodelets themes
 ```
 
 | layer | Julia | verified |
@@ -254,20 +254,26 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | bridges (horizontal and vertical) | `bridges.jl` | 304 lines |
 | coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
 | bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
+| themespace: clusters, activation dynamics, theme support | `themes.jl` | 2,049 lines |
 | description, group, bridge and rule codelets | not yet ported | |
-| themes, temporal trace, episodic memory, justification | not yet ported | |
+| temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The nine verified layers cover roughly 4,500 of the ~16,000 lines of Metacat's
+The ten verified layers cover roughly 5,300 of the ~16,000 lines of Metacat's
 non-graphics Scheme. What remains for a run that reaches an answer is the other
 codelet procedures (description, group, bridge, rule), plus `rules.ss`,
-`answers.ss`, `themes.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and
-`justify.ss` — about 11,300 lines. `themes.ss` is on that critical path rather
-than optional: every workspace structure's strength is weighted by its thematic
-compatibility, which is 0 only while no themes exist. The probes here hold that
-condition, so the layers agree; a real run creates themes as soon as bridges
-start boosting them.
+`answers.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about
+10,100 lines.
+
+The themespace is what makes Metacat more than Copycat, and it was on the
+critical path rather than optional: every workspace structure's strength is
+weighted by its thematic compatibility, and while no themes existed that weight
+was 0 for everything. With `themes.jl` in place, bridges boost the themes their
+concept mappings realise, themes feed back into structure strengths and into
+slipnet activation, and the `themes` probe checks all three loops — including
+the float-valued compatibility, which both sides print as the exact rational
+the double really is, so a one-ulp drift shows up as a different numerator.
 
 Three things about Metacat's Scheme turned out to be load-bearing and are easy
 to lose in a translation:
@@ -284,6 +290,13 @@ to lose in a translation:
 - **Right-to-left argument evaluation.** Chez evaluates procedure arguments
   right to left, so a call drawing two random numbers draws the rightmost
   first.
+
+The differential test keeps earning its keep: adding the themespace surfaced a
+bug in a layer that had been passing for four commits. `contains?` was stubbed
+to `false` back when no groups existed, which was correct then and silently
+wrong the moment a group was built — it inflated every description's local
+support. Nothing in the earlier probes printed a description strength after
+grouping, so nothing caught it until theme-weighted strengths did.
 
 ## Licence
 

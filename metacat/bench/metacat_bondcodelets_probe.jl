@@ -11,6 +11,7 @@ include("../julia/src/bonds.jl")
 include("../julia/src/groups.jl")
 include("../julia/src/bridges.jl")
 include("../julia/src/coderack.jl")
+include("../julia/src/themes.jl")
 include("../julia/src/context.jl")
 include("../julia/src/codelets_bonds.jl")
 
@@ -36,7 +37,8 @@ function probe(i, m, t, seed, n, temp)
         set_activation!(nd, MAX_ACTIVATION)
     end
     rng = PyRandom(0)   # reseeded below, after the workspace values pass
-    ctx = MetacatCtx(net, rng, Coderack(), strings[1], strings[2], strings[3], temp, 0)
+    ctx = MetacatCtx(net, rng, Coderack(), make_themespace(net),
+                     strings[1], strings[2], strings[3], temp, 0)
     TEMPERATURE[] = temp
     update_workspace_values!(strings)
     ctx.rng = PyRandom(seed)

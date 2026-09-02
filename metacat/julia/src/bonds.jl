@@ -137,9 +137,11 @@ end
 
 calculate_external_strength(b::Bond, rng::PyRandom) = get_local_support(rng, b)
 
-"""Bonds have no thematic compatibility until themes are ported; the Scheme
-falls back to the workspace-structure default of 0."""
-function update_structure_strength!(b::Bond, net::Slipnet, rng::PyRandom)
+"""Bonds have no thematic compatibility of their own; the Scheme falls back to
+the workspace-structure default of 0, so their strength is purely intrinsic.
+The themespace argument is accepted only to keep one call shape across the
+structure types."""
+function update_structure_strength!(b::Bond, net::Slipnet, rng::PyRandom, ts = nothing)
     internal = calculate_internal_strength(b, net)
     external = calculate_external_strength(b, rng)
     intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])

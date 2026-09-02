@@ -9,6 +9,8 @@ include("../julia/src/concept_mappings.jl")
 include("../julia/src/images.jl")
 include("../julia/src/bonds.jl")
 include("../julia/src/groups.jl")
+include("../julia/src/bridges.jl")
+include("../julia/src/themes.jl")
 
 const net = build_slipnet()
 current_strings = WorkspaceString[]
@@ -115,8 +117,29 @@ function bonds_groups_workload()
            ssum([g.strength for s in strings for g in s.groups])
 end
 
+#--- workload 5: themespace activation cycles -------------------------------
+const ts = make_themespace(net)
+
+function themespace_workload()
+    initialize!(ts)
+    for type in (:top_bridge, :bottom_bridge, :vertical_bridge)
+        set_theme_type_activations!(ts, type, 60)
+    end
+    set_theme_activation!(ts, :top_bridge, ts.dimensions[1], net[:plato_identity], 100)
+    # accumulate across cycles: the activations decay to zero by the end, so
+    # only the trajectory is a checksum worth comparing.
+    acc = 0
+    for _ in 1:50
+        spread_activation!(ts)
+        acc += ssum([absolute_activation(t) for t in ts.all_themes]) +
+               count(is_dominant, ts.all_themes)
+    end
+    return acc
+end
+
 timeit("slipnet-50-cycles", 400, slipnet_cycle_workload)
 timeit("workspace-init", 2000, workspace_init_workload)
 workspace_init_workload()
 timeit("concept-mappings", 2000, cm_workload)
 timeit("bonds-and-groups", 2000, bonds_groups_workload)
+timeit("themespace-50-cycles", 200, themespace_workload)

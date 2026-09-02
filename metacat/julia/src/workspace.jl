@@ -166,10 +166,10 @@ end
 description_type_present(o::WSObject, t::Node) =
     any(d -> d.description_type === t, o.descriptions)
 
-"""`contains?` — whether one object encloses another. With no groups yet, an
-object contains only itself's group chain, so this is false for distinct
-letters."""
-contains_object(outer::WSObject, inner::WSObject) = false
+"""`(contains? object1 object2)` — whether the first object is a group that has
+the second somewhere inside it. Only groups can contain anything, and
+`nested-member?` is false for a letter, so this is just the nesting test."""
+contains_object(outer::WSObject, inner::WSObject) = nested_member(outer, inner)
 
 function calculate_local_support(d::Description)
     n = 0
@@ -191,16 +191,18 @@ calculate_internal_strength(d::Description) = d.descriptor.conceptual_depth
 calculate_external_strength(d::Description) =
     sdiv(calculate_local_support(d) + d.description_type.activation, 2)
 
-"""Themes are not ported yet; with no active themes `(maximum '())` is 0,
-which is what the Scheme returns here too."""
-get_thematic_compatibility(::Description) = 0
+"""With no themespace there are no active themes, and `(maximum '())` is 0 —
+the same answer the Scheme gives before any theme exists."""
+get_thematic_compatibility(::Description, ::Nothing) = 0
 
-"""`(update-strength)` from workspace-structures.ss."""
-function update_strength!(s)
+"""`(update-strength)` from workspace-structures.ss. A structure that fits the
+active themes is pulled toward 100, one that fights them toward 0, in
+proportion to how strongly the themes feel about it."""
+function update_strength!(s, ts = nothing)
     internal = calculate_internal_strength(s)
     external = calculate_external_strength(s)
     intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
-    compatibility = get_thematic_compatibility(s)
+    compatibility = get_thematic_compatibility(s, ts)
     thematic_weight = abs(compatibility)
     s.strength = sround(weighted_average([compatibility > 0 ? 100 : 0, intrinsic],
                                          [thematic_weight, sub_from_1(thematic_weight)]))
@@ -358,7 +360,7 @@ function update_average_salience!(o::WSObject)
     return o
 end
 
-function update_object_values!(o::WSObject)
+function update_object_values!(o::WSObject, ts = nothing)
     update_intra_string_unhappiness!(o)
     update_inter_string_unhappiness!(o)
     update_average_unhappiness!(o)
@@ -366,7 +368,7 @@ function update_object_values!(o::WSObject)
     update_inter_string_salience!(o)
     update_average_salience!(o)
     for d in o.descriptions
-        update_strength!(d)
+        update_strength!(d, ts)
     end
     return o
 end
@@ -454,15 +456,16 @@ the rng is what lets a bond's external strength do its stochastic local-density
 walk; it is optional so the pre-bond layers can call this without one."""
 function update_workspace_values!(strings::Vector{WorkspaceString},
                                   rng::Union{Nothing,PyRandom} = nothing,
-                                  net::Union{Nothing,Slipnet} = nothing)
+                                  net::Union{Nothing,Slipnet} = nothing,
+                                  ts = nothing)
     if rng !== nothing && net !== nothing
         # (tell *workspace* 'get-structures) is bonds, then groups, then
         # bridges and rules, each gathered across all strings in turn.
         for s in strings, structure in s.bonds
-            update_structure_strength!(structure, net::Slipnet, rng::PyRandom)
+            update_structure_strength!(structure, net::Slipnet, rng::PyRandom, ts)
         end
         for s in strings, structure in s.groups
-            update_structure_strength!(structure, net::Slipnet, rng::PyRandom)
+            update_structure_strength!(structure, net::Slipnet, rng::PyRandom, ts)
         end
     end
     objs = vcat((objects(s) for s in strings)...)
@@ -473,7 +476,7 @@ function update_workspace_values!(strings::Vector{WorkspaceString},
         update_all_relative_importances!(s)
     end
     for o in objs
-        update_object_values!(o)
+        update_object_values!(o, ts)
     end
     for s in strings
         update_average_intra_string_unhappiness!(s)

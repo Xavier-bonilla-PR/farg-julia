@@ -53,6 +53,10 @@ mutable struct Group <: WSObject
     proposal_level::Int
 end
 
+is_group(::Group) = true
+is_group(::Letter) = false
+group_length(g::Group) = g.group_length
+
 singleton_group(g::Group) = g.group_length == 1
 singleton_group(::Letter) = false
 top_level_member(g::Group, object::WSObject) = any(o -> o === object, g.constituent_objects)
@@ -283,7 +287,7 @@ end
 calculate_external_strength(g::Group, rng::PyRandom) =
     spans_whole_string(g) ? 100 : get_local_support(rng, g)
 
-function update_structure_strength!(g::Group, net::Slipnet, rng::PyRandom)
+function update_structure_strength!(g::Group, net::Slipnet, rng::PyRandom, ts = nothing)
     internal = calculate_internal_strength(g, net)
     external = calculate_external_strength(g, rng)
     intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])

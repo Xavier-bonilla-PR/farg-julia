@@ -9,9 +9,9 @@
 # they are one type here with an `orientation` field, and the places where they
 # genuinely differ dispatch on it.
 #
-# Deferred, and marked where they arise: theme boosting (themes are not ported,
-# and an empty themespace contributes 0), the flipped-group and translated-rule
-# machinery, and graphics.
+# Deferred, and marked where they arise: the flipped-group and translated-rule
+# machinery, and graphics. Theme boosting and thematic compatibility live in
+# themes.jl, which loads after this file.
 
 mutable struct Bridge
     orientation::Symbol                # :horizontal | :vertical
@@ -292,15 +292,23 @@ function calculate_external_strength(b::Bridge, all_bridges::Vector{Bridge}, net
     return sround(min(100, total))
 end
 
-"""Themes are not ported; an empty themespace contributes 0, which is the
-workspace-structure default."""
-get_thematic_compatibility(::Bridge) = 0
+"""With no themespace there are no active themes, so `get-average-theme-support`
+weighs nothing and the compatibility is 0 — the workspace-structure default."""
+get_thematic_compatibility(::Bridge, ::Nothing, ::Slipnet) = 0
 
-function update_structure_strength!(b::Bridge, net::Slipnet, all_bridges::Vector{Bridge})
+"""`(update-strength)` for a bridge. Unlike bonds and groups, a bridge has a
+thematic compatibility of its own, and it is signed: a bridge that violates an
+active theme is dragged toward strength 0, one that realises the themes toward
+100."""
+function update_structure_strength!(b::Bridge, net::Slipnet, all_bridges::Vector{Bridge},
+                                    ts = nothing)
     internal = calculate_internal_strength(b, net)
     external = calculate_external_strength(b, all_bridges, net)
     intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
-    b.strength = sround(weighted_average([0, intrinsic], [0, 1]))
+    compatibility = get_thematic_compatibility(b, ts, net)
+    thematic_weight = abs(compatibility)
+    b.strength = sround(weighted_average([compatibility > 0 ? 100 : 0, intrinsic],
+                                         [thematic_weight, sub_from_1(thematic_weight)]))
     return b
 end
 

@@ -3,8 +3,8 @@
 Everything below assumes a **fresh container with a fresh clone** — no
 toolchain, nothing cached. Start here.
 
-Branch: `claude/copycat-python-julia-rewrite-0bw3lu`
-Last commit at time of writing: `6a4b9c2`
+Branch: `claude/copycat-metacat-folders-iybxko`
+Last commit at time of writing: the themespace port (see `git log -1`)
 
 ---
 
@@ -50,10 +50,10 @@ From the repo root. This is the single most useful command in the project:
 
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
-  util slipnet workspace cm bonds groups bridges coderack bondcodelets
+  util slipnet workspace cm bonds groups bridges coderack bondcodelets themes
 ```
 
-Expected — nine layers, **2,627 trace lines byte-identical**:
+Expected — ten layers, **4,676 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -65,6 +65,7 @@ ok    groups (230 lines identical)
 ok    bridges (304 lines identical)
 ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
+ok    themes (2049 lines identical)
 all probes matched
 ```
 
@@ -96,7 +97,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~4,500 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~5,300 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -109,6 +110,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | bridges (horizontal + vertical) | `bridges.jl` | `bridges` | 304 |
 | coderack | `coderack.jl` | `coderack` | 366 |
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
+| themespace: clusters, dynamics, theme support | `themes.jl` | `themes` | 2049 |
 
 ---
 
@@ -131,7 +133,13 @@ To add a layer:
 1. Read the Scheme file. Note every `random` call and its **order**.
 2. Write the Julia port in `metacat/julia/src/`.
 3. Write the two probes, dumping every field you can reach. Tag exact vs
-   inexact numbers (`E`/`F`) — exactness is a real signal, see below.
+   inexact numbers (`E`/`F`) — exactness is a real signal, see below. For a
+   value that is genuinely a float, print the exact rational the double is
+   (`(inexact->exact x)` in Chez, `Rational{BigInt}(x)` in Julia) rather than
+   the float itself: it is a bit-exact comparison, and it sidesteps the two
+   languages disagreeing about how to render `1e-5`. See
+   `metacat_themes_probe.{ss,jl}`, which compares thematic compatibilities that
+   way.
 4. `JULIA=$JULIA bash metacat/bench/verify_metacat.sh <name>` and fix until
    identical.
 5. Re-run **all** probes before committing; later layers change earlier ones.
@@ -182,26 +190,61 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **`contains?` is group nesting, not position arithmetic** — and a stub of
+  `false` is correct exactly until the first group is built. This one sat in
+  `workspace.jl` for four commits: `calculate-local-support` excludes objects
+  that enclose or are enclosed by the one being described, and with the stub it
+  excluded nothing, inflating every description's local support once a group
+  existed. No earlier probe printed a description strength after grouping.
+  **Lesson: a stub justified by "this state cannot arise yet" needs a probe the
+  moment that state can arise.**
+- **A theme cluster's `alpha` is frozen at construction.** `net-effect` closes
+  over the value of `sensitivity` inside the cluster's `let*`, so
+  `set-sensitivity` mutates the variable and changes nothing. `themes.jl`
+  stores the computed `alpha` rather than the sensitivity to keep that true.
+- **`(get-label from to)` can legitimately return `#f`**, and in the themespace
+  that `#f` is not "missing" — it is the DIFFERENCE theme, a claim in its own
+  right ("this dimension maps by no relation at all"). It sits in the relation
+  list beside `identity` and `successor`.
+- **`get-possible-relations` uses `remq-duplicates`,** which keeps the LAST of
+  each duplicate group. Relations therefore come out in an order no forward
+  scan of the cross product reproduces.
+- **Julia's two-variable comprehensions are COLUMN-major.** `[f(a,b) for a in
+  A, b in B]` varies `a` fastest, but Scheme's `cross-product-map` is
+  row-major. A two-variable `for` loop is row-major and safe; a comprehension
+  is not. Order matters here because theme support values feed a
+  `weighted-average`, and float addition is not associative.
+- **`update-strength` is where the themes actually bite.** Every workspace
+  structure's strength is `weighted-average([compatibility > 0 ? 100 : 0,
+  intrinsic], [|compatibility|, 1 - |compatibility|])`. Bonds and groups have
+  no compatibility of their own (the workspace-structure default of 0), so only
+  bridges and descriptions feel it — but they feel it hard: a bridge violating
+  an active theme drops to strength 0 outright.
 
 ---
 
 ## 6. What's next, in order
 
-**~11,300 lines of Scheme remain.** Suggested order, with the reasoning:
+**~10,100 lines of Scheme remain.** Suggested order, with the reasoning:
 
-1. **`themes.ss` (1,235)** — do this first. It is on the critical path, not
-   optional: every workspace structure's strength is weighted by its thematic
-   compatibility, which is 0 *only while no themes exist*. The current probes
-   hold that condition, which is why the ported layers agree. A real run creates
-   themes as soon as bridges start boosting them, so no end-to-end comparison
-   means anything until themes are in. Ported layers currently hardcode
-   `get_thematic_compatibility(...) = 0` — grep for that and replace.
-2. **Description and group codelets** (`descriptions.ss` 205, plus the codelet
+0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
+   and their recurrent dynamics, freezing and deletion, theme patterns, the
+   theme-support predicates, and the three feedback loops (bridges boost
+   themes; themes weight structure strengths; themes re-activate slipnodes).
+   **Not** ported from `themes.ss`, deliberately, because they need codelets
+   that do not exist yet: `thematic-bridge-scout`,
+   `propose-description-based-on-theme`, `look-for-auxiliary-slippages` and
+   `conditions-for-bridge`/`flipped`. Do those with step 3 below. Also skipped:
+   themespace state save/restore, which only the GUI's history browser uses.
+1. **Description and group codelets** (`descriptions.ss` 205, plus the codelet
    bodies in `groups.ss`) — small, and they follow the exact
    scout → evaluator → builder shape already ported for bonds in
    `codelets_bonds.jl`. Use that file as the template.
 3. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
-   logic.
+   logic. Take the four deferred `themes.ss` codelet procedures listed above at
+   the same time; they are bridge codelets in all but name, and
+   `conditions-for-bridge` needs `make-flipped-version` on groups, which is
+   also still unported.
 4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).
@@ -256,6 +299,12 @@ Copycat is fully benchmarked (`copycat/results/benchmark.json`, table in
 `README.md`): **7.5x** over 1.4M codelets, range 3.3x–11.3x per problem.
 
 Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`) covering the
-ported layers with matching checksums, but the numbers are **micro-benchmarks
-of layers, not of the model**, and should not be quoted as "Metacat in Julia is
-Nx faster". Wait for the run loop.
+ported layers with matching checksums — five workloads now, the newest being
+50 themespace activation cycles over all 27 clusters. The numbers are
+**micro-benchmarks of layers, not of the model**, and should not be quoted as
+"Metacat in Julia is Nx faster". Wait for the run loop.
+
+When adding a workload, check the checksum is not trivially constant: the
+themespace one summed activations after 50 cycles, by which point everything
+had decayed to zero on both sides. It now accumulates the trajectory across
+cycles instead, which is what actually distinguishes the two runs.
