@@ -4,6 +4,7 @@ include("../julia/src/schemenum.jl")
 include("../julia/src/utilities.jl")
 include("../julia/src/slipnet.jl")
 include("../julia/src/workspace.jl")
+include("../julia/src/images.jl")
 
 numstr(v) = v isa AbstractFloat ? string(v) :
             (v isa Rational ? string(numerator(v), "/", denominator(v)) : string(v))

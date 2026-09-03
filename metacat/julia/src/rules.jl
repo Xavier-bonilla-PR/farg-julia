@@ -643,3 +643,497 @@ function transcribe_to_english(rule_clauses::Vector{RuleClause}, s::WorkspaceStr
     return String[line for str in clause_strings
                   for line in separate_into_multiple_lines(str, max_line_length, "  ")]
 end
+
+# --- change descriptions ----------------------------------------------------
+#
+# A change description says that one dimension of one object became something
+# else. It is the currency of rule abstraction — one is made for every
+# horizontal bridge that describes a change — but rule APPLICATION needs them
+# too, to notice that two transforms of the same rule contradict each other.
+#
+# Two kinds. An INTRINSIC change description is about one object; an EXTRINSIC
+# one is about a set of objects trading a dimension between them, and carries
+# the equivalent intrinsic changes so that the two kinds can be compared.
+
+mutable struct IntrinsicChangeDescription
+    reference_object::Any            # a workspace object, or a workspace string
+    scope::Symbol                    # :self | :subobjects
+    dimension::Node
+    descriptor1::Union{Nothing,Node}
+    relation::Union{Nothing,Node}
+    descriptor2::Union{Nothing,Node}
+    descriptors::Vector{Node}
+    enclosing_object::Any            # nothing when the referent is a string
+end
+
+"""`(make-intrinsic-change-description ...)`."""
+function make_intrinsic_change_description(reference_object, scope::Symbol,
+                                           dimension::Node,
+                                           descriptor1::Union{Nothing,Node},
+                                           relation::Union{Nothing,Node},
+                                           descriptor2::Union{Nothing,Node})
+    descriptors = Node[d for d in (relation, descriptor2) if d !== nothing]
+    enclosing = reference_object isa WorkspaceString ? nothing :
+                get_enclosing_object(reference_object::WSObject)
+    return IntrinsicChangeDescription(reference_object, scope, dimension, descriptor1,
+                                      relation, descriptor2, descriptors, enclosing)
+end
+
+mutable struct ExtrinsicChangeDescription
+    reference_objects::Vector{Any}
+    dimension::Node
+    descriptors::Vector{Node}
+    equivalent_intrinsic_changes::Vector{IntrinsicChangeDescription}
+    subobjects_swap::Bool
+end
+
+"""`(make-extrinsic-change-description reference-objects dimension descriptors)`
+— the equivalent intrinsic changes are "each object takes the OTHER of the two
+descriptors"."""
+function make_extrinsic_change_description(reference_objects, dimension::Node,
+                                           descriptors::Vector{Node})
+    equivalents = IntrinsicChangeDescription[
+        make_intrinsic_change_description(
+            obj, :self, dimension, nothing, nothing,
+            get_descriptor_for(obj, dimension) === descriptors[1] ? descriptors[2] :
+                                                                    descriptors[1])
+        for obj in reference_objects]
+    return ExtrinsicChangeDescription(Any[reference_objects...], dimension, descriptors,
+                                      equivalents, false)
+end
+
+const ChangeDescription = Union{IntrinsicChangeDescription,ExtrinsicChangeDescription}
+
+is_intrinsic_change(::IntrinsicChangeDescription) = true
+is_intrinsic_change(::ExtrinsicChangeDescription) = false
+
+change_dimension_is(c::ChangeDescription, dim::Node) = c.dimension === dim
+same_dimension(c1::ChangeDescription, c2::ChangeDescription) =
+    c1.dimension === c2.dimension
+same_scope(ic1::IntrinsicChangeDescription, ic2::IntrinsicChangeDescription) =
+    ic1.scope === ic2.scope
+change_self(ic::IntrinsicChangeDescription) = ic.scope === :self
+change_subobjects(ic::IntrinsicChangeDescription) = ic.scope === :subobjects
+lett_ctgy_or_alph_pos_dimension(ic::IntrinsicChangeDescription, net::Slipnet) =
+    ic.dimension === net[:plato_letter_category] ||
+    ic.dimension === net[:plato_alphabetic_position_category]
+same_reference_objects(ic1::IntrinsicChangeDescription,
+                       ic2::IntrinsicChangeDescription) =
+    ic1.reference_object === ic2.reference_object
+same_reference_objects(ec1::ExtrinsicChangeDescription,
+                       ec2::ExtrinsicChangeDescription) =
+    sets_equal(ec1.reference_objects, ec2.reference_objects)
+encloses(ic1::IntrinsicChangeDescription, ic2::IntrinsicChangeDescription) =
+    ic1.reference_object === ic2.enclosing_object
+encloses_at_any_level(ic1::IntrinsicChangeDescription,
+                      ic2::IntrinsicChangeDescription) =
+    nested_member(ic1.reference_object, ic2.reference_object)
+change_to_letter(ic::IntrinsicChangeDescription, net::Slipnet) =
+    ic.descriptor2 === net[:plato_letter]
+same_dimension_as_group_ctgy_medium(ic::IntrinsicChangeDescription,
+                                    other::IntrinsicChangeDescription, net::Slipnet) =
+    ic.dimension === get_bond_facet(other.reference_object, net)
+implied_by_opposite_group_ctgy(ic::IntrinsicChangeDescription, net::Slipnet) =
+    ic.reference_object isa Group &&
+    get_ending_letter_category(ic.reference_object::Group, net) === ic.descriptor2
+common_reference_object(ec::ExtrinsicChangeDescription,
+                        ic::IntrinsicChangeDescription) =
+    any(o -> o === ic.reference_object, ec.reference_objects)
+get_change_enclosing_object(ec::ExtrinsicChangeDescription) =
+    get_enclosing_object(ec.reference_objects[1])
+
+"""`(mark-as-subobjects-swap-if-possible)` — a swap among exactly the
+constituents of one enclosing object is a swap of THAT object's subobjects."""
+function mark_as_subobjects_swap_if_possible!(ec::ExtrinsicChangeDescription)
+    if sets_equal(get_constituent_objects(get_change_enclosing_object(ec)),
+                  ec.reference_objects)
+        ec.subobjects_swap = true
+    end
+    return ec
+end
+
+# --- change-description heuristics ------------------------------------------
+#
+# See pages 110-113 of Marshall's thesis for what each clause of
+# `intrinsic-implies-intrinsic?` is for; the cases are set out at length in the
+# comment above it in rules.ss. The shape of the idea: a change is redundant
+# when some other change already brings it about — changing every subobject's
+# length already changes this letter's length, and reversing a group already
+# changes which letter it ends on.
+
+"""`(intrinsic-implies-intrinsic? ic1 ic2)` — is ic2 already implicit in ic1?"""
+function intrinsic_implies_intrinsic(ic1::IntrinsicChangeDescription,
+                                     ic2::IntrinsicChangeDescription, net::Slipnet)
+    (same_dimension(ic1, ic2) &&
+     ((same_reference_objects(ic1, ic2) && same_scope(ic1, ic2)) ||
+      (encloses(ic1, ic2) && change_subobjects(ic1) && change_self(ic2)))) && return true
+    (lett_ctgy_or_alph_pos_dimension(ic1, net) &&
+     lett_ctgy_or_alph_pos_dimension(ic2, net) &&
+     ((same_reference_objects(ic1, ic2) &&
+       ((change_dimension_is(ic1, net[:plato_alphabetic_position_category]) &&
+         change_dimension_is(ic2, net[:plato_letter_category])) ||
+        (same_dimension(ic1, ic2) && change_subobjects(ic2)))) ||
+      encloses_at_any_level(ic1, ic2))) && return true
+    (change_dimension_is(ic1, net[:plato_length]) &&
+     change_dimension_is(ic2, net[:plato_letter_category]) &&
+     encloses(ic1, ic2) && change_self(ic1)) && return true
+    (change_dimension_is(ic1, net[:plato_group_category]) && change_self(ic1) &&
+     same_dimension_as_group_ctgy_medium(ic2, ic1, net) &&
+     (encloses(ic1, ic2) ||
+      (same_reference_objects(ic1, ic2) &&
+       change_dimension_is(ic2, net[:plato_letter_category]) &&
+       implied_by_opposite_group_ctgy(ic2, net)))) && return true
+    (change_dimension_is(ic1, net[:plato_string_position_category]) &&
+     change_dimension_is(ic2, net[:plato_direction_category]) &&
+     encloses(ic2, ic1) && change_self(ic2)) && return true
+    (change_to_letter(ic1, net) && change_dimension_is(ic2, net[:plato_length]) &&
+     ((same_reference_objects(ic1, ic2) && same_scope(ic1, ic2)) ||
+      (encloses(ic1, ic2) && change_subobjects(ic1) && change_self(ic2)))) && return true
+    return false
+end
+
+"""`(conflicts? ic1 ic2)` — implication either way."""
+change_conflicts(ic1::IntrinsicChangeDescription, ic2::IntrinsicChangeDescription,
+                 net::Slipnet) =
+    intrinsic_implies_intrinsic(ic1, ic2, net) ||
+    intrinsic_implies_intrinsic(ic2, ic1, net)
+
+extrinsic_implies_intrinsic(ec::ExtrinsicChangeDescription,
+                            ic::IntrinsicChangeDescription, net::Slipnet) =
+    any(e -> change_conflicts(e, ic, net), ec.equivalent_intrinsic_changes)
+
+extrinsic_implies_extrinsic(ec1::ExtrinsicChangeDescription,
+                            ec2::ExtrinsicChangeDescription, net::Slipnet) =
+    all(ic1 -> any(ic2 -> change_implies(ic1, ic2, net),
+                   ec2.equivalent_intrinsic_changes),
+        ec1.equivalent_intrinsic_changes)
+
+"""`(implies? c)`. NB an intrinsic change never implies an extrinsic one."""
+change_implies(ic::IntrinsicChangeDescription, c::ChangeDescription, net::Slipnet) =
+    c isa IntrinsicChangeDescription ?
+    intrinsic_implies_intrinsic(ic, c::IntrinsicChangeDescription, net) : false
+change_implies(ec::ExtrinsicChangeDescription, c::ChangeDescription, net::Slipnet) =
+    c isa IntrinsicChangeDescription ?
+    extrinsic_implies_intrinsic(ec, c::IntrinsicChangeDescription, net) :
+    extrinsic_implies_extrinsic(ec, c::ExtrinsicChangeDescription, net)
+
+get_redundant_change(c1::ChangeDescription, c2::ChangeDescription, net::Slipnet) =
+    change_implies(c1, c2, net) ? c2 :
+    change_implies(c2, c1, net) ? c1 : nothing
+
+"""`(get-symmetric-changes string-position-ec)` — two changes that swap each
+other's descriptors between two objects whose positions are being swapped say
+nothing the swap does not already say."""
+function get_symmetric_changes(string_position_ec::ExtrinsicChangeDescription,
+                               ic1::IntrinsicChangeDescription,
+                               ic2::IntrinsicChangeDescription)
+    if common_reference_object(string_position_ec, ic1) &&
+       common_reference_object(string_position_ec, ic2) &&
+       same_dimension(ic1, ic2) &&
+       ic1.descriptor1 === ic2.descriptor2 && ic1.descriptor2 === ic2.descriptor1
+        return ChangeDescription[ic1, ic2]
+    end
+    return ChangeDescription[]
+end
+
+function get_changes_implied_by_swap(intrinsic_cds, other_extrinsic_cds,
+                                     string_position_ec::ExtrinsicChangeDescription)
+    result = ChangeDescription[ec for ec in other_extrinsic_cds
+                               if same_reference_objects(ec, string_position_ec)]
+    for pair in pairwise_map((a, b) -> get_symmetric_changes(string_position_ec, a, b),
+                             intrinsic_cds)
+        append!(result, pair)
+    end
+    return result
+end
+
+function changes_implied_by_string_position_swaps(change_descriptions, net::Slipnet)
+    string_position_cds = ChangeDescription[
+        c for c in change_descriptions
+        if change_dimension_is(c, net[:plato_string_position_category])]
+    intrinsic_cds = IntrinsicChangeDescription[c for c in change_descriptions
+                                               if c isa IntrinsicChangeDescription]
+    other_extrinsic_cds = ChangeDescription[
+        c for c in change_descriptions
+        if !is_intrinsic_change(c) && !any(x -> x === c, string_position_cds)]
+    result = ChangeDescription[]
+    for ec in string_position_cds
+        append!(result,
+                get_changes_implied_by_swap(intrinsic_cds, other_extrinsic_cds,
+                                            ec::ExtrinsicChangeDescription))
+    end
+    return result
+end
+
+"""`(remove-redundant-change-descriptions change-descriptions)`."""
+function remove_redundant_change_descriptions(change_descriptions, net::Slipnet)
+    doomed = ChangeDescription[]
+    for c in pairwise_map((a, b) -> get_redundant_change(a, b, net), change_descriptions)
+        c === nothing || push!(doomed, c::ChangeDescription)
+    end
+    append!(doomed, changes_implied_by_string_position_swaps(change_descriptions, net))
+    return [c for c in change_descriptions if !any(d -> d === c, doomed)]
+end
+
+# --- rule application -------------------------------------------------------
+#
+# Applying a rule turns it into a list of TRANSFORMS — one dimension of one
+# image becoming something else — and runs them against the string's images.
+# Nothing in the workspace changes: what changes is what the string LOOKS like
+# under the rule, which is exactly what has to be computed before anyone can
+# ask whether the rule works.
+#
+# A transform is `[dimension, descriptor]`, or `[GroupCtgy, Opposite,
+# bond-facet]` for a group reversal, which needs to know which medium it is
+# reversing. An object-transform pair is `[object, transform]`, and a
+# string-position swap is `[StrPosCtgy, object1, object2]` — told apart from an
+# object-transform pair by whether its first element is that slipnode.
+
+"""Thrown to abandon a rule application; `apply-rule` catches it and answers
+`nothing`, the Scheme's `#f`."""
+struct RuleApplicationAborted <: Exception end
+
+"""`ignore-snag` — the failure action that does not care why."""
+ignore_snag(failure_result) = :done
+
+"""`(get-reference-objects rule-clause)` — the objects a clause is about. A
+verbatim clause is about none."""
+get_reference_objects(s::WorkspaceString, rc::RuleClause, net::Slipnet) =
+    is_verbatim_clause(rc) ? Any[] :
+    Any[o for od in rc.object_descriptions
+        for o in get_object_description_ref_objects(s, od, net)]
+
+"""`(generate-image-letters)` — the string's image, flattened to letters."""
+generate_image_letters(s::WorkspaceString) = Node[n for n in flatten_nodes(generate(get_image(s)))]
+
+flatten_nodes(x) = x isa Node ? Node[x] : Node[n for e in x for n in flatten_nodes(e)]
+
+"""`(StrPosCtgy-transforms object1 object2)` — a swap transform plus the two
+object-transform pairs that record each object's new position descriptor."""
+strposctgy_transforms(object1, object2, net::Slipnet) = Any[
+    Any[net[:plato_string_position_category], object1, object2],
+    Any[object1, Any[net[:plato_string_position_category],
+                     get_descriptor_for(object2,
+                                        net[:plato_string_position_category])]],
+    Any[object2, Any[net[:plato_string_position_category],
+                     get_descriptor_for(object1,
+                                        net[:plato_string_position_category])]]]
+
+"""`(get-dimension-transforms denoted-objects fail)`."""
+function get_dimension_transforms(denoted_objects, dimension::Node, net::Slipnet, fail)
+    if dimension === net[:plato_string_position_category]
+        length(denoted_objects) > 2 && fail(denoted_objects, dimension)
+        return strposctgy_transforms(denoted_objects[1], denoted_objects[2], net)
+    end
+    # A Length swap on a group with no Length description attaches one, since
+    # attempting the swap amounts to noticing the group's length. A letter gets
+    # `one` back without any description being attached.
+    descriptors = Union{Nothing,Node}[]
+    for object in denoted_objects
+        if dimension !== net[:plato_length]
+            push!(descriptors, get_descriptor_for(object, dimension))
+        elseif object isa Letter
+            push!(descriptors, net[:plato_one])
+        elseif description_type_present(object, net[:plato_length])
+            push!(descriptors, get_descriptor_for(object, net[:plato_length]))
+        else
+            attach_length_description!(object::Group, net)
+            push!(descriptors, get_descriptor_for(object, net[:plato_length]))
+        end
+    end
+    all(d -> d !== nothing, descriptors) || fail(denoted_objects, dimension)
+    # remq-duplicates keeps the LAST of each duplicate group
+    swap_descriptors = Node[d for (i, d) in enumerate(descriptors)
+                            if !any(x -> x === d, descriptors[(i + 1):end])]
+    length(swap_descriptors) > 2 && fail(denoted_objects, dimension)
+    d1 = swap_descriptors[1]
+    d2 = length(swap_descriptors) == 1 ? swap_descriptors[1] : swap_descriptors[2]
+    return Any[Any[object, Any[dimension, descriptor === d1 ? d2 : d1]]
+               for (object, descriptor) in zip(denoted_objects, descriptors)]
+end
+
+"""`(get-extrinsic-transforms rule string fail)`. A clause naming ONE object
+swaps among that object's constituents; a clause naming several swaps among
+those."""
+function get_extrinsic_transforms(r::Rule, s::WorkspaceString, net::Slipnet, fail)
+    result = Any[]
+    for rc in r.extrinsic_rule_clauses
+        reference_objects = get_reference_objects(s, rc, net)
+        denoted_objects = length(rc.object_descriptions) == 1 ?
+            Any[o for ref in reference_objects for o in get_constituent_objects(ref)] :
+            reference_objects
+        length(denoted_objects) < 2 && continue
+        if !pairwise_andmap(disjoint_objects, denoted_objects)
+            fail(denoted_objects, rc.dimensions[1])
+        end
+        for dimension in rc.dimensions
+            append!(result,
+                    get_dimension_transforms(denoted_objects, dimension, net, fail))
+        end
+    end
+    return result
+end
+
+"""`(get-intrinsic-transforms rule string)` — a reference object is what the
+clause names; a denoted object is the reference object itself (`self`) or each
+of its constituents (`subobjects`)."""
+function get_intrinsic_transforms(r::Rule, s::WorkspaceString, net::Slipnet)
+    result = Any[]
+    for rc in r.intrinsic_rule_clauses
+        ref_objects = get_reference_objects(s, rc, net)
+        self_transforms = Any[Any[c.dimension, c.descriptor] for c in rc.changes
+                              if c.scope === :self]
+        subobject_transforms = Any[Any[c.dimension, c.descriptor] for c in rc.changes
+                                   if c.scope === :subobjects]
+        for (o, t) in cross_product(ref_objects, self_transforms)
+            push!(result, Any[o, t])
+        end
+        if !isempty(subobject_transforms)
+            all_subobjects = Any[o for ref in ref_objects
+                                 for o in get_constituent_objects(ref)]
+            for (o, t) in cross_product(all_subobjects, subobject_transforms)
+                push!(result, Any[o, t])
+            end
+        end
+    end
+    return result
+end
+
+"""`(check-for-conflicts object-transform-pairs fail)` — two transforms of one
+rule that say incompatible things about the same object."""
+function check_for_conflicts(object_transform_pairs, net::Slipnet, fail)
+    cds = IntrinsicChangeDescription[
+        make_intrinsic_change_description(ot[1], :self, ot[2][1], nothing, nothing,
+                                          ot[2][2])
+        for ot in object_transform_pairs]
+    # `fail` escapes, so WHICH conflicting pair is reported depends on the order
+    # `pairwise-map` gets round to them — see `pairwise_apply_order`.
+    for (i, j) in pairwise_apply_order(length(cds))
+        if change_conflicts(cds[i], cds[j], net)
+            fail(cds[i].reference_object, cds[i].dimension,
+                 cds[j].reference_object, cds[j].dimension)
+        end
+    end
+    return :done
+end
+
+"""`(apply-before? platonic-image-length)` — the order transforms have to run
+in. Deliberately NOT a transitive relation, so which order it actually produces
+depends on the sort algorithm; `chez_sort` is Chez's, exactly."""
+apply_before(platonic_image_length::Union{Nothing,Node}, net::Slipnet) =
+    (t1, t2) ->
+        t1[1] === net[:plato_group_category] ||
+        t1[2] === net[:plato_letter] ||
+        (t1[1] === net[:plato_length] &&
+         change_length_first(t1[2], platonic_image_length, net)) ||
+        (t2[1] === net[:plato_length] &&
+         !change_length_first(t2[2], platonic_image_length, net))
+
+"""`(transform-image image transform fail)`.
+
+A BondFacet "transform" has no effect of its own: it rides along with a
+GroupCtgy reversal to say which medium — letter categories or lengths — is
+being reversed, so that the information survives abstraction. StrPosCtgy swaps
+are handled separately, after everything else."""
+function transform_image(image, transform, net::Slipnet, fail)
+    dimension = transform[1]
+    descriptor = transform[2]
+    n = dimension.name
+    if n === :plato_object_category
+        return descriptor === net[:plato_letter] ? letter!(image, net, fail) :
+                                                   group!(image, net, fail)
+    elseif n === :plato_letter_category
+        return new_start_letter!(image, descriptor, net, fail)
+    elseif n === :plato_length
+        return new_length!(image, descriptor, net, fail)
+    elseif n === :plato_direction_category
+        return reverse_direction!(image, net, fail)
+    elseif n === :plato_group_category
+        return reverse_medium!(image, transform[3], net, fail)
+    elseif n === :plato_alphabetic_position_category
+        return new_alpha_position_category!(image, descriptor, net, fail)
+    end
+    # plato-bond-facet and plato-string-position-category: nothing to do.
+    return :done
+end
+
+"""`(apply-transforms transforms image fail)`."""
+function apply_transforms(transforms, image, net::Slipnet, fail)
+    ordered = chez_sort(apply_before(get_length(image, net), net), transforms)
+    for transform in ordered
+        if transform[1] === net[:plato_group_category]
+            i = findfirst(t -> t[1] === net[:plato_bond_facet], transforms)
+            medium = transforms[i][2]
+            augmented = Any[net[:plato_group_category], net[:plato_opposite], medium]
+            transform_image(image, augmented, net, fail(augmented))
+        else
+            transform_image(image, transform, net, fail(transform))
+        end
+    end
+    return :done
+end
+
+"""`(apply-string-position-swap object1 object2)` — the two images trade states
+outright, and each remembers the other so that the answer can be read back."""
+function apply_string_position_swap(object1, object2)
+    image1 = get_image(object1)
+    image2 = get_image(object2)
+    state1 = get_state(image1)
+    state2 = get_state(image2)
+    new_state!(image1, state2)
+    new_state!(image2, state1)
+    image1.swapped_image = image2
+    image2.swapped_image = image1
+    return :done
+end
+
+"""`(apply-rule rule string failure-action)` — returns the transforms grouped by
+object, `Any[]` for a verbatim rule, or `nothing` when the rule cannot be
+applied. Deepest objects are transformed first, so that a group's own change
+sees its subobjects already changed."""
+function apply_rule(r::Rule, s::WorkspaceString, net::Slipnet, failure_action)
+    if is_verbatim_rule(r)
+        new_appearance!(get_image(s), get_verbatim_letter_categories(r), net)
+        return Any[]
+    end
+    try
+        reset_image!(get_image(s))
+        swap_fail = (objects, dimension) -> begin
+            failure_action(Any[:SWAP, objects, dimension])
+            throw(RuleApplicationAborted())
+        end
+        extrinsic_transforms = get_extrinsic_transforms(r, s, net, swap_fail)
+        string_position_swaps =
+            Any[x for x in extrinsic_transforms
+                if x[1] === net[:plato_string_position_category]]
+        extrinsic_pairs = Any[x for x in extrinsic_transforms
+                              if !any(y -> y === x, string_position_swaps)]
+        intrinsic_pairs = get_intrinsic_transforms(r, s, net)
+        all_pairs = vcat(extrinsic_pairs, intrinsic_pairs)
+        check_for_conflicts(all_pairs, net,
+                            (o1, d1, o2, d2) -> begin
+                                failure_action(Any[:CONFLICT, o1, d1, o2, d2])
+                                throw(RuleApplicationAborted())
+                            end)
+        grouped = Any[Any[cls[1][1], Any[ot[2] for ot in cls]]
+                      for cls in spartition((ot1, ot2) -> ot1[1] === ot2[1], all_pairs)]
+        grouped = chez_sort((l1, l2) -> nesting_level(l1[1]) > nesting_level(l2[1]),
+                            grouped)
+        for l in grouped
+            object = l[1]
+            transforms = l[2]
+            fail = transform -> () -> begin
+                failure_action(Any[:CHANGE, object, transform])
+                throw(RuleApplicationAborted())
+            end
+            apply_transforms(transforms, get_image(object), net, fail)
+        end
+        for swap in string_position_swaps
+            apply_string_position_swap(swap[2], swap[3])
+        end
+        return grouped
+    catch e
+        e isa RuleApplicationAborted && return nothing
+        rethrow()
+    end
+end

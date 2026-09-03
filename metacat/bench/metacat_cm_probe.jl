@@ -4,6 +4,7 @@ include("../julia/src/schemenum.jl")
 include("../julia/src/utilities.jl")
 include("../julia/src/slipnet.jl")
 include("../julia/src/workspace.jl")
+include("../julia/src/images.jl")
 include("../julia/src/concept_mappings.jl")
 
 numstr(v) = v isa AbstractFloat ? string(v) :

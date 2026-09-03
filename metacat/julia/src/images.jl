@@ -135,9 +135,7 @@ reverse_direction!(im::Image, net::Slipnet, fail) =
 """`(replace-all method-name new-args fail)` — apply a transform to each
 sub-image with its own argument."""
 function replace_all!(transform!, im::Image, new_args, net::Slipnet, fail)
-    for (s, arg) in zip(im.sub_images, new_args)
-        transform!(s, arg, net, fail)
-    end
+    chez_map((s, arg) -> transform!(s, arg, net, fail), im.sub_images, new_args)
     return im
 end
 
@@ -189,9 +187,10 @@ function new_start_letter!(im::Image, arg::Union{Nothing,Node}, net::Slipnet, fa
             im.start_letter = a
         end
     elseif platonic_relation(a, net)
-        for s in im.sub_images
-            new_start_letter!(s, a, net, fail)
-        end
+        # `tell-all`, i.e. Chez's `map`: applied from the END of the list, in
+        # pairs. Only shows when one sub-image's slide fails and the ones the
+        # Scheme had not reached yet must be left alone.
+        chez_map(s -> new_start_letter!(s, a, net, fail), im.sub_images)
         im.start_letter = get_related_node(im.start_letter::Node, a, net[:plato_identity])
     elseif platonic_letter(a, net)
         new_letters = enumerate_letters(a, im.letter_relation, length(im.sub_images),
@@ -335,3 +334,99 @@ function enumerate_letters(start::Node, relation::Union{Nothing,Node}, n::Int,
     end
     return result
 end
+
+# --- the string image -------------------------------------------------------
+#
+# A workspace string's image is NOT an `Image`: it has no start letter, no
+# relations and no length of its own, and it reads its sub-images straight off
+# the string's top-level objects each time it is asked, so building a group
+# changes what the string image is made of. It answers the same messages, so
+# rule application treats the two alike. Its one extra trick is `new-appearance`,
+# which a verbatim rule uses to replace the string wholesale with a fixed list
+# of letters.
+
+mutable struct StringImage
+    string::Any                    # the WorkspaceString it belongs to
+    direction::Node
+    # `reset` puts the direction back to `plato-right`, which the Scheme reads
+    # from the global; the constructor is only ever called with it, so the
+    # string image keeps its own handle on the node.
+    plato_right::Node
+    verbatim_images::Vector{Image}
+    verbatim::Bool
+end
+
+make_string_image(string, direction::Node) =
+    StringImage(string, direction, direction, Image[], false)
+
+"""`(get-sub-images)` — read off the string's constituent objects, unless a
+verbatim appearance has been imposed."""
+sub_images(si::StringImage) =
+    si.verbatim ? si.verbatim_images :
+    Image[get_image(o) for o in get_constituent_objects(si.string)]
+
+ordered_sub_images(si::StringImage) =
+    si.direction.name === :plato_right ? sub_images(si) : reverse(sub_images(si))
+
+generate(si::StringImage) = Any[generate(im) for im in ordered_sub_images(si)]
+
+function reset_image!(si::StringImage)
+    si.verbatim = false
+    # NB the direction is reset BEFORE the sub-images are read, so the reset
+    # walks the string's objects left to right whatever direction it was in.
+    si.direction = si.plato_right
+    for im in sub_images(si)
+        reset_image!(im)
+    end
+    return si
+end
+
+leaf_walk(action, si::StringImage) =
+    (foreach(im -> leaf_walk(action, im), ordered_sub_images(si)); si)
+postorder_interior_walk(action, si::StringImage) =
+    (foreach(im -> postorder_interior_walk(action, im), ordered_sub_images(si)); si)
+
+get_length(si::StringImage, net::Slipnet) =
+    number_to_platonic_number(net, length(sub_images(si)))
+
+new_start_letter!(si::StringImage, arg::Union{Nothing,Node}, net::Slipnet, fail) =
+    (foreach(im -> new_start_letter!(im, arg, net, fail), sub_images(si)); si)
+
+"""NB the Scheme really does send `new-start-letter`, not
+`new-alpha-position-category`, to each sub-image here."""
+new_alpha_position_category!(si::StringImage, arg::Union{Nothing,Node}, net::Slipnet,
+                             fail) =
+    (foreach(im -> new_start_letter!(im, arg, net, fail), sub_images(si)); si)
+
+new_length!(si::StringImage, arg::Union{Nothing,Node}, net::Slipnet, fail) = fail()
+
+"""`(new-appearance letter-categories)` — what a verbatim rule does to a
+string."""
+function new_appearance!(si::StringImage, letter_categories, net::Slipnet)
+    si.verbatim_images = Image[make_letter_image(c) for c in letter_categories]
+    si.direction = net[:plato_right]
+    si.verbatim = true
+    return si
+end
+
+reverse_direction!(si::StringImage, net::Slipnet, fail) =
+    (si.direction = inverse(si.direction, net)::Node; si)
+
+function reverse_medium!(si::StringImage, medium::Node, net::Slipnet, fail)
+    if medium === net[:plato_letter_category]
+        letters = Union{Nothing,Node}[im.start_letter for im in sub_images(si)]
+        replace_all!(new_start_letter!, si, reverse(letters), net, fail)
+    elseif medium === net[:plato_length]
+        lengths = Union{Nothing,Node}[get_length(im, net) for im in sub_images(si)]
+        replace_all!(new_length!, si, reverse(lengths), net, fail)
+    end
+    return si
+end
+
+function replace_all!(transform!, si::StringImage, new_args, net::Slipnet, fail)
+    chez_map((im, arg) -> transform!(im, arg, net, fail), sub_images(si), new_args)
+    return si
+end
+
+letter!(si::StringImage, net::Slipnet, fail) = fail()
+group!(si::StringImage, net::Slipnet, fail) = fail()

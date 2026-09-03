@@ -75,8 +75,24 @@ get_initial_letter_category(o::Letter) = o.letter_category
 get_initial_letter_category(g::Group) = g.initial_letter_category
 get_platonic_length(o::Letter, net::Slipnet) = net[:plato_one]
 get_platonic_length(g::Group, ::Slipnet) = g.platonic_length
-get_image(o::Letter) = make_letter_image(o.letter_category)
+get_image(o::Letter) = o.image
 get_image(g::Group) = g.image
+
+"""`(get-constituent-objects)` for a group: the objects it was built from."""
+get_constituent_objects(g::Group) = g.constituent_objects
+
+"""`(get-bond-facet)`."""
+get_bond_facet(g::Group, ::Slipnet) = g.group_bond_facet
+
+"""The group's objects in reading order — reversed for a leftward group."""
+ordered_objects(g::Group, net::Slipnet) =
+    g.direction === net[:plato_left] ? reverse(g.constituent_objects) :
+                                       g.constituent_objects
+
+"""`(get-ending-letter-category)` — the letter category of the LAST object in
+reading order, which is what a group-category reversal moves to the front."""
+get_ending_letter_category(g::Group, net::Slipnet) =
+    get_descriptor_for(ordered_objects(g, net)[end], net[:plato_letter_category])
 
 leftmost_in_string(g::Group) = g.left_string_pos == 0
 rightmost_in_string(g::Group) = g.right_string_pos == string_length(g.string) - 1

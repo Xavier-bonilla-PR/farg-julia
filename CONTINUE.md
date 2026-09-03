@@ -51,10 +51,11 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  descriptioncodelets groupcodelets bridgecodelets themecodelets images rules
+  descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
+  ruleapply
 ```
 
-Expected — sixteen layers, **24,870 trace lines byte-identical**:
+Expected — seventeen layers, **26,863 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -73,6 +74,7 @@ ok    bridgecodelets (5396 lines identical)
 ok    themecodelets (3335 lines identical)
 ok    images (1668 lines identical)
 ok    rules (4620 lines identical)
+ok    ruleapply (1993 lines identical)
 all probes matched
 ```
 
@@ -104,7 +106,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~8,200 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~8,800 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -124,6 +126,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | thematic codelets | `codelets_themes.jl` | `themecodelets` | 3335 |
 | image transforms (the algebra rules compute in) | `images.jl` | `images` | 1668 |
 | rule structure, English transcription, quality | `rules.jl` | `rules` | 4620 |
+| change descriptions, rule application | `rules.jl`, `images.jl` | `ruleapply` | 1993 |
 
 ---
 
@@ -325,6 +328,38 @@ by reading the code.
   no compatibility of their own (the workspace-structure default of 0), so only
   bridges and descriptions feel it — but they feel it hard: a bridge violating
   an active theme drops to strength 0 outright.
+- **Chez's `map` does NOT apply its procedure left to right.** It recurses on
+  the tail-but-two before applying the procedure to the first two elements, so
+  it works the list in pairs from the END backwards, left to right within each
+  pair: `(1 2 3 4 5)` is applied in the order `5 3 4 1 2`. Invisible for a pure
+  procedure; decisive for one with an effect or one that can escape. It is what
+  decides how much of a group image has already been changed when
+  `new-start-letter` walks off the end of the alphabet part-way through.
+  `for-each` (Metacat's `for*`) IS left to right. `chez_map` in `utilities.jl`
+  reproduces the order; `chez_map_order` gives it for any length.
+- **`pairwise-map` applies its procedure from the deepest suffix outwards**,
+  because Chez evaluates `append`'s arguments right to left and the recursive
+  call is the second one. The RESULT is still in plain i<j order — it is only
+  the timing that differs, and it decides which conflicting pair
+  `check-for-conflicts` reports before it escapes. `pairwise_apply_order` in
+  `utilities.jl`.
+- **`partition` appends a new class at the END, not the front.** It partitions
+  the tail and then inserts the head into the first class all of whose members
+  it matches, or, failing that, at the end of the list of classes. With a
+  predicate nothing matches across, `(a b c)` comes back as `((c) (b) (a))`.
+  Getting this backwards put every rule's transforms in the wrong order.
+- **Chez's `sort` splits at `n >> 1` with the LEFT half short and sorts the
+  RIGHT half first** (procedure arguments, again), merging in favour of the
+  left list on a tie. For a predicate that is a strict weak ordering none of
+  that shows. `apply-before?` in `rules.ss` is deliberately NOT transitive, so
+  for it the algorithm IS the specification: use `chez_sort` in `utilities.jl`,
+  not Julia's `MergeSort`, which splits the other way.
+- **A letter's image is made ONCE, at construction.** It is a mutable object
+  that rule application transforms in place and that the letter's enclosing
+  groups hold a reference to. Rebuilding it on each `get-image` — which the
+  port did, harmlessly, while only group construction ever asked — makes every
+  transform apply to a fresh copy that nothing ever reads again. The fourth
+  stub-shaped bug of the same family.
 - **A `record-case` with no matching arm returns Chez's unspecified value,
   which is TRUE.** `literal-clause?` in `rules.ss` has arms for the intrinsic
   and extrinsic clauses only, so a verbatim clause falls off the end and the
@@ -379,10 +414,14 @@ by reading the code.
      hand in the probe straight from the grammar at the top of `rules.ss`, so
      every branch of the fourteen-case transcription table and every arm of the
      quality formulas is reached deliberately rather than hoped for.
-   - (B) **rule application** — `apply-rule`, `apply-transforms`,
-     `transform-image`, `apply-before?`, `apply-string-position-swap`,
-     `get-extrinsic-transforms`, `get-intrinsic-transforms`,
-     `StrPosCtgy-transforms`, plus `make-string-image` from `images.ss`.
+   - (B) ~~rule application~~ — **done**, as the rest of `rules.jl`, probe
+     `ruleapply`: change descriptions of both kinds and the implication
+     heuristics they are compared by, then `apply-rule` down through
+     `get-intrinsic-transforms`, plus `make-string-image` from `images.ss` and
+     the letter/string image plumbing it needs. Applying a rule changes nothing
+     in the workspace — what it changes is what the string LOOKS like under the
+     rule, which is what has to be computed before anyone can ask whether the
+     rule works.
    - (C) **abstraction and the rule codelets** — `abstract-change-descriptions`
      and its ~30 helpers, then `rule-scout`, `rule-evaluator`, `rule-builder`.
      This is the part that needs horizontal bridges, so it goes last.

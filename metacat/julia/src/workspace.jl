@@ -46,6 +46,10 @@ mutable struct WorkspaceString
     translated::Bool
     average_intra_string_unhappiness::Int
     next_id_num::Int
+    # `string-image`: the string's appearance under whatever rule is currently
+    # being applied to it, a StringImage (images.jl). Untyped because images.jl
+    # loads after this file.
+    string_image::Any
 end
 
 mutable struct Description
@@ -65,6 +69,10 @@ mutable struct Letter <: WSObject
     letter_category::Node
     string_pos::Int
     id_num::Int
+    # A letter's image is made once, at construction, and is then a mutable
+    # object that rule application transforms in place — NOT something to
+    # rebuild on each read. Untyped because images.jl loads after this file.
+    image::Any
     descriptions::Vector{Description}
     raw_importance::Union{Int,Rational{Int}}
     relative_importance::Int
@@ -184,6 +192,38 @@ end
 descriptions, so a group's bond descriptions count too."""
 description_type_present(o::WSObject, t::Node) =
     any(d -> d.description_type === t, all_descriptions(o))
+
+"""`(nested-member? object)` for a string — the string contains everything in
+it, at any depth."""
+function nested_member(s::WorkspaceString, object)
+    tops = get_top_level_objects(s)
+    any(o -> o === object, tops) && return true
+    return any(o -> nested_member(o, object), tops)
+end
+
+"""`(get-bond-facet)` for a string. A group answers with its own bond facet
+(groups.jl); a letter has no answer at all, as in the Scheme."""
+get_bond_facet(s::WorkspaceString, net::Slipnet) = net[:plato_letter_category]
+
+"""`(get-top-level-objects)` — the string's letters and groups that no group
+encloses. NB letters come before groups, as in the Scheme's `append`."""
+get_top_level_objects(s::WorkspaceString) =
+    WSObject[o for o in vcat(s.letters, s.groups) if o.enclosing_group === nothing]
+
+"""`(get-constituent-objects)` for a string: its top-level objects, left to
+right. For a group it is the objects the group was built from (groups.jl)."""
+get_constituent_objects(s::WorkspaceString) =
+    chez_sort((a, b) -> left_string_pos(a) < left_string_pos(b),
+              get_top_level_objects(s))
+
+"""`(get-enclosing-object object)` — the immediately enclosing group, or, for a
+top-level object, the string it sits in."""
+get_enclosing_object(o::WSObject) =
+    o.enclosing_group === nothing ? o.string : o.enclosing_group::WSObject
+
+"""`(get-image)` for a letter. A group's image lives on the group (groups.jl),
+and a string's on the string."""
+get_image(s::WorkspaceString) = s.string_image
 
 """`(descriptor-present? descriptor)` — like `description-type-present?`, this
 scans ALL descriptions."""
@@ -453,9 +493,10 @@ function make_workspace_string(net::Slipnet, string_type::Symbol, sym::AbstractS
                         [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
                         Dict{Tuple{Int,Int},Vector{Any}}(),
                         Dict{Tuple{Int,Int},Any}(), Dict{Int,Any}(), Any[],
-                        String(sym), false, 0, 0)
+                        String(sym), false, 0, 0, nothing)
+    s.string_image = make_string_image(s, net[:plato_right])
     for (position, cat) in enumerate(cats)
-        letter = Letter(s, cat, position - 1, 0, Description[],
+        letter = Letter(s, cat, position - 1, 0, make_letter_image(cat), Description[],
                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nothing, false,
                         nothing, nothing, Any[], Any[], nothing, nothing, 0, 0, 0)
         # (make-letter ...) attaches these two, in this order

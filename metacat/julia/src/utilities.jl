@@ -84,9 +84,118 @@ function stochastic_filter(rng::PyRandom, proc, l)
     return result
 end
 
+"""`(sort pred? l)` — Chez's list sort, reproduced exactly.
+
+Chez splits at `n >> 1` with the LEFT half short, recurses on the right half
+FIRST (procedure arguments are evaluated right to left), and merges preferring
+the left list on a tie. For a predicate that is a strict weak ordering none of
+that is observable — but `apply-before?` in `rules.ss` is deliberately not
+transitive, so for it the algorithm IS the specification. Julia's `MergeSort`
+splits the other way and would order such a list differently."""
+function chez_sort(pred, l::AbstractVector)
+    n = length(l)
+    n <= 1 && return collect(l)
+    i = n >> 1
+    right = chez_sort(pred, l[(i + 1):end])
+    left = chez_sort(pred, l[1:i])
+    out = similar(left, 0)
+    a = 1
+    b = 1
+    while a <= length(left) && b <= length(right)
+        if pred(right[b], left[a])
+            push!(out, right[b]); b += 1
+        else
+            push!(out, left[a]); a += 1
+        end
+    end
+    append!(out, left[a:end])
+    append!(out, right[b:end])
+    return out
+end
+
+"""`(pairwise-map proc l)` — proc over every ordered pair `(l[i], l[j])`, i<j,
+in that order."""
+pairwise_map(proc, l) =
+    [proc(l[i], l[j]) for i in eachindex(l) for j in (i + 1):lastindex(l)]
+
+"""The order in which `(pairwise-map proc l)` APPLIES proc.
+
+`pairwise-map` is `(append (map (proc l[1] .) (rest l)) (pairwise-map (rest l)))`
+and Chez evaluates `append`'s arguments right to left, so the recursive call
+runs first: the pairs come out starting from the deepest suffix and working
+back to the head, each head's own pairs in `chez_map_order`. The RESULT list is
+still in plain i<j order — this is only about when each call happens, which
+matters when proc escapes, as it does in `check-for-conflicts`."""
+function pairwise_apply_order(n::Integer)
+    pairs = Tuple{Int,Int}[]
+    for i in (n - 1):-1:1
+        for k in chez_map_order(n - i)
+            push!(pairs, (i, i + k))
+        end
+    end
+    return pairs
+end
+
+"""`(pairwise-andmap pred? l)`."""
+pairwise_andmap(pred, l) =
+    all(pred(l[i], l[j]) for i in eachindex(l) for j in (i + 1):lastindex(l))
+
+"""`(cross-product l1 l2)` — pairs in row-major order, `l1` varying slowest."""
+cross_product(l1, l2) = [(x, y) for x in l1 for y in l2]
+
+"""`(sets-equal? s1 s2)` — by `eq?`, i.e. object identity."""
+sets_equal(s1, s2) = all(x -> any(y -> y === x, s2), s1) &&
+                     all(y -> any(x -> x === y, s1), s2)
+
+"""The order in which Chez's `map` applies its procedure — NOT left to right.
+
+Chez's `map` recurses on the tail-but-two before applying the procedure to the
+first two elements, so it works the list in pairs from the END backwards, left
+to right within each pair: `(1 2 3 4 5)` is applied in the order `5 3 4 1 2`.
+That is invisible for a pure procedure and decides the answer for one with side
+effects or one that can fail part-way — which is what `new-start-letter` on a
+group image does when the run walks off the end of the alphabet. `for-each`
+(Metacat's `for*`) IS left to right; only `map` and `tell-all` do this."""
+function chez_map_order(n::Integer)
+    order = Int[]
+    for start in ((isodd(n) ? n : n - 1):-2:1)
+        push!(order, start)
+        start + 1 <= n && push!(order, start + 1)
+    end
+    return order
+end
+
+"""`(map f l)` — the result is in list order, but `f` is APPLIED in Chez's
+order, which is what matters when `f` has an effect or can escape."""
+function chez_map(f, l)
+    n = length(l)
+    n == 0 && return Any[]
+    results = Vector{Any}(undef, n)
+    for i in chez_map_order(n)
+        results[i] = f(l[i])
+    end
+    return results
+end
+
+"""`(map f l1 l2)`, applied in the same order."""
+function chez_map(f, l1, l2)
+    n = min(length(l1), length(l2))
+    n == 0 && return Any[]
+    results = Vector{Any}(undef, n)
+    for i in chez_map_order(n)
+        results[i] = f(l1[i], l2[i])
+    end
+    return results
+end
+
 """`(partition pred? l)` — greedily group elements into classes whose members
-all satisfy pred? pairwise. The Scheme builds this back-to-front, inserting the
-head of the list into the partition of the tail."""
+all satisfy pred? pairwise.
+
+The Scheme builds this back-to-front: it partitions the TAIL, then inserts the
+head into the first class all of whose members it matches, or, failing that,
+appends a class of its own at the END. Both halves of that matter to the order
+of the result: with a predicate nothing matches across, `(a b c)` comes back as
+`((c) (b) (a))`, not `((a) (b) (c))`."""
 function spartition(pred, l)
     isempty(l) && return Vector{eltype(l)}[]
     classes = spartition(pred, l[2:end])
@@ -97,7 +206,7 @@ function spartition(pred, l)
             return classes
         end
     end
-    return vcat(Vector{eltype(l)}[[x]], classes)
+    return push!(classes, eltype(classes)([x]))
 end
 
 # --- formulas.ss ------------------------------------------------------------
