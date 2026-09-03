@@ -241,7 +241,8 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 ```bash
 bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      bridges coderack bondcodelets themes \
-                                     descriptioncodelets groupcodelets
+                                     descriptioncodelets groupcodelets \
+                                     bridgecodelets
 ```
 
 | layer | Julia | verified |
@@ -258,15 +259,17 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | themespace: clusters, activation dynamics, theme support | `themes.jl` | 2,049 lines |
 | description codelets | `codelets_descriptions.jl` | 321 lines |
 | group codelets: scouts, evaluator, builder, consolidation | `codelets_groups.jl` | 4,854 lines |
-| bridge and rule codelets | not yet ported | |
+| bridge codelets, incl. group flipping and mapping strength | `codelets_bridges.jl` | 5,396 lines |
+| rule codelets | not yet ported | |
 | temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The twelve verified layers cover roughly 6,000 of the ~16,000 lines of Metacat's
-non-graphics Scheme. What remains for a run that reaches an answer is the bridge
-and rule codelets, plus `rules.ss`, `answers.ss`, `trace.ss`, `memory.ss`,
-`jootsing.ss` and `justify.ss` — about 9,400 lines.
+The thirteen verified layers cover roughly 6,900 of the ~16,000 lines of
+Metacat's non-graphics Scheme. All three perceptual structures — bonds, groups
+and bridges — now build, fight and break each other through the real coderack.
+What remains for a run that reaches an answer is `rules.ss`, `answers.ss`,
+`trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about 8,500 lines.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
@@ -301,7 +304,11 @@ Adding the group codelets surfaced two more: a codelet's "carries a proposed
 structure" flag that was always false, because an untyped predicate and an
 `::Any` fallback are the same Julia method signature and the second silently
 replaced the first; and the right-to-left evaluation trap finally biting, in a
-group's local-density walk. None of the three was visible by reading the code.
+group's local-density walk. Adding the bridge codelets surfaced a third
+stub-shaped bug of the same family: the cleanup that removes a "middle"
+description once a grouping makes it false is also supposed to strip the
+matching concept mapping from any bridge resting on it, and break a bridge left
+with none. None of these was visible by reading the code.
 
 ## Licence
 

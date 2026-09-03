@@ -32,7 +32,7 @@ function get_equivalent_group(s::WorkspaceString, g::Group)
            (other::Group).group_length == g.group_length ? other : nothing
 end
 
-delete_proposed_structure!(g::Group) = delete_proposed_group!(g.string, g)
+delete_proposed_structure!(g::Group, ctx) = delete_proposed_group!(g.string, g)
 
 add_proposed_group!(s::WorkspaceString, g::Group) = (pushfirst!(s.proposed_groups, g); s)
 delete_proposed_group!(s::WorkspaceString, g::Group) =
@@ -48,9 +48,8 @@ function get_incompatible_groups(g::Group)
     return Any[x for x in deduped if x !== g]
 end
 
-"""`(get-incompatible-bridges bridge-orientation)` — deferred until the bridge
-codelets exist; nothing tracks built bridges yet, so there are none to fight."""
-get_incompatible_bridges(::Group, ::Symbol) = Any[]
+# `(get-incompatible-bridges bridge-orientation)` for a group lives in
+# codelets_bridges.jl, which loads after this file.
 
 """`(descriptor-support descriptor string)` — what fraction of the string's
 groups already carry this descriptor."""
@@ -411,19 +410,21 @@ function group_builder(ctx::MetacatCtx, args::Vector{Any})
               wins_fight(ctx.rng, ctx, g, 1, og, 1)
         won || return
     end
-    incompatible_bridges = vcat(get_incompatible_bridges(g, :vertical),
-                                get_incompatible_bridges(g, :horizontal))
+    incompatible_bridges = vcat(get_incompatible_bridges(g, :vertical, net),
+                                get_incompatible_bridges(g, :horizontal, net))
     if !isempty(incompatible_bridges) &&
        !wins_all_fights(ctx.rng, ctx, g, 1, incompatible_bridges, 1)
         return
     end
     for other in incompatible_groups
-        break_group!(other::Group, net)
+        break_group!(other::Group, net, ctx)
     end
-    # incompatible bridges would be broken here once bridges are built
+    for bridge in incompatible_bridges
+        break_bridge!(bridge::Bridge, ctx)
+    end
     g = consolidate_group(ctx, g, constituent_objects, constituent_bonds)
     g === nothing && return
-    build_group!(g::Group, net)
+    build_group!(g::Group, net, ctx)
     return
 end
 
@@ -442,7 +443,7 @@ function consolidate_group(ctx::MetacatCtx, g::Group, constituent_objects, const
        any(o -> o isa Group, constituent_objects)
         letters = g.letters
         for o in constituent_objects
-            o isa Group && break_group!(o::Group, net)
+            o isa Group && break_group!(o::Group, net, ctx)
         end
         letter_bonds = adjacency_map(letters) do l1, l2
             bonded(l1, l2) && return l1.right_bond
@@ -471,7 +472,7 @@ function consolidate_group(ctx::MetacatCtx, g::Group, constituent_objects, const
             end
         end
         for o in constituent_objects
-            length_group(o, net) && break_group!(o::Group, net)
+            length_group(o, net) && break_group!(o::Group, net, ctx)
         end
         all_same([get_platonic_length(o, net) for o in new_constituents]) || return nothing
         group_bonds = adjacency_map(new_constituents) do g1, g2

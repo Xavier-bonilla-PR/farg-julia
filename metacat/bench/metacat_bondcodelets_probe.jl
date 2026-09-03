@@ -14,6 +14,9 @@ include("../julia/src/coderack.jl")
 include("../julia/src/themes.jl")
 include("../julia/src/context.jl")
 include("../julia/src/codelets_bonds.jl")
+include("../julia/src/codelets_descriptions.jl")
+include("../julia/src/codelets_groups.jl")
+include("../julia/src/codelets_bridges.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name
 net = build_slipnet()

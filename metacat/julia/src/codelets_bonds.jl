@@ -87,10 +87,10 @@ function delete_proposed_bonds!(s::WorkspaceString, o::WSObject)
     return s
 end
 
-delete_proposed_structure!(b::Bond) = delete_proposed_bond!(b.string, b)
-"""Bridges are not registered in the workspace until the bridge codelets are
-ported, so there is nothing to remove for one yet."""
-delete_proposed_structure!(::Bridge) = nothing
+delete_proposed_structure!(b::Bond, ctx) = delete_proposed_bond!(b.string, b)
+"""Without a workspace context there is nowhere a proposed bridge is
+registered, so there is nothing to remove."""
+delete_proposed_structure!(::Bridge, ::Nothing) = nothing
 
 function delete_proposed_bond!(s::WorkspaceString, b::Bond)
     key = (b.from_object.id_num, b.to_object.id_num)
@@ -301,12 +301,24 @@ function bond_builder(ctx::MetacatCtx, args::Vector{Any})
         max_span = maximum(get_letter_span(g) for g in incompatible_groups)
         wins_all_fights(ctx.rng, ctx, b, 1, incompatible_groups, max_span) || return
     end
-    # bridges are not broken by bonds until the bridge codelets are ported
+    # A directed bond at either edge of its string can contradict a bridge that
+    # maps that edge onto the other string; only edge bonds can.
+    incompatible_bridges =
+        (directed(b) && (bond_leftmost_in_string(b) || bond_rightmost_in_string(b))) ?
+        vcat(get_incompatible_bridges(b, :horizontal, ctx.net),
+             get_incompatible_bridges(b, :vertical, ctx.net)) : Bridge[]
+    if !isempty(incompatible_bridges) &&
+       !wins_all_fights(ctx.rng, ctx, b, 2, incompatible_bridges, 3)
+        return
+    end
     for g in incompatible_groups
-        object_exists(ctx, g) && break_group!(g, ctx.net)
+        object_exists(ctx, g) && break_group!(g, ctx.net, ctx)
     end
     for other in incompatible_bonds
         break_bond!(other::Bond, ctx.net)
+    end
+    for bridge in incompatible_bridges
+        break_bridge!(bridge, ctx)
     end
     build_bond!(b, ctx.net)
     return

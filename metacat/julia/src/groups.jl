@@ -184,7 +184,7 @@ end
 and its constituents, activates its descriptors, and invalidates any "middle"
 descriptions the new grouping has made false. The trace and graphics parts of
 the Scheme are not ported."""
-function build_group!(g::Group, net::Slipnet)
+function build_group!(g::Group, net::Slipnet, ctx = nothing)
     g.id_num = g.string.next_id_num
     g.string.next_id_num += 1
     pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
@@ -202,21 +202,31 @@ function build_group!(g::Group, net::Slipnet)
     end
     g.proposal_level = BUILT
     spans_whole_string(g) ||
-        delete_invalid_string_position_middle_descriptions!(g.string, net)
+        delete_invalid_string_position_middle_descriptions!(g.string, net, ctx)
     return g
 end
 
-"""Building a non-spanning group can make an object no longer "middle"; those
-descriptions are removed. The bridge cleanup in the Scheme applies once bridges
-are ported."""
+"""Building or breaking a non-spanning group can make an object no longer
+"middle". Such a description is removed — AND so is the string-position concept
+mapping of any bridge the object is part of, since that mapping now rests on a
+description that no longer exists. A bridge left with no concept mappings at
+all is broken outright."""
 function delete_invalid_string_position_middle_descriptions!(s::WorkspaceString,
-                                                             net::Slipnet)
+                                                             net::Slipnet, ctx = nothing)
     for object in all_objects(s)
-        if any(d -> d.descriptor === net[:plato_middle], object.descriptions) &&
-           !middle_in_string(object)
-            idx = findfirst(d -> d.description_type === net[:plato_string_position_category],
-                            object.descriptions)
-            idx === nothing || deleteat!(object.descriptions, idx)
+        (any(d -> d.descriptor === net[:plato_middle], all_descriptions(object)) &&
+         !middle_in_string(object)) || continue
+        idx = findfirst(d -> d.description_type === net[:plato_string_position_category],
+                        object.descriptions)
+        idx === nothing || deleteat!(object.descriptions, idx)
+        ctx === nothing && continue
+        for orientation in (:vertical, :horizontal)
+            bridge = get_bridge(object, orientation)
+            bridge === nothing && continue
+            b = bridge::Bridge
+            cm_type_present(b, net[:plato_string_position_category]) || continue
+            delete_concept_mapping_type!(b, net[:plato_string_position_category])
+            isempty(b.all_concept_mappings) && break_bridge!(b, ctx)
         end
     end
     return s
@@ -322,20 +332,29 @@ end
 """`(break-group group)` — recursively breaks any enclosing group first, then
 detaches this one and the bonds incident on it. The bridge handling is added
 once the bridge codelets are ported."""
-function break_group!(g::Group, net::Slipnet)
+function break_group!(g::Group, net::Slipnet, ctx = nothing)
     s = g.string
-    g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net)
+    # both bridges are read BEFORE anything is broken, since breaking the
+    # enclosing group can clear them
+    vertical_bridge = get_bridge(g, :vertical)
+    horizontal_bridge = get_bridge(g, :horizontal)
+    g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net, ctx)
     i = findfirst(x -> x === g, s.groups)
     i === nothing || deleteat!(s.groups, i)
     delete!(s.group_by_leftmost_id, g.left_object.id_num)
-    delete_proposed_bonds!(s, g)
     for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
                         (g.right_string_pos, s.right_edge_groups))
         j = findfirst(x -> x === g, list[pos + 1])
         j === nothing || deleteat!(list[pos + 1], j)
     end
+    delete_proposed_bonds!(s, g)
     for b in incident_bonds(g)
         break_bond!(b::Bond, net)
+    end
+    if ctx !== nothing
+        delete_proposed_bridges!(ctx, g)
+        vertical_bridge === nothing || break_bridge!(vertical_bridge::Bridge, ctx)
+        horizontal_bridge === nothing || break_bridge!(horizontal_bridge::Bridge, ctx)
     end
     for o in g.constituent_objects
         o.enclosing_group = nothing
@@ -344,6 +363,6 @@ function break_group!(g::Group, net::Slipnet)
         b.enclosing_group = nothing
     end
     spans_whole_string(g) ||
-        delete_invalid_string_position_middle_descriptions!(s, net)
+        delete_invalid_string_position_middle_descriptions!(s, net, ctx)
     return g
 end

@@ -26,6 +26,10 @@ mutable struct Bridge
     group_spanning_bridge::Bool
     flipped_group1::Bool
     flipped_group2::Bool
+    # the unflipped groups a flipped bridge was proposed from; the builder has
+    # to beat these before it may replace them
+    original_group1::Union{Nothing,WSObject}
+    original_group2::Union{Nothing,WSObject}
     translated_rule_bridge::Bool
     # workspace-structure fields
     time_stamp::Int
@@ -53,7 +57,7 @@ function make_bridge(orientation::Symbol, object1::WSObject, object2::WSObject,
                   ConceptMapping[],
                   spans_whole_string(object1) && spans_whole_string(object2),
                   string_spanning_group(object1) && string_spanning_group(object2),
-                  false, false, false, codelet_count, 0, 0, nothing)
+                  false, false, nothing, nothing, false, codelet_count, 0, 0, nothing)
 end
 
 """`(set-concept-mappings CM-list)` — splits the bond CMs out, keeps the rest,
@@ -92,6 +96,25 @@ get_concept_mapping(b::Bridge, description_type::Node) =
 get_relevant_cms(b::Bridge) = ConceptMapping[cm for cm in b.concept_mappings if cm_relevant(cm)]
 get_distinguishing_cms(b::Bridge, net::Slipnet) =
     ConceptMapping[cm for cm in b.concept_mappings if cm_distinguishing(cm, net)]
+"""`(delete-concept-mapping-type type)` — drops the FIRST concept mapping of
+that type, and the symmetric slippage that goes with it, from every list it
+appears in."""
+function delete_concept_mapping_type!(b::Bridge, type::Node)
+    i = findfirst(cm -> is_cm_type(cm, type), b.all_concept_mappings)
+    if i !== nothing
+        cm = b.all_concept_mappings[i]
+        deleteat!(b.all_concept_mappings, i)
+        j = findfirst(x -> x === cm, b.concept_mappings)
+        j === nothing || deleteat!(b.concept_mappings, j)
+    end
+    k = findfirst(cm -> is_cm_type(cm, type), b.symmetric_slippages)
+    k === nothing || deleteat!(b.symmetric_slippages, k)
+    return b
+end
+
+cm_type_present(b::Bridge, type::Node) =
+    any(cm -> is_cm_type(cm, type), b.all_concept_mappings)
+
 get_relevant_distinguishing_cms(b::Bridge, net::Slipnet) =
     ConceptMapping[cm for cm in b.concept_mappings if cm_relevant_distinguishing(cm, net)]
 
@@ -103,6 +126,24 @@ get_other_object(b::Bridge, object::WSObject) =
     object === b.object1 ? b.object2 : b.object1
 get_covered_letters(b::Bridge) = vcat(get_letters(b.object1), get_letters(b.object2))
 bridge_letter_span(b::Bridge) = get_letter_span(b.object1) + get_letter_span(b.object2)
+get_letter_span(b::Bridge) = bridge_letter_span(b)
+
+"""`(get-original-object1)` — the object the bridge was proposed FROM, which for
+a flipped bridge is the group before flipping. Existence checks use these,
+since the flipped version was never in the workspace."""
+original_object1(b::Bridge) =
+    b.flipped_group1 ? (b.original_group1)::WSObject : b.object1
+original_object2(b::Bridge) =
+    b.flipped_group2 ? (b.original_group2)::WSObject : b.object2
+
+"""`(bridge-type->orientation bridge-type)`."""
+bridge_type_to_orientation(bridge_type::Symbol) =
+    bridge_type === :vertical ? :vertical : :horizontal
+
+"""`(lone-spanning-object? object1 object2)` — exactly one of them spans its
+whole string, so there is nothing sensible to map."""
+lone_spanning_object(object1::WSObject, object2::WSObject) =
+    spans_whole_string(object1) != spans_whole_string(object2)
 
 # --- CM-level compatibility -------------------------------------------------
 #
@@ -314,8 +355,10 @@ end
 
 # --- building ---------------------------------------------------------------
 
-"""`(build-bridge bridge-orientation bridge)`, minus the length-description and
-translated-rule handling, which belong with rules."""
+"""`(build-bridge bridge-orientation bridge)` without a workspace context: it
+attaches the bridge to its objects but cannot register it in the workspace or
+add the length concept mapping. `codelets_bridges.jl` has the full version;
+this one exists for the probes that build bridges outside a run."""
 function build_bridge!(b::Bridge, net::Slipnet)
     update_bridge!(b.object1, b.orientation, b)
     update_bridge!(b.object2, b.orientation, b)

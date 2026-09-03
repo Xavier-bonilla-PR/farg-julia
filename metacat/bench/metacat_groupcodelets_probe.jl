@@ -17,6 +17,7 @@ include("../julia/src/context.jl")
 include("../julia/src/codelets_bonds.jl")
 include("../julia/src/codelets_descriptions.jl")
 include("../julia/src/codelets_groups.jl")
+include("../julia/src/codelets_bridges.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name
 num(v) = (x = snorm(v); x isa Integer ? string(x) :

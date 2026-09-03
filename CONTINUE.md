@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  descriptioncodelets groupcodelets
+  descriptioncodelets groupcodelets bridgecodelets
 ```
 
-Expected — twelve layers, **9,851 trace lines byte-identical**:
+Expected — thirteen layers, **15,247 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -69,6 +69,7 @@ ok    bondcodelets (263 lines identical)
 ok    themes (2049 lines identical)
 ok    descriptioncodelets (321 lines identical)
 ok    groupcodelets (4854 lines identical)
+ok    bridgecodelets (5396 lines identical)
 all probes matched
 ```
 
@@ -100,7 +101,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~6,000 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~6,900 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -116,6 +117,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | themespace: clusters, dynamics, theme support | `themes.jl` | `themes` | 2049 |
 | description codelets | `codelets_descriptions.jl` | `descriptioncodelets` | 321 |
 | group codelets, incl. consolidation | `codelets_groups.jl` | `groupcodelets` | 4854 |
+| bridge codelets, workspace mapping strength | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 5396 |
 
 ---
 
@@ -195,6 +197,37 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **`delete-invalid-string-position-middle-descriptions` is not only about
+  descriptions.** When a grouping makes an object no longer "middle" it deletes
+  the StringPos description AND the StringPos concept mapping of every bridge
+  that object is part of, breaking any bridge left with no mappings. Porting
+  only the description half leaves bridges resting on descriptions that no
+  longer exist, and their strengths drift.
+- **`propose-bridge` uses ALL descriptions of a string-spanning group**, not
+  just the relevant ones. The Scheme has a long comment about why: a momentarily
+  inactive Direction-Category would otherwise leave a spanning bridge without
+  the very concept mapping that makes it incompatible with the letter bridges it
+  ought to replace.
+- **A flipped group keeps the ORIGINAL group's id-num**, so that bridges to it
+  land in the same slot of the proposed-bridge table as bridges to the
+  unflipped version. And existence checks use `get-original-object1/2`, since
+  the flipped group was never in the workspace.
+- **`reverse-direction-orientation?` requires EVERY reversible concept mapping
+  to map by opposite** — reversible being Direction, BondCtgy and GroupCtgy. A
+  single `GroupCtgy:succgrp=>succgrp` identity mapping vetoes flipping. To reach
+  the flip path in a probe, leave Group-Category inactive so those descriptions
+  are irrelevant and the scouts never build that mapping.
+- **A group and a bond ask the same question of a bridge.** `groups.ss` and
+  `bonds.ss` each define `get-incompatible-bridge`, and the two bodies are
+  identical apart from which object supplies the direction. `codelets_bridges.jl`
+  has one function taking the direction as an argument.
+- **The bond builder fights bridges too** (weights 2 against 3), but only when
+  the bond is directed and sits at an edge of its string.
+- **An object's inter-string unhappiness counts its own bridge in full and its
+  enclosing group's bridge at half.** Both of those can be exact rationals.
+- **A bridge's external strength needs the workspace's real bridge list.** The
+  context shim that dispatches `update-strength` was passing an empty one, which
+  is invisible until bridges exist and then quietly halves every fight.
 - **Right-to-left argument evaluation finally bit.** A group's
   `get-local-density` builds its neighbour list with
   `(append (neighbors self 'choose-left-neighbor) (neighbors self 'choose-right-neighbor))`.
@@ -257,7 +290,7 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~10,100 lines of Scheme remain.** Suggested order, with the reasoning:
+**~8,500 lines of Scheme remain.** Suggested order, with the reasoning:
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -275,13 +308,15 @@ by reading the code.
    without that the rack drains after the seed batch and the builders barely
    run. Deferred there: incompatible BRIDGES, which the builder is supposed to
    fight and break — grep `get_incompatible_bridges` in `codelets_groups.jl`.
-3. **Bridge codelets** (in `bridges.ss`) — same shape, more incompatibility
-   logic, and now the next thing on the critical path. Take the four deferred
-   `themes.ss` codelet procedures listed above at the same time; they are bridge
-   codelets in all but name, and `conditions-for-bridge` needs
-   `make-flipped-version` on GROUPS, which is still unported (the BOND version
-   is, in `bonds.jl`). Doing this also lets `group_builder` stop returning an
-   empty list from `get_incompatible_bridges`.
+3. ~~Bridge codelets~~ — **done**, as `codelets_bridges.jl`, together with the
+   workspace-level bridge storage and mapping strengths now in `context.jl`.
+   `make-flipped-version` for groups is ported, so the four deferred
+   `themes.ss` codelet procedures (`thematic-bridge-scout`,
+   `propose-description-based-on-theme`, `look-for-auxiliary-slippages`,
+   `conditions-for-bridge`) are now UNBLOCKED and are the smallest next step —
+   do them first. **Not** ported: `propose-singleton-group` and
+   `try-to-propose-singleton-group`, which `bridges.ss` defines and nothing in
+   the model ever calls.
 4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).

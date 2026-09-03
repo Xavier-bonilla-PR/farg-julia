@@ -161,9 +161,9 @@ add_deferred_codelet!(cr::Coderack, c::Codelet) = (pushfirst!(cr.deferred_codele
 
 """`(post codelet)`."""
 function post!(cr::Coderack, c::Codelet, codelet_count::Int, rng::PyRandom,
-               temperature::Int)
+               temperature::Int, ctx = nothing)
     cr.current_num == MAX_CODERACK_SIZE &&
-        delete_codelets!(cr, 1, codelet_count, rng, temperature)
+        delete_codelets!(cr, 1, codelet_count, rng, temperature, ctx)
     add_codelet!(cr.bins[c.coderack_bin + 1], c, codelet_count)
     pushfirst!(cr.codelet_list, c)
     cr.current_num += 1
@@ -172,9 +172,10 @@ end
 
 """`(post-deferred-codelets)` — makes room first, then posts them all."""
 function post_deferred_codelets!(cr::Coderack, codelet_count::Int, rng::PyRandom,
-                                 temperature::Int)
+                                 temperature::Int, ctx = nothing)
     num_to_delete = cr.current_num + length(cr.deferred_codelets) - MAX_CODERACK_SIZE
-    num_to_delete > 0 && delete_codelets!(cr, num_to_delete, codelet_count, rng, temperature)
+    num_to_delete > 0 &&
+        delete_codelets!(cr, num_to_delete, codelet_count, rng, temperature, ctx)
     for c in cr.deferred_codelets
         add_codelet!(cr.bins[c.coderack_bin + 1], c, codelet_count)
         pushfirst!(cr.codelet_list, c)
@@ -195,11 +196,11 @@ methods live with their structure layers, which load after this file."""
 function delete_proposed_structure! end
 
 function delete_codelets!(cr::Coderack, num_to_delete::Int, codelet_count::Int,
-                          rng::PyRandom, temperature::Int)
+                          rng::PyRandom, temperature::Int, ctx = nothing)
     for _ in 1:num_to_delete
         weights = [removal_weight(c, cr, codelet_count, temperature) for c in cr.codelet_list]
         c = stochastic_pick(rng, cr.codelet_list, weights)::Codelet
-        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1])
+        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1], ctx)
         remove_codelet!(cr.bins[c.coderack_bin + 1], c)
         i = findfirst(x -> x === c, cr.codelet_list)
         i === nothing || deleteat!(cr.codelet_list, i)
