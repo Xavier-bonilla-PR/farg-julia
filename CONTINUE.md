@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  descriptioncodelets groupcodelets bridgecodelets themecodelets images
+  descriptioncodelets groupcodelets bridgecodelets themecodelets images rules
 ```
 
-Expected — fifteen layers, **20,250 trace lines byte-identical**:
+Expected — sixteen layers, **24,870 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -72,6 +72,7 @@ ok    groupcodelets (4854 lines identical)
 ok    bridgecodelets (5396 lines identical)
 ok    themecodelets (3335 lines identical)
 ok    images (1668 lines identical)
+ok    rules (4620 lines identical)
 all probes matched
 ```
 
@@ -103,7 +104,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~7,500 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~8,200 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -122,6 +123,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | bridge codelets, workspace mapping strength | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 5396 |
 | thematic codelets | `codelets_themes.jl` | `themecodelets` | 3335 |
 | image transforms (the algebra rules compute in) | `images.jl` | `images` | 1668 |
+| rule structure, English transcription, quality | `rules.jl` | `rules` | 4620 |
 
 ---
 
@@ -323,6 +325,21 @@ by reading the code.
   no compatibility of their own (the workspace-structure default of 0), so only
   bridges and descriptions feel it — but they feel it hard: a bridge violating
   an active theme drops to strength 0 outright.
+- **A `record-case` with no matching arm returns Chez's unspecified value,
+  which is TRUE.** `literal-clause?` in `rules.ss` has arms for the intrinsic
+  and extrinsic clauses only, so a verbatim clause falls off the end and the
+  caller sees a truthy result. `rules.jl` returns `true` there deliberately;
+  returning `false` (the natural reading) diverges. Check every `record-case`
+  and `case` in the Scheme for a missing `else` before assuming the fall-through
+  is a no-op.
+- **`(average l)` is 0 for an empty list, and `(product '())` is 1.** Both come
+  up in the rule quality formulas, where a rule with no intrinsic clauses or no
+  swap dimensions leaves a list empty. `savg` and `prod(...; init = 1)` in
+  `rules.jl` match.
+- **The transcription's line width is computed, not fixed.** Each phrase is
+  split into the fewest lines that keep it under 60 characters, and the widest
+  of those quotients then sets the width for *every* phrase in the rule. Wrap
+  at a constant 60 and the output differs on any rule with more than one clause.
 
 ---
 
@@ -355,15 +372,26 @@ by reading the code.
    `codelets_themes.jl`. That closes the self-watching loop in both directions.
    Everything in `themes.ss` is now ported except themespace state
    save/restore, which only the GUI history browser uses.
-4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
-   an answer, and now the next thing on the critical path. The transform/apply
-   half of `images.ss` is DONE, so `rules.ss` has the algebra it computes in.
-   Still deferred from `images.ss`: `make-string-image`, which `rules.ss` uses
-   for whole-string images, and `instantiate-as-letter` /
+4. **`rules.ss` (2,163)** — being ported in three commits, of which the first
+   is **done**:
+   - (A) ~~the rule structure, its English transcription and its quality
+     metrics~~ — **done**, as `rules.jl`, probe `rules`. Clauses are built by
+     hand in the probe straight from the grammar at the top of `rules.ss`, so
+     every branch of the fourteen-case transcription table and every arm of the
+     quality formulas is reached deliberately rather than hoped for.
+   - (B) **rule application** — `apply-rule`, `apply-transforms`,
+     `transform-image`, `apply-before?`, `apply-string-position-swap`,
+     `get-extrinsic-transforms`, `get-intrinsic-transforms`,
+     `StrPosCtgy-transforms`, plus `make-string-image` from `images.ss`.
+   - (C) **abstraction and the rule codelets** — `abstract-change-descriptions`
+     and its ~30 helpers, then `rule-scout`, `rule-evaluator`, `rule-builder`.
+     This is the part that needs horizontal bridges, so it goes last.
+5. **`answers.ss` (1,558)** — needed for a run to reach an answer. Still
+   deferred from `images.ss` and waiting on this: `instantiate-as-letter` and
    `instantiate-as-group`, which need the answer string `answers.ss` builds.
-5. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
+6. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
    `justify.ss` (352)** — the self-watching layers the paper is actually about.
-6. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
+7. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
    possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
 
 `breakers.ss` (47) can go in any time.
@@ -409,6 +437,12 @@ Needed to load under Chez 9; the model is otherwise untouched.
   it can see at that point and raises "incorrect argument count" the first time
   a rule tries to renumber a group's letters. Renamed to `enumerate-nodes`.
   Nothing reached that path until the image probe did.
+
+The harness also supplies `find-next-space-position`. `rules.ss`'s English
+transcription calls it to wrap long phrases, but it is defined in
+`general-graphics.ss` — a graphics file, never loaded headless — even though
+the procedure itself is pure string arithmetic. The harness defines it verbatim
+rather than moving it in the vendored source.
 
 The harness also stubs `group-graphics`. `group-builder` calls
 `(group-graphics 'erase ...)` UNGUARDED in each of its two consolidation

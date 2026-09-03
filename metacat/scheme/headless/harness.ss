@@ -33,6 +33,16 @@
   (lambda args
     (if (procedure? (car args)) (apply original-tell args) (void))))
 
+;; rules.ss's English transcription calls find-next-space-position, which lives
+;; in general-graphics.ss -- a graphics file, and so never loaded headless, even
+;; though this one procedure is pure string arithmetic. Supply it verbatim.
+(define find-next-space-position
+  (lambda (s i)
+    (cond
+      ((>= i (string-length s)) (string-length s))
+      ((char=? (string-ref s i) #\space) i)
+      (else (find-next-space-position s (+ i 1))))))
+
 ;; Metacat ends a run with (suspend) -> (break), which hands control back to
 ;; the SWL repl. Headless, redirect that to an escape continuation.
 (define *escape* #f)

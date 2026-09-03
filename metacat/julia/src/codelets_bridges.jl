@@ -89,21 +89,6 @@ function group_incompatible_bridges(orientation::Symbol, object1::WSObject,
     return result
 end
 
-"""`(partition pred? l)` — greedily group elements into classes whose members
-all satisfy pred? pairwise. The Scheme builds this back-to-front, inserting the
-head of the list into the partition of the tail."""
-function spartition(pred, l)
-    isempty(l) && return Vector{eltype(l)}[]
-    classes = spartition(pred, l[2:end])
-    x = l[1]
-    for (i, cls) in enumerate(classes)
-        if all(y -> pred(x, y), cls)
-            classes[i] = vcat([x], cls)
-            return classes
-        end
-    end
-    return vcat(Vector{eltype(l)}[[x]], classes)
-end
 
 """`(select-longest-list l)` — `select-extreme` takes the FIRST entry attaining
 the maximum, via assv on the (length, list) pairs."""

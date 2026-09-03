@@ -185,6 +185,17 @@ descriptions, so a group's bond descriptions count too."""
 description_type_present(o::WSObject, t::Node) =
     any(d -> d.description_type === t, all_descriptions(o))
 
+"""`(descriptor-present? descriptor)` — like `description-type-present?`, this
+scans ALL descriptions."""
+descriptor_present(o::WSObject, descriptor::Node) =
+    any(d -> d.descriptor === descriptor, all_descriptions(o))
+
+"""`(get-nesting-level)` — how deeply the object sits inside groups. A
+workspace string is at level 0."""
+nesting_level(o::WSObject) =
+    o.enclosing_group === nothing ? 0 : nesting_level(o.enclosing_group::WSObject) + 1
+nesting_level(::WorkspaceString) = 0
+
 """`(contains? object1 object2)` — whether the first object is a group that has
 the second somewhere inside it. Only groups can contain anything, and
 `nested-member?` is false for a letter, so this is just the nesting test."""

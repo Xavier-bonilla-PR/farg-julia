@@ -84,6 +84,22 @@ function stochastic_filter(rng::PyRandom, proc, l)
     return result
 end
 
+"""`(partition pred? l)` — greedily group elements into classes whose members
+all satisfy pred? pairwise. The Scheme builds this back-to-front, inserting the
+head of the list into the partition of the tail."""
+function spartition(pred, l)
+    isempty(l) && return Vector{eltype(l)}[]
+    classes = spartition(pred, l[2:end])
+    x = l[1]
+    for (i, cls) in enumerate(classes)
+        if all(y -> pred(x, y), cls)
+            classes[i] = vcat([x], cls)
+            return classes
+        end
+    end
+    return vcat(Vector{eltype(l)}[[x]], classes)
+end
+
 # --- formulas.ss ------------------------------------------------------------
 
 """`(temp-adjusted-probability prob)` — flattens probabilities toward 0.5 as
