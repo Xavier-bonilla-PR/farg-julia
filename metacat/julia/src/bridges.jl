@@ -74,20 +74,26 @@ function set_concept_mappings!(b::Bridge, cm_list::Vector{ConceptMapping}, net::
     return b
 end
 
-function add_concept_mapping!(b::Bridge, cm::ConceptMapping)
-    push!(b.concept_mappings, cm)
-    push!(b.all_concept_mappings, cm)
+"""`(add-concept-mappings cm-list)` — NB these PREPEND, as everything else in
+Metacat does. `add-concept-mapping` is this with a one-element list, so a
+mapping added later comes out earlier."""
+function add_concept_mappings!(b::Bridge, cms::Vector{ConceptMapping})
+    prepend!(b.concept_mappings, cms)
+    prepend!(b.all_concept_mappings, cms)
     return b
 end
 
+add_concept_mapping!(b::Bridge, cm::ConceptMapping) =
+    add_concept_mappings!(b, ConceptMapping[cm])
+
 function add_bond_concept_mapping!(b::Bridge, cm::ConceptMapping)
-    push!(b.bond_concept_mappings, cm)
-    push!(b.all_concept_mappings, cm)
+    pushfirst!(b.bond_concept_mappings, cm)
+    pushfirst!(b.all_concept_mappings, cm)
     return b
 end
 
 add_symmetric_slippage!(b::Bridge, cm::ConceptMapping, net::Slipnet) =
-    (push!(b.symmetric_slippages, cm_symmetric_mapping(cm, net)); b)
+    (pushfirst!(b.symmetric_slippages, cm_symmetric_mapping(cm, net)); b)
 
 get_concept_mapping(b::Bridge, description_type::Node) =
     (i = findfirst(cm -> is_cm_type(cm, description_type), b.all_concept_mappings);

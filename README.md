@@ -242,7 +242,7 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      bridges coderack bondcodelets themes \
                                      descriptioncodelets groupcodelets \
-                                     bridgecodelets
+                                     bridgecodelets themecodelets
 ```
 
 | layer | Julia | verified |
@@ -260,16 +260,20 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | description codelets | `codelets_descriptions.jl` | 321 lines |
 | group codelets: scouts, evaluator, builder, consolidation | `codelets_groups.jl` | 4,854 lines |
 | bridge codelets, incl. group flipping and mapping strength | `codelets_bridges.jl` | 5,396 lines |
+| thematic codelets: bridges scouted from the themespace | `codelets_themes.jl` | 3,335 lines |
 | rule codelets | not yet ported | |
 | temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The thirteen verified layers cover roughly 6,900 of the ~16,000 lines of
+The fourteen verified layers cover roughly 7,200 of the ~16,000 lines of
 Metacat's non-graphics Scheme. All three perceptual structures — bonds, groups
-and bridges — now build, fight and break each other through the real coderack.
-What remains for a run that reaches an answer is `rules.ss`, `answers.ss`,
-`trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about 8,500 lines.
+and bridges — build, fight and break each other through the real coderack, and
+the self-watching loop is closed in both directions: the themespace reads what
+the workspace builds, and `thematic-bridge-scout` sends the workspace looking
+for structures that would bear the themespace out. What remains for a run that
+reaches an answer is `rules.ss`, `answers.ss`, `trace.ss`, `memory.ss`,
+`jootsing.ss` and `justify.ss` — about 8,200 lines.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is

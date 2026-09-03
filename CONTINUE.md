@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  descriptioncodelets groupcodelets bridgecodelets
+  descriptioncodelets groupcodelets bridgecodelets themecodelets
 ```
 
-Expected — thirteen layers, **15,247 trace lines byte-identical**:
+Expected — fourteen layers, **18,582 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -70,6 +70,7 @@ ok    themes (2049 lines identical)
 ok    descriptioncodelets (321 lines identical)
 ok    groupcodelets (4854 lines identical)
 ok    bridgecodelets (5396 lines identical)
+ok    themecodelets (3335 lines identical)
 all probes matched
 ```
 
@@ -101,7 +102,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~6,900 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~7,200 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -118,6 +119,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | description codelets | `codelets_descriptions.jl` | `descriptioncodelets` | 321 |
 | group codelets, incl. consolidation | `codelets_groups.jl` | `groupcodelets` | 4854 |
 | bridge codelets, workspace mapping strength | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 5396 |
+| thematic codelets | `codelets_themes.jl` | `themecodelets` | 3335 |
 
 ---
 
@@ -197,6 +199,25 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **A bridge's concept-mapping lists PREPEND.** `add-concept-mappings` uses
+  `(append cm-list concept-mappings)` and `add-bond-concept-mapping` and
+  `add-symmetric-slippage` both `cons`, so a mapping added later comes out
+  earlier. Appending instead is invisible until a bridge is BUILT — that is when
+  bond CMs and the ObjCtgy CM get added — and then it reorders every list that
+  reads them.
+- **`look-for-auxiliary-slippages` calls `(fizzle)` from inside a helper**,
+  which escapes the whole codelet, not just the helper. Adding a description
+  there ENDS the thematic scout; the slippage it was about to make happens on
+  some later run, once the description is in place.
+- **The auxiliary-slippage branch needs `a` and `z`.** It fires when a slippage's
+  descriptor is laterally linked to an instance of another category whose
+  opposite is a possible descriptor of the other object — which in practice
+  means StringPos `lmost=>rmost` dragging AlphaPos `first=>last` behind it,
+  since `leftmost` links to `alphabetic-first`. No other pair of letters reaches
+  it, so a probe without a `z` in it exercises the traversal and never the body.
+- **`conditions-for-bridge` distinguishes `'()` from `#f`.** An empty list means
+  "possible, no flips needed"; `#f` means "no bridge possible". `exists?` is
+  true for `'()`, so the two must not both map to `nothing` in Julia.
 - **`delete-invalid-string-position-middle-descriptions` is not only about
   descriptions.** When a grouping makes an object no longer "middle" it deletes
   the StringPos description AND the StringPos concept mapping of every bridge
@@ -310,13 +331,13 @@ by reading the code.
    fight and break — grep `get_incompatible_bridges` in `codelets_groups.jl`.
 3. ~~Bridge codelets~~ — **done**, as `codelets_bridges.jl`, together with the
    workspace-level bridge storage and mapping strengths now in `context.jl`.
-   `make-flipped-version` for groups is ported, so the four deferred
-   `themes.ss` codelet procedures (`thematic-bridge-scout`,
-   `propose-description-based-on-theme`, `look-for-auxiliary-slippages`,
-   `conditions-for-bridge`) are now UNBLOCKED and are the smallest next step —
-   do them first. **Not** ported: `propose-singleton-group` and
+   **Not** ported: `propose-singleton-group` and
    `try-to-propose-singleton-group`, which `bridges.ss` defines and nothing in
    the model ever calls.
+3b. ~~The four deferred `themes.ss` codelet procedures~~ — **done**, as
+   `codelets_themes.jl`. That closes the self-watching loop in both directions.
+   Everything in `themes.ss` is now ported except themespace state
+   save/restore, which only the GUI history browser uses.
 4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
    an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
    which is deliberately not ported (`images.jl` is the data structure only).

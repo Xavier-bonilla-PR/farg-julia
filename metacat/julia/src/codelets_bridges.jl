@@ -495,9 +495,7 @@ function bridge_builder(ctx::MetacatCtx, args::Vector{Any})
         existing = get_bridge(object1, b.orientation)::Bridge
         to_add = ConceptMapping[cm for cm in b.concept_mappings
                                 if !any(x -> cms_equal(x, cm), existing.all_concept_mappings)]
-        for cm in to_add
-            add_concept_mapping!(existing, cm)
-        end
+        isempty(to_add) || add_concept_mappings!(existing, to_add)
         return
     end
     all(cm_relevant, b.concept_mappings) || return
