@@ -460,6 +460,27 @@ end
 
 reset_slipnet!(net::Slipnet) = (foreach(reset!, net.nodes); net)
 
+"""The platonic-node predicates from slipnet.ss."""
+platonic_letter(n::Node, net::Slipnet) = any(x -> x === n, net.letters)
+platonic_number(n::Node, net::Slipnet) = any(x -> x === n, net.numbers)
+platonic_relation(n::Node, net::Slipnet) =
+    n === net[:plato_identity] || n === net[:plato_opposite] ||
+    n === net[:plato_predecessor] || n === net[:plato_successor]
+
+"""`(number->platonic-number n)` — nothing above five."""
+number_to_platonic_number(net::Slipnet, n::Int) =
+    n > length(net.numbers) ? nothing : net.numbers[n]
+
+"""`(platonic-number->number node)`."""
+platonic_number_to_number(n::Node, net::Slipnet) = findfirst(x -> x === n, net.numbers)
+
+"""`(inverse node)` — identity is its own inverse; anything else follows its
+opposite link, and a node with none inverts to nothing."""
+inverse(n::Union{Nothing,Node}, net::Slipnet) =
+    n === nothing ? nothing :
+    n === net[:plato_identity] ? n :
+    get_related_node(n, net[:plato_opposite], net[:plato_identity])
+
 """`(possible-descriptor? object)` — whether this node could describe the
 object. Only the nodes with a `define-descriptor-predicate` in slipnet.ss can;
 every other node answers no, which is the default predicate there."""

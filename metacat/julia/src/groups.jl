@@ -94,10 +94,6 @@ function nested_member(g::Group, object::WSObject)
     return false
 end
 
-"""`(number->platonic-number n)`."""
-number_to_platonic_number(net::Slipnet, n::Int) =
-    n > length(net.numbers) ? nothing : net.numbers[n]
-
 function new_bond_description!(g::Group, description_type::Node, descriptor::Node,
                                codelet_count::Int = 0)
     d = make_description(g, description_type, descriptor, codelet_count)

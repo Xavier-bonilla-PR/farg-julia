@@ -242,7 +242,7 @@ pair of probes that dump a canonical trace, and the two must be byte-identical:
 bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      bridges coderack bondcodelets themes \
                                      descriptioncodelets groupcodelets \
-                                     bridgecodelets themecodelets
+                                     bridgecodelets themecodelets images
 ```
 
 | layer | Julia | verified |
@@ -253,6 +253,7 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | concept mappings | `concept_mappings.jl` | 192 lines |
 | bonds | `bonds.jl` | 92 lines |
 | groups (and the image structure they build) | `groups.jl`, `images.jl` | 230 lines |
+| image transforms: the algebra a rule works in | `images.jl` | 1,668 lines |
 | bridges (horizontal and vertical) | `bridges.jl` | 304 lines |
 | coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
 | bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
@@ -266,14 +267,15 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 
 ### How much is done
 
-The fourteen verified layers cover roughly 7,200 of the ~16,000 lines of
+The fifteen verified layers cover roughly 7,500 of the ~16,000 lines of
 Metacat's non-graphics Scheme. All three perceptual structures — bonds, groups
 and bridges — build, fight and break each other through the real coderack, and
 the self-watching loop is closed in both directions: the themespace reads what
 the workspace builds, and `thematic-bridge-scout` sends the workspace looking
 for structures that would bear the themespace out. What remains for a run that
 reaches an answer is `rules.ss`, `answers.ss`, `trace.ss`, `memory.ss`,
-`jootsing.ss` and `justify.ss` — about 8,200 lines.
+`jootsing.ss` and `justify.ss` — about 7,900 lines. The image transform algebra
+`rules.ss` computes in is in place, which is the piece that had to come first.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is

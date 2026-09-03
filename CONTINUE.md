@@ -51,10 +51,10 @@ From the repo root. This is the single most useful command in the project:
 ```bash
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
-  descriptioncodelets groupcodelets bridgecodelets themecodelets
+  descriptioncodelets groupcodelets bridgecodelets themecodelets images
 ```
 
-Expected — fourteen layers, **18,582 trace lines byte-identical**:
+Expected — fifteen layers, **20,250 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -71,6 +71,7 @@ ok    descriptioncodelets (321 lines identical)
 ok    groupcodelets (4854 lines identical)
 ok    bridgecodelets (5396 lines identical)
 ok    themecodelets (3335 lines identical)
+ok    images (1668 lines identical)
 all probes matched
 ```
 
@@ -102,7 +103,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~7,200 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~7,500 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -120,6 +121,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | group codelets, incl. consolidation | `codelets_groups.jl` | `groupcodelets` | 4854 |
 | bridge codelets, workspace mapping strength | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 5396 |
 | thematic codelets | `codelets_themes.jl` | `themecodelets` | 3335 |
+| image transforms (the algebra rules compute in) | `images.jl` | `images` | 1668 |
 
 ---
 
@@ -199,6 +201,21 @@ by reading the code.
 - **`group-builder`'s `continue` skips the cursor update** for
   `previous`/`next_object`.
 - **`bottom-up-bond-scout` chooses over ALL workspace objects**, not per string.
+- **`shorten`'s two relation repairs are in the SAME `if*` body.** It reads like
+  an if/else — repair the letter relation, otherwise the length relation — but
+  `if*` takes a test and a BODY, so both repairs happen together once more than
+  one constituent is left. Nothing happens to either when only one is.
+- **A transform's `fail` is an escape continuation for the whole rule**, not a
+  local error. `images.jl` throws `ImageTransformFailure` and the caller catches;
+  the transforms themselves must not try to recover.
+- **`new-start-letter` applied as a RELATION to a group image does not check the
+  group's own new start letter.** The sub-images are each checked and can fail,
+  but the group's `start-letter` is slid with `get-related-node` and simply
+  becomes `#f` if there is nothing there. Preserved.
+- **Image state snapshots capture the sub-image LIST by reference**, and that is
+  safe only because every transform that changes the constituents REPLACES the
+  list rather than mutating it. `shorten` and `extend` both build a new one; the
+  Julia port must keep doing that or `reset` silently stops working.
 - **A bridge's concept-mapping lists PREPEND.** `add-concept-mappings` uses
   `(append cm-list concept-mappings)` and `add-bond-concept-mapping` and
   `add-symmetric-slippage` both `cons`, so a mapping added later comes out
@@ -339,8 +356,11 @@ by reading the code.
    Everything in `themes.ss` is now ported except themespace state
    save/restore, which only the GUI history browser uses.
 4. **`rules.ss` (2,163) and `answers.ss` (1,558)** — needed for a run to reach
-   an answer. `rules.ss` also needs the transform/apply half of `images.ss`,
-   which is deliberately not ported (`images.jl` is the data structure only).
+   an answer, and now the next thing on the critical path. The transform/apply
+   half of `images.ss` is DONE, so `rules.ss` has the algebra it computes in.
+   Still deferred from `images.ss`: `make-string-image`, which `rules.ss` uses
+   for whole-string images, and `instantiate-as-letter` /
+   `instantiate-as-group`, which need the answer string `answers.ss` builds.
 5. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
    `justify.ss` (352)** — the self-watching layers the paper is actually about.
 6. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
@@ -374,7 +394,7 @@ carries that. Metacat is **GPL-2** (`metacat/scheme/metacat/LICENSE.upstream`),
 so `metacat/julia/src/` is a derivative work and is **GPL-2**. The top-level
 `copycat/` and `metacat/` split is what keeps them distinct.
 
-### Two mechanical patches to the vendored Metacat
+### Three mechanical patches to the vendored Metacat
 
 Needed to load under Chez 9; the model is otherwise untouched.
 
@@ -383,6 +403,12 @@ Needed to load under Chez 9; the model is otherwise untouched.
   prelude.
 - Chez 9's reader rejects `#` inside symbols. The five affected symbols all
   ended in `id#` and were renamed to `id-num` throughout.
+- `enumerate` is a Chez 9 primitive of one argument. `images.ss` defines its own
+  four-argument `enumerate` at the BOTTOM of the file, but calls it from
+  `new-start-letter` near the top; Chez compiles that call against the primitive
+  it can see at that point and raises "incorrect argument count" the first time
+  a rule tries to renumber a group's letters. Renamed to `enumerate-nodes`.
+  Nothing reached that path until the image probe did.
 
 The harness also stubs `group-graphics`. `group-builder` calls
 `(group-graphics 'erase ...)` UNGUARDED in each of its two consolidation

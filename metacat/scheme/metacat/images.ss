@@ -281,7 +281,7 @@
 		 (set! start-letter (tell start-letter 'get-related-node arg)))
 		((platonic-letter? arg)
 		 (let ((new-letters
-			 (enumerate arg letter-relation (length sub-images) fail)))
+			 (enumerate-nodes arg letter-relation (length sub-images) fail)))
 		   (tell self 'replace-all 'new-start-letter new-letters fail)
 		   (set! start-letter arg))))
 	      'done)
@@ -377,7 +377,7 @@
 		    (platonic-number->number current-length)))))))
 
 
-(define enumerate
+(define enumerate-nodes
   (lambda (start relation n fail)
     (if (and (> n 1) (not (exists? relation)))
 	(fail)
