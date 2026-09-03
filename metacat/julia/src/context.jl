@@ -36,6 +36,14 @@ mutable struct MetacatCtx
     top_mapping_strength::Int
     bottom_mapping_strength::Int
     vertical_mapping_strength::Int
+    # Built rules, CONSed, one list per rule type, and whether a rule of each
+    # type is possible at all — which is a question about coverage: every letter
+    # of both strings has to sit under some describable bridge. Untyped because
+    # rules.jl loads after this file.
+    top_rules::Vector{Any}
+    bottom_rules::Vector{Any}
+    top_rule_possible::Bool
+    bottom_rule_possible::Bool
 end
 
 """A context with empty bridge storage and zeroed workspace averages, which is
@@ -49,7 +57,8 @@ MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
-               0, 0, 0, 0, 0, 0, 0, 0)
+               0, 0, 0, 0, 0, 0, 0, 0,
+               Any[], Any[], false, false)
 
 """`*non-answer-strings*` — the three strings a non-justify-mode run works on."""
 all_strings(ctx::MetacatCtx) =
@@ -256,3 +265,72 @@ function update_workspace_values!(ctx::MetacatCtx)
     update_workspace_averages!(ctx)
     return ctx
 end
+
+# --- rules ------------------------------------------------------------------
+
+"""`(get-rules rule-type)` — newest first, as CONSed."""
+get_rules(ctx::MetacatCtx, rule_type::Symbol) =
+    rule_type === :top ? ctx.top_rules : ctx.bottom_rules
+
+get_all_rules(ctx::MetacatCtx) = vcat(ctx.top_rules, ctx.bottom_rules)
+
+"""`(add-rule rule)`."""
+function add_rule!(ctx::MetacatCtx, r)
+    pushfirst!(r.rule_type === :top ? ctx.top_rules : ctx.bottom_rules, r)
+    return ctx
+end
+
+"""`(get-equivalent-rule rule)` — the first rule of the same type that says the
+same thing."""
+function get_equivalent_rule(ctx::MetacatCtx, r)
+    rules = get_rules(ctx, r.rule_type)
+    i = findfirst(other -> rules_equal(other, r, ctx.net), rules)
+    return i === nothing ? nothing : rules[i]
+end
+
+rule_present(ctx::MetacatCtx, r) = get_equivalent_rule(ctx, r) !== nothing
+rule_exists(ctx::MetacatCtx, rule_type::Symbol) = !isempty(get_rules(ctx, rule_type))
+
+"""`(check-if-rules-possible)` — a rule of a type is possible when every letter
+of both its strings is covered by some bridge a rule could be described from.
+Outside justify mode only the top rule is ever possible."""
+function check_if_rules_possible!(ctx::MetacatCtx)
+    covered = Any[o for b in ctx.top_bridges if rule_describable_bridge(b, ctx.net)
+                  for o in get_covered_letters(b)]
+    letters = vcat(ctx.initial_string.letters, ctx.modified_string.letters)
+    ctx.top_rule_possible = all(l -> any(c -> c === l, covered), letters)
+    return ctx
+end
+
+"""`(get-possible-rule-types)`."""
+get_possible_rule_types(ctx::MetacatCtx) =
+    ctx.top_rule_possible && ctx.bottom_rule_possible ? Symbol[:top, :bottom] :
+    ctx.top_rule_possible ? Symbol[:top] :
+    ctx.bottom_rule_possible ? Symbol[:bottom] : Symbol[]
+
+"""`(get-equivalent-object object)` — the object at the same place in this
+string. When the object already belongs to the string that is the object
+itself; the case where it does not arises only for TRANSLATED strings, which
+come with `jootsing.ss` and are not ported yet."""
+function get_equivalent_object(s::WorkspaceString, o)
+    pool = o isa Letter ? s.letters : s.groups
+    any(x -> x === o, pool) && return o
+    return nothing
+end
+
+"""`(get-equivalent-bridge bridge)` — the bridge in the workspace that does the
+same job as this one, which is the bridge itself unless it has been rebuilt."""
+function get_equivalent_bridge(ctx::MetacatCtx, b::Bridge)
+    list = get_bridges(ctx, b.bridge_type)
+    any(x -> x === b, list) && return b
+    string1 = b.bridge_type === :bottom ? ctx.target_string : ctx.initial_string
+    string2 = b.bridge_type === :top ? ctx.modified_string :
+              b.bridge_type === :vertical ? ctx.target_string : nothing
+    o1 = get_equivalent_object(string1, b.object1)
+    o2 = string2 === nothing ? nothing : get_equivalent_object(string2, b.object2)
+    (o1 !== nothing && o2 !== nothing &&
+     bridge_between(b.orientation, o1, o2)) || return nothing
+    return get_bridge(o1, b.orientation)
+end
+
+bridge_present(ctx::MetacatCtx, b::Bridge) = get_equivalent_bridge(ctx, b) !== nothing

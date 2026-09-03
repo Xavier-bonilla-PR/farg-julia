@@ -147,6 +147,15 @@ mutable struct Rule
     strength::Int
     proposal_level::Int
     enclosing_group::Union{Nothing,WSObject}
+    # What the rule was abstracted from and what it now rests on. A rule
+    # written straight from clauses (or a verbatim one) has none of this until
+    # `set-abstracted-rule-information` or `set-verbatim-rule-information` fills
+    # it in. Untyped where the element type is defined further down this file.
+    rule_clause_templates::Vector{Any}
+    tagged_supporting_horizontal_bridges::Vector{Any}
+    supporting_horizontal_bridges::Vector{Bridge}
+    theme_pattern::Any
+    translated::Bool
 end
 
 """`(make-rule rule-type rule-clauses)`. The English transcription is computed
@@ -158,7 +167,8 @@ function make_rule(rule_type::Symbol, rule_clauses::Vector{RuleClause},
                 RuleClause[rc for rc in rule_clauses if is_extrinsic_clause(rc)],
                 rule_type === :top ? :top_bridge : :bottom_bridge,
                 transcribe_to_english(rule_clauses, s, net),
-                0, 0, 0, 0, 0, codelet_count, 0, 0, nothing)
+                0, 0, 0, 0, 0, codelet_count, 0, 0, nothing,
+                Any[], Any[], Bridge[], nothing, false)
 end
 
 is_identity_rule(r::Rule) = isempty(r.rule_clauses)
@@ -1137,3 +1147,656 @@ function apply_rule(r::Rule, s::WorkspaceString, net::Slipnet, failure_action)
         rethrow()
     end
 end
+
+# --- rule abstraction -------------------------------------------------------
+#
+# See section 3.3.6 of Marshall's thesis. A rule is not composed; it is READ
+# OFF the horizontal bridges the model has already built between the initial
+# string and the modified one. Each bridge's slippages become intrinsic change
+# descriptions; bridges that trade a descriptor between them become extrinsic
+# ones; and changes shared by every bridge of a cluster are lifted into a single
+# statement about the enclosing object's subobjects. What survives is turned
+# into rule-clause TEMPLATES, which hold reference objects and lists of possible
+# descriptors, and only then instantiated into a rule — that last step is where
+# the model chooses how to describe each object and which descriptor to use.
+
+"""`(rule-describable-bridge? bridge)` — whether the change from object1 to
+object2 is expressible at all.
+
+A letter can turn directly only into a letter-category sameness group; a group
+turns into a letter only if it is built on letter categories; and two groups
+must share a bond facet and have related group categories."""
+function rule_describable_bridge(b::Bridge, net::Slipnet)
+    o1 = b.object1
+    o2 = b.object2
+    o1 isa Letter && o2 isa Letter && return true
+    o1 isa Letter && o2 isa Group &&
+        return (o2::Group).group_bond_facet === net[:plato_letter_category] &&
+               (o2::Group).group_category === net[:plato_samegrp]
+    o1 isa Group && o2 isa Letter &&
+        return (o1::Group).group_bond_facet === net[:plato_letter_category]
+    return (o1::Group).group_bond_facet === (o2::Group).group_bond_facet &&
+           related((o1::Group).group_category, (o2::Group).group_category)
+end
+
+# --- schemas ---------------------------------------------------------------
+#
+# <schema> ::= (<dimension> <descriptor1> <relation> <descriptor2>), with `nothing`
+# wherever the bridges of a cluster do not agree. `(Length two Identity two)` for
+# [aa]-->[bb]; `(ObjCtgy letter nothing group)` for a-->[bb].
+
+struct Schema
+    dimension::Node
+    descriptor1::Union{Nothing,Node}
+    relation::Union{Nothing,Node}
+    descriptor2::Union{Nothing,Node}
+end
+
+"""`(concept-mappings->schema cms)` — `nothing` unless the mappings agree on a
+relation or on where they land."""
+function concept_mappings_to_schema(cms)
+    common(f) = (vals = [f(cm) for cm in cms];
+                 all(v -> v === vals[1], vals) ? vals[1] : nothing)
+    relation = common(cm -> cm.label)
+    descriptor2 = common(cm -> cm.descriptor2)
+    (relation === nothing && descriptor2 === nothing) && return nothing
+    return Schema(cm_type(cms[1]), common(cm -> cm.descriptor1), relation, descriptor2)
+end
+
+"""`(get-common-schemas cluster)` — one schema per dimension that EVERY bridge
+in the cluster maps."""
+function get_common_schemas(cluster)
+    num_bridges = length(cluster)
+    all_cms = ConceptMapping[cm for b in cluster for cm in b.concept_mappings]
+    classes = spartition((cm1, cm2) -> cm_type(cm1) === cm_type(cm2), all_cms)
+    result = Schema[]
+    for p in classes
+        length(p) < num_bridges && continue
+        sch = concept_mappings_to_schema(p)
+        sch === nothing || push!(result, sch::Schema)
+    end
+    return result
+end
+
+"""`(get-common-change-schemas cluster)` — the common schemas that actually say
+something changed."""
+get_common_change_schemas(cluster, net::Slipnet) =
+    Schema[s for s in get_common_schemas(cluster) if s.relation !== net[:plato_identity]]
+
+format_schema(s::Schema) =
+    string(s.dimension.short_name, " : ",
+           s.descriptor1 === nothing ? "*" : (s.descriptor1::Node).short_name, " ",
+           s.relation === nothing ? "*" : (s.relation::Node).short_name, " ",
+           s.descriptor2 === nothing ? "*" : (s.descriptor2::Node).short_name)
+
+# --- swaps -----------------------------------------------------------------
+#
+# <swap> ::= ((<object> ...) <dimension> (<descriptor> <descriptor>))
+
+struct Swap
+    objects::Vector{Any}
+    dimension::Node
+    descriptors::Vector{Node}
+end
+
+"""`(slippages->swap slippages)` — a set of slippages in one dimension is a SWAP
+when what they come from is exactly what they go to, and there are two of
+them."""
+function slippages_to_swap(slippages)
+    dedup(xs) = Node[x for (i, x) in enumerate(xs) if !any(y -> y === x, xs[(i + 1):end])]
+    from = dedup(Node[s.descriptor1 for s in slippages])
+    to = dedup(Node[s.descriptor2 for s in slippages])
+    (sets_equal(from, to) && length(from) == 2) || return nothing
+    return Swap(Any[s.object1 for s in slippages], cm_type(slippages[1]), from)
+end
+
+"""`(get-all-swaps cluster)`."""
+function get_all_swaps(cluster)
+    all_slippages = ConceptMapping[cm for b in cluster
+                                   for cm in get_non_symmetric_non_bond_slippages(b)]
+    result = Swap[]
+    for p in spartition((s1, s2) -> cm_type(s1) === cm_type(s2), all_slippages)
+        sw = slippages_to_swap(p)
+        sw === nothing || push!(result, sw::Swap)
+    end
+    return result
+end
+
+select_swap(dimension::Node, swaps) =
+    (i = findfirst(s -> s.dimension === dimension, swaps);
+     i === nothing ? nothing : swaps[i])
+
+# --- the clusters ----------------------------------------------------------
+
+all_subobjects_describable(object, description_type::Node,
+                           descriptor::Union{Nothing,Node}) =
+    descriptor !== nothing &&
+    all(o -> get_descriptor_for(o, description_type) === descriptor,
+        get_constituent_objects(object))
+
+same_left_enclosing_objects(b1::Bridge, b2::Bridge) =
+    enclosing_group1(b1) === enclosing_group1(b2)
+disjoint_left_objects(b1::Bridge, b2::Bridge) =
+    disjoint_objects(b1.object1, b2.object1)
+common_right_enclosing_object(bridges) =
+    all_same(Any[enclosing_group2(b) for b in bridges])
+get_left_enclosing_object(bridges) = get_enclosing_object(bridges[1].object1)
+get_right_enclosing_object(bridges) = get_enclosing_object(bridges[1].object2)
+
+"""`(spans-left-side? bridges)` — the cluster's left objects are exactly the
+constituents of their enclosing object."""
+spans_left_side(bridges) =
+    sets_equal(Any[b.object1 for b in bridges],
+               get_constituent_objects(get_left_enclosing_object(bridges)))
+spans_right_side(bridges) =
+    sets_equal(Any[b.object2 for b in bridges],
+               get_constituent_objects(get_right_enclosing_object(bridges)))
+
+const SWAP_ABSTRACTION_PROBABILITY = 0.75
+const SUBOBJECTS_ABSTRACTION_PROBABILITY = 0.75
+
+"""`(abstract-change-descriptions bridges)` — read a set of change descriptions
+off the horizontal bridges. Stochastic throughout: which swaps get abstracted,
+whether a swap is recorded as a swap of some object's subobjects, and whether a
+change common to a whole cluster is lifted."""
+function abstract_change_descriptions(bridges, rng::PyRandom, net::Slipnet)
+    all_cds = ChangeDescription[]
+    function add_extrinsic!(objects, dim::Node, descs::Vector{Node},
+                            abstraction_possible::Bool)
+        cd = make_extrinsic_change_description(objects, dim, descs)
+        abstraction_possible && mark_as_subobjects_swap_if_possible!(cd)
+        pushfirst!(all_cds, cd)
+        return :done
+    end
+    function add_intrinsic!(object, scope::Symbol, dim::Node,
+                            desc1::Union{Nothing,Node}, relation::Union{Nothing,Node},
+                            desc2::Union{Nothing,Node})
+        # Individual string-position changes are not allowed; only a swap can
+        # say that something moved.
+        if dim !== net[:plato_string_position_category]
+            pushfirst!(all_cds, make_intrinsic_change_description(object, scope, dim,
+                                                                  desc1, relation, desc2))
+        end
+        return :done
+    end
+    for b in bridges, slippage in get_non_symmetric_non_bond_slippages(b)
+        add_intrinsic!(b.object1, :self, cm_type(slippage), slippage.descriptor1,
+                       slippage.label, slippage.descriptor2)
+    end
+    swaps_partition = isempty(bridges) ? Vector{Any}[] :
+        bounded_random_partition(rng, disjoint_left_objects, bridges,
+                                 random_int(rng, length(bridges)) + 1)
+    for cluster in swaps_partition
+        all_swaps = get_all_swaps(cluster)
+        length_swap = select_swap(net[:plato_length], all_swaps)
+        objctgy_swap = select_swap(net[:plato_object_category], all_swaps)
+        remaining = Swap[s for s in all_swaps
+                         if !(s === length_swap) && !(s === objctgy_swap)]
+        # Length and ObjCtgy swaps go in together or not at all, which keeps the
+        # resulting rule clause uniform.
+        if stochastic_if(rng, SWAP_ABSTRACTION_PROBABILITY)
+            abstract_subobjects = prob(rng, SUBOBJECTS_ABSTRACTION_PROBABILITY)
+            if length_swap !== nothing
+                add_extrinsic!((length_swap::Swap).objects, net[:plato_length],
+                               (length_swap::Swap).descriptors, abstract_subobjects)
+            end
+            if objctgy_swap !== nothing
+                add_extrinsic!((objctgy_swap::Swap).objects, net[:plato_object_category],
+                               (objctgy_swap::Swap).descriptors, abstract_subobjects)
+            end
+        end
+        for swap in remaining
+            if stochastic_if(rng, SWAP_ABSTRACTION_PROBABILITY)
+                add_extrinsic!(swap.objects, swap.dimension, swap.descriptors,
+                               prob(rng, SUBOBJECTS_ABSTRACTION_PROBABILITY))
+            end
+        end
+    end
+    for cluster in spartition(same_left_enclosing_objects, bridges)
+        left_enclosing = get_left_enclosing_object(cluster)
+        singleton_group(left_enclosing) && continue
+        # Two StrPosCtgy:Opposite slippages across a cluster that spans its
+        # enclosing object mean the whole thing turned round.
+        if spans_left_side(cluster) &&
+           count(b -> strposctgy_opposite_slippage(b, net), cluster) == 2
+            if stochastic_if(rng, SUBOBJECTS_ABSTRACTION_PROBABILITY)
+                add_intrinsic!(left_enclosing, :self, net[:plato_direction_category],
+                               nothing, net[:plato_opposite], nothing)
+            end
+        end
+        for schema in get_common_change_schemas(cluster, net)
+            liftable =
+                (spans_left_side(cluster) && !common_right_enclosing_object(cluster)) ||
+                (spans_left_side(cluster) && common_right_enclosing_object(cluster) &&
+                 spans_right_side(cluster)) ||
+                (spans_left_side(cluster) && common_right_enclosing_object(cluster) &&
+                 all_subobjects_describable(get_right_enclosing_object(cluster),
+                                            schema.dimension, schema.descriptor2)) ||
+                (common_right_enclosing_object(cluster) && spans_right_side(cluster) &&
+                 all_subobjects_describable(left_enclosing, schema.dimension,
+                                            schema.descriptor1))
+            if liftable && stochastic_if(rng, SUBOBJECTS_ABSTRACTION_PROBABILITY)
+                add_intrinsic!(left_enclosing, :subobjects, schema.dimension,
+                               schema.descriptor1, schema.relation, schema.descriptor2)
+            end
+        end
+    end
+    return all_cds
+end
+
+# --- templates -------------------------------------------------------------
+#
+# A TEMPLATE is a rule clause with the choices not yet made: it holds the
+# reference OBJECTS rather than descriptions of them, and a list of possible
+# descriptors rather than one. Instantiating it is what commits the model to a
+# particular way of saying the same thing.
+
+struct ChangeTemplate
+    scope::Symbol
+    dimension::Node
+    descriptors::Vector{Node}
+end
+
+struct RuleClauseTemplate
+    kind::Symbol                 # :intrinsic | :extrinsic
+    ref_object::Any              # :intrinsic
+    change_templates::Vector{ChangeTemplate}
+    ref_objects::Vector{Any}     # :extrinsic
+    dimensions::Vector{Node}
+end
+
+is_intrinsic_template(t::RuleClauseTemplate) = t.kind === :intrinsic
+is_extrinsic_template(t::RuleClauseTemplate) = t.kind === :extrinsic
+
+"""`(make-change-template)` — a literal DirCtgy or GroupCtgy change makes no
+sense (there is no such thing as "DirCtgy:left"), so those keep only the
+relation."""
+make_change_template(ic::IntrinsicChangeDescription, net::Slipnet) =
+    (ic.dimension === net[:plato_direction_category] ||
+     ic.dimension === net[:plato_group_category]) ?
+    ChangeTemplate(ic.scope, ic.dimension,
+                   Node[d for d in ic.descriptors if d !== ic.descriptor2]) :
+    ChangeTemplate(ic.scope, ic.dimension, copy(ic.descriptors))
+
+"""`(get-BondFacet-change)` — a group-category reversal carries the medium it
+reverses along with it, so that the information survives abstraction."""
+get_bond_facet_change(ic::IntrinsicChangeDescription, net::Slipnet) =
+    (ic.reference_object isa Group && ic.dimension === net[:plato_group_category] &&
+     ic.scope === :self) ?
+    ChangeTemplate(:self, net[:plato_bond_facet],
+                   Node[get_bond_facet(ic.reference_object::Group, net)::Node]) :
+    nothing
+
+"""The predicate `rule-scout` partitions the surviving change descriptions by:
+same kind, and about the same objects. `&&` short-circuits, so the mixed case
+never reaches `same_reference_objects`, which has no method for it — exactly as
+the Scheme's `same-change-type?` guards its `same-reference-objects?`."""
+change_descriptions_groupable(c1::ChangeDescription, c2::ChangeDescription) =
+    is_intrinsic_change(c1) == is_intrinsic_change(c2) &&
+    same_reference_objects(c1, c2)
+
+"""`(change-descriptions->rule-clause-template change-descriptions)`."""
+function change_descriptions_to_rule_clause_template(cds, net::Slipnet)
+    if cds[1] isa IntrinsicChangeDescription
+        first = cds[1]::IntrinsicChangeDescription
+        templates = ChangeTemplate[make_change_template(c::IntrinsicChangeDescription,
+                                                        net) for c in cds]
+        bond_facet_change = get_bond_facet_change(first, net)
+        bond_facet_change === nothing ||
+            pushfirst!(templates, bond_facet_change::ChangeTemplate)
+        return RuleClauseTemplate(:intrinsic, first.reference_object, templates,
+                                  Any[], Node[])
+    end
+    first = cds[1]::ExtrinsicChangeDescription
+    objects = any(c -> (c::ExtrinsicChangeDescription).subobjects_swap, cds) ?
+        Any[get_change_enclosing_object(first)] :
+        chez_sort((a, b) -> left_string_pos(a) < left_string_pos(b),
+                  first.reference_objects)
+    return RuleClauseTemplate(:extrinsic, nothing, ChangeTemplate[], objects,
+                              Node[(c::ExtrinsicChangeDescription).dimension
+                                   for c in cds])
+end
+
+"""`(sort-templates rule-clause-templates)` — intrinsic clauses before
+extrinsic, wider swaps first, and intrinsic clauses by nesting then string
+position. Another comparator that is not a strict weak ordering."""
+sort_templates(templates) =
+    chez_sort((t1, t2) ->
+                  (is_intrinsic_template(t1) && is_extrinsic_template(t2)) ||
+                  (is_extrinsic_template(t1) && is_extrinsic_template(t2) &&
+                   length(t1.dimensions) > length(t2.dimensions)) ||
+                  (is_intrinsic_template(t1) && is_intrinsic_template(t2) &&
+                   (nested_member(t2.ref_object, t1.ref_object) ||
+                    (disjoint_objects(t1.ref_object, t2.ref_object) &&
+                     left_string_pos(t1.ref_object) < left_string_pos(t2.ref_object)))),
+              templates)
+
+const RULE_DIMENSION_ORDER_NAMES =
+    (:plato_direction_category, :plato_group_category,
+     :plato_alphabetic_position_category, :plato_letter_category, :plato_length,
+     :plato_object_category, :plato_string_position_category, :plato_bond_facet)
+
+rule_dimension_order(net::Slipnet) = Node[net[n] for n in RULE_DIMENSION_ORDER_NAMES]
+
+sort_rule_dimensions(dimensions, net::Slipnet) =
+    sort_wrt_order(dimensions, rule_dimension_order(net))
+
+"""`(sort-change-templates change-templates)` — self before subobjects, then by
+the fixed dimension order."""
+function sort_change_templates(change_templates, net::Slipnet)
+    order = rule_dimension_order(net)
+    return chez_sort((ct1, ct2) ->
+                         (ct1.scope === :self && ct2.scope === :subobjects) ||
+                         (ct1.scope === ct2.scope &&
+                          list_index(order, ct1.dimension) <
+                          list_index(order, ct2.dimension)),
+                     change_templates)
+end
+
+object_description_possible(object, net::Slipnet) =
+    object isa WorkspaceString ||
+    !isempty(get_descriptions_for_rule(object::WSObject, net))
+
+"""`(possible-to-instantiate? templates)` — every object the templates name has
+to be describable, or there is no rule to write."""
+possible_to_instantiate(templates, net::Slipnet) =
+    all(t -> is_intrinsic_template(t) ?
+             object_description_possible(t.ref_object, net) :
+             all(o -> object_description_possible(o, net), t.ref_objects),
+        templates)
+
+"""`(reference-object->object-description object)` — choose how to name it."""
+function reference_object_to_object_description(object, rng::PyRandom, net::Slipnet)
+    object isa WorkspaceString &&
+        return ObjectDescription(:string, net[:plato_string_position_category],
+                                 net[:plato_whole])
+    chosen = choose_description_for_rule(rng, object::WSObject, net)
+    return ObjectDescription(get_descriptor_for(object::WSObject,
+                                                net[:plato_object_category]),
+                             (chosen::Description).description_type,
+                             (chosen::Description).descriptor)
+end
+
+"""`(instantiate-change-template object-description)` — pick a descriptor by
+conceptual depth.
+
+The last clause avoids rules like "change letter-category of the object with
+letter-category `c' to successor" by substituting the literal `d` for the
+relation."""
+function instantiate_change_template(ct::ChangeTemplate, od::ObjectDescription,
+                                     rng::PyRandom, net::Slipnet)
+    chosen = stochastic_pick(rng, ct.descriptors,
+                             temp_adjusted_values([d.conceptual_depth
+                                                   for d in ct.descriptors]))
+    descriptor = (ct.dimension === od.description_type &&
+                  platonic_relation(chosen, net)) ?
+                 get_related_node(od.descriptor, chosen, net[:plato_identity]) : chosen
+    return Change(ct.scope, ct.dimension, descriptor)
+end
+
+"""`(instantiate-rule-clause-template template)`."""
+function instantiate_rule_clause_template(t::RuleClauseTemplate, rng::PyRandom,
+                                          net::Slipnet)
+    # Both `map`s here draw — `instantiate-change-template` picks a descriptor
+    # and `reference-object->object-description` picks a description — so they
+    # go through `chez_map`, which applies in Chez's order rather than left to
+    # right. Same draws either way; different picks.
+    if is_intrinsic_template(t)
+        od = reference_object_to_object_description(t.ref_object, rng, net)
+        changes = Change[chez_map(ct -> instantiate_change_template(ct, od, rng, net),
+                                  sort_change_templates(t.change_templates, net))...]
+        return intrinsic_clause(od, changes)
+    end
+    sorted = chez_sort((a, b) -> left_string_pos(a) < left_string_pos(b), t.ref_objects)
+    return extrinsic_clause(
+        ObjectDescription[chez_map(o -> reference_object_to_object_description(o, rng,
+                                                                               net),
+                                   sorted)...],
+        sort_rule_dimensions(t.dimensions, net))
+end
+
+# --- what a rule rests on ---------------------------------------------------
+#
+# A rule abstracted from bridges is only as good as the bridges under it, and
+# those can be broken by other codelets at any time. Each rule therefore
+# remembers which horizontal bridges support it, TAGGED with whether the support
+# is provisional: a template that changes an object which has no bridge of its
+# own falls back on its subobjects' bridges, and the tag says so, so that the
+# support can be revised upward if that object's own bridge appears later.
+
+unsupported_self_change(tagged) = tagged[1]::Bool
+tagged_bridges(tagged) = tagged[2]::Vector{Bridge}
+
+"""`(get-tagged-supporting-horizontal-bridges rule-clause-template)`."""
+function get_tagged_supporting_horizontal_bridges(t::RuleClauseTemplate)
+    if is_extrinsic_template(t)
+        bridges = length(t.ref_objects) == 1 ?
+            get_subobject_bridges(t.ref_objects[1], :horizontal) :
+            Bridge[get_bridge(o, :horizontal) for o in t.ref_objects]
+        return Any[false, bridges]
+    end
+    self_bridge = t.ref_object isa WorkspaceString ? nothing :
+                  get_bridge(t.ref_object::WSObject, :horizontal)
+    subobject_bridges = any(ct -> ct.scope === :subobjects, t.change_templates) ?
+        get_subobject_bridges(t.ref_object, :horizontal) : Bridge[]
+    change_self = any(ct -> ct.scope === :self, t.change_templates)
+    supporting = !change_self ? subobject_bridges :
+        self_bridge !== nothing ? vcat(Bridge[self_bridge::Bridge], subobject_bridges) :
+        get_subobject_bridges(t.ref_object, :horizontal)
+    return Any[change_self && self_bridge === nothing, supporting]
+end
+
+"""`(set-abstracted-rule-information templates)` — record what the rule rests
+on, attach a Length description to any group whose bridge slips length (the
+rule is about to talk about that length), and take a snapshot of the dominant
+themes."""
+function set_abstracted_rule_information!(r::Rule, templates, ctx)
+    net = ctx.net
+    r.rule_clause_templates = collect(templates)
+    r.tagged_supporting_horizontal_bridges =
+        Any[get_tagged_supporting_horizontal_bridges(t) for t in templates]
+    r.supporting_horizontal_bridges =
+        Bridge[b for tagged in r.tagged_supporting_horizontal_bridges
+               for b in tagged_bridges(tagged)]
+    for bridge in r.supporting_horizontal_bridges
+        slippage_type_present(bridge, net[:plato_length]) || continue
+        for o in (bridge.object1, bridge.object2)
+            if o isa Group && !description_type_present(o, net[:plato_length])
+                attach_length_description!(o::Group, net)
+            end
+        end
+    end
+    r.theme_pattern = get_dominant_theme_pattern(ctx.themespace, r.bridge_theme_type)
+    return r
+end
+
+"""`(set-verbatim-rule-information)` — a verbatim rule rests on nothing."""
+function set_verbatim_rule_information!(r::Rule)
+    r.rule_clause_templates = RuleClauseTemplate[]
+    r.tagged_supporting_horizontal_bridges = Any[]
+    r.supporting_horizontal_bridges = Bridge[]
+    r.theme_pattern = Any[r.bridge_theme_type]
+    return r
+end
+
+"""`(revise-abstracted-rule-information proposed-rule)` — an existing rule that
+a new proposal duplicates takes the proposal's support where its own was only
+provisional."""
+function revise_abstracted_rule_information!(r::Rule, proposed::Rule)
+    if any(unsupported_self_change, r.tagged_supporting_horizontal_bridges)
+        r.tagged_supporting_horizontal_bridges =
+            Any[(unsupported_self_change(old) && !unsupported_self_change(new)) ?
+                new : old
+                for (old, new) in zip(r.tagged_supporting_horizontal_bridges,
+                                      proposed.tagged_supporting_horizontal_bridges)]
+        all_bridges = Bridge[b for tagged in r.tagged_supporting_horizontal_bridges
+                             for b in tagged_bridges(tagged)]
+        # remq-duplicates keeps the LAST of each duplicate group
+        r.supporting_horizontal_bridges =
+            Bridge[b for (i, b) in enumerate(all_bridges)
+                   if !any(x -> x === b, all_bridges[(i + 1):end])]
+    end
+    r.theme_pattern = proposed.theme_pattern
+    return r
+end
+
+"""`(supported?)` — every bridge the rule rests on is still in the workspace."""
+rule_supported(r::Rule, ctx) =
+    all(b -> bridge_present(ctx, b), r.supporting_horizontal_bridges)
+
+"""`(get-degree-of-support)` — the product of the supporting bridges'
+strengths, as a percentage of a percentage."""
+get_degree_of_support(r::Rule, ctx) =
+    mul100(prod([pct(get_equivalent_bridge(ctx, b).strength)
+                 for b in r.supporting_horizontal_bridges]; init = 1))
+
+"""`(get-relative-quality)` — a rule is ranked against the other rules of its
+type rather than judged absolutely, so the best rule in the workspace is always
+worth 100."""
+function get_relative_quality(r::Rule, ctx)
+    ranked = chez_sort((r1, r2) -> r1.quality < r2.quality, get_rules(ctx, r.rule_type))
+    i = findfirst(x -> x === r, ranked)
+    return i === nothing ? r.quality : mul100(sdiv(i, length(ranked)))
+end
+
+calculate_internal_strength(r::Rule, ctx) = get_relative_quality(r, ctx)
+calculate_external_strength(r::Rule, ctx) = calculate_internal_strength(r, ctx)
+
+"""`(update-strength)` for a rule. A rule is one of the structures with no
+thematic compatibility of its own — it takes the `workspace-structure` default
+of 0 — so its strength reduces to its quality relative to the other rules."""
+function update_structure_strength!(r::Rule, ctx)
+    TEMPERATURE[] = ctx.temperature
+    internal = calculate_internal_strength(r, ctx)
+    external = calculate_external_strength(r, ctx)
+    intrinsic = weighted_average([internal, external],
+                                 [internal, sub_from_100(internal)])
+    r.strength = sround(weighted_average([0, intrinsic], [0, 1]))
+    return r
+end
+
+"""`(currently-works?)` — apply the rule to its own string and see whether what
+comes out is the string it is supposed to explain. A BOTTOM rule is checked
+against the answer string, which only exists in justify mode; that mode is not
+ported, and nothing proposes a bottom rule without it."""
+function currently_works(r::Rule, ctx)
+    string1 = r.rule_type === :top ? ctx.initial_string : ctx.target_string
+    string2 = ctx.modified_string
+    result = apply_rule(r, string1, ctx.net, ignore_snag)
+    return result !== nothing &&
+           generate_image_letters(string1) == string2.letter_categories
+end
+
+"""`(activate-rule-descriptors-from-workspace rule)`."""
+function activate_rule_descriptors_from_workspace(r::Rule)
+    for clause in r.rule_clauses
+        is_verbatim_clause(clause) && continue
+        for od in clause.object_descriptions
+            activate_from_workspace!(od.descriptor)
+        end
+        if is_intrinsic_clause(clause)
+            for c in clause.changes
+                activate_from_workspace!(c.descriptor)
+            end
+        end
+    end
+    return r
+end
+
+# --- the rule codelets ------------------------------------------------------
+
+const VERBATIM_RULE_PROBABILITY = 0.01
+
+"""`rule-scout` — propose a rule.
+
+One time in a hundred it gives up and proposes a VERBATIM rule, which simply
+quotes the modified string. Otherwise it abstracts one from the describable
+horizontal bridges: read change descriptions off them, drop the redundant ones,
+group what is left into rule-clause templates, and instantiate. NB the verbatim
+coin is drawn on EVERY run, whether or not it comes up."""
+function rule_scout(ctx::MetacatCtx, args::Vector{Any})
+    net = ctx.net
+    if stochastic_if(ctx.rng, VERBATIM_RULE_PROBABILITY)
+        # `%justify-mode%` is off, so the rule type is always `top`.
+        rule_type = :top
+        letter_categories = ctx.modified_string.letter_categories
+        clauses = RuleClause[verbatim_clause(copy(letter_categories))]
+        proposed = make_rule(rule_type, clauses, ctx.initial_string, net,
+                             ctx.codelet_count)
+        set_quality_values!(proposed, net)
+        set_verbatim_rule_information!(proposed)
+        proposed.proposal_level = PROPOSED
+        post!(ctx.coderack,
+              make_codelet(CODELET_TYPES[:rule_evaluator], LOW_URGENCY, Any[proposed]),
+              ctx.codelet_count, ctx.rng, ctx.temperature)
+        return
+    end
+    possible_rule_types = get_possible_rule_types(ctx)
+    isempty(possible_rule_types) && return
+    rule_type = random_pick(ctx.rng, possible_rule_types)::Symbol
+    describable = Bridge[b for b in get_bridges(ctx, rule_type)
+                         if rule_describable_bridge(b, net)]
+    all_cds = abstract_change_descriptions(describable, ctx.rng, net)
+    final_cds = remove_redundant_change_descriptions(all_cds, net)
+    templates = sort_templates(RuleClauseTemplate[
+        change_descriptions_to_rule_clause_template(cls, net)
+        for cls in spartition(change_descriptions_groupable, final_cds)])
+    possible_to_instantiate(templates, net) || return
+    clauses = RuleClause[chez_map(t -> instantiate_rule_clause_template(t, ctx.rng, net),
+                                  templates)...]
+    string1 = rule_type === :top ? ctx.initial_string : ctx.target_string
+    proposed = make_rule(rule_type, clauses, string1, net, ctx.codelet_count)
+    set_quality_values!(proposed, net)
+    set_abstracted_rule_information!(proposed, templates, ctx)
+    proposed.proposal_level = PROPOSED
+    post!(ctx.coderack,
+          make_codelet(CODELET_TYPES[:rule_evaluator], HIGH_URGENCY, Any[proposed]),
+          ctx.codelet_count, ctx.rng, ctx.temperature)
+    return
+end
+
+"""`rule-evaluator` — a rule that does not actually turn the initial string into
+the modified one is no rule at all; then the usual strength coin."""
+function rule_evaluator(ctx::MetacatCtx, args::Vector{Any})
+    proposed = args[1]::Rule
+    currently_works(proposed, ctx) || return
+    update_structure_strength!(proposed, ctx)
+    strength = proposed.strength
+    # stochastic-if* on (1- p): fires when the rule is NOT strong enough, and
+    # always draws
+    coin = random_real(ctx.rng, 1.0)
+    coin < sub_from_1(pct(strength)) && return
+    proposed.proposal_level = EVALUATED
+    post!(ctx.coderack,
+          make_codelet(CODELET_TYPES[:rule_builder], HIGH_URGENCY, Any[proposed]),
+          ctx.codelet_count, ctx.rng, ctx.temperature)
+    return
+end
+
+"""`rule-builder` — add it to the workspace, unless an equivalent rule is
+already there, in which case the existing one takes over whatever support the
+proposal had that it lacked.
+
+Building a rule is what sets the model looking for an answer, so this posts an
+`answer-finder`. That codelet is `answers.ss` and is not ported yet: the type
+is registered without a procedure, so it can be posted and counted but not
+run."""
+function rule_builder(ctx::MetacatCtx, args::Vector{Any})
+    proposed = args[1]::Rule
+    activate_rule_descriptors_from_workspace(proposed)
+    equivalent = get_equivalent_rule(ctx, proposed)
+    if equivalent !== nothing
+        revise_abstracted_rule_information!(equivalent::Rule, proposed)
+        return
+    end
+    proposed.proposal_level = BUILT
+    add_rule!(ctx, proposed)
+    post!(ctx.coderack,
+          make_codelet(CODELET_TYPES[:answer_finder], EXTREMELY_HIGH_URGENCY, Any[]),
+          ctx.codelet_count, ctx.rng, ctx.temperature)
+    return
+end
+
+register_codelet_type!(:rule_scout, rule_scout)
+register_codelet_type!(:rule_evaluator, rule_evaluator)
+register_codelet_type!(:rule_builder, rule_builder)

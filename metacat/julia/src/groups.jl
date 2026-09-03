@@ -32,8 +32,11 @@ mutable struct Group <: WSObject
     raw_importance::Union{Int,Rational{Int}}
     relative_importance::Int
     intra_string_unhappiness::Int
-    horizontal_inter_string_unhappiness::Int
-    vertical_inter_string_unhappiness::Int
+    # `(100- (* 1/2 strength))` for an object whose ENCLOSING GROUP carries the
+    # bridge is an exact rational whenever that strength is odd, so these are
+    # not integers.
+    horizontal_inter_string_unhappiness::Union{Int,Rational{Int}}
+    vertical_inter_string_unhappiness::Union{Int,Rational{Int}}
     average_unhappiness::Int
     intra_string_salience::Int
     horizontal_inter_string_salience::Int
@@ -101,8 +104,10 @@ string_spanning_group(g::Group) = spans_whole_string(g)
 string_spanning_group(::Letter) = false
 
 """`(nested-member? object)` — whether the object is somewhere inside this
-group's constituent tree."""
-function nested_member(g::Group, object::WSObject)
+group's constituent tree. Untyped in the argument, as in the Scheme: asked
+about a workspace string it simply answers no, which `sort-templates` relies
+on when a template's reference object is the string itself."""
+function nested_member(g::Group, object)
     for o in g.constituent_objects
         o === object && return true
         o isa Group && nested_member(o::Group, object) && return true

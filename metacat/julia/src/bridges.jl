@@ -126,6 +126,34 @@ get_relevant_distinguishing_cms(b::Bridge, net::Slipnet) =
 
 get_non_symmetric_slippages(b::Bridge) =
     ConceptMapping[cm for cm in b.all_concept_mappings if is_slippage(cm)]
+"""NB the non-BOND slippages come from `concept-mappings`, not from
+`all-concept-mappings` — that is the whole of the difference."""
+get_non_symmetric_non_bond_slippages(b::Bridge) =
+    ConceptMapping[cm for cm in b.concept_mappings if is_slippage(cm)]
+
+"""`(slippage-type-present? type)` — the FIRST concept mapping of that type, if
+there is one, is a slippage."""
+function slippage_type_present(b::Bridge, type::Node)
+    i = findfirst(cm -> is_cm_type(cm, type), b.all_concept_mappings)
+    return i !== nothing && is_slippage(b.all_concept_mappings[i])
+end
+
+"""`(bridge-between? orientation object1 object2)`."""
+function bridge_between(orientation::Symbol, object1, object2)
+    b = get_bridge(object1, orientation)
+    return b !== nothing && (b::Bridge).object2 === object2
+end
+
+enclosing_group1(b::Bridge) = b.object1.enclosing_group
+enclosing_group2(b::Bridge) = b.object2.enclosing_group
+
+"""`(StrPosCtgy:Opposite-slippage?)` — the bridge maps string position by
+Opposite, which is what a direction reversal is abstracted from."""
+function strposctgy_opposite_slippage(b::Bridge, net::Slipnet)
+    i = findfirst(cm -> is_cm_type(cm, net[:plato_string_position_category]),
+                  b.concept_mappings)
+    return i !== nothing && b.concept_mappings[i].label === net[:plato_opposite]
+end
 get_slippages(b::Bridge) = vcat(get_non_symmetric_slippages(b), b.symmetric_slippages)
 
 get_other_object(b::Bridge, object::WSObject) =

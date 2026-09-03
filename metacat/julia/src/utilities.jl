@@ -84,6 +84,46 @@ function stochastic_filter(rng::PyRandom, proc, l)
     return result
 end
 
+"""`(stochastic-if* prob ...)` — the coin is ALWAYS drawn, and it is drawn
+BEFORE the probability is evaluated. Callers pass an already-evaluated
+probability; where the probability expression itself consumes randomness, draw
+the coin first by hand instead of using this."""
+stochastic_if(rng::PyRandom, p) = random_real(rng, 1.0) < p
+
+"""`(list-index l v)` — 0-based position of v in l, by `eq?`."""
+list_index(l, v) = (i = findfirst(x -> x === v, l); i === nothing ? nothing : i - 1)
+
+"""`(sort-wrt-order l order)` — order the elements by where they appear in a
+reference list."""
+sort_wrt_order(l, order) =
+    chez_sort((v1, v2) -> list_index(order, v1) < list_index(order, v2), l)
+
+"""`(bounded-random-partition pred? l bound)` — like `partition`, but the
+elements are taken in a RANDOM order and no class may exceed `bound`.
+
+The draw is `(random-pick l)` on the remaining elements, so the number of draws
+is the length of the list, not the number of classes."""
+function bounded_random_partition(rng::PyRandom, pred, l, bound::Integer)
+    remaining = collect(l)
+    isempty(remaining) && return Vector{eltype(remaining)}[]
+    x = remaining[random_int(rng, length(remaining)) + 1]
+    rest = bounded_random_partition(rng, pred, remove_first(x, remaining), bound)
+    for (i, cls) in enumerate(rest)
+        if length(cls) < bound && all(y -> pred(x, y), cls)
+            rest[i] = vcat([x], cls)
+            return rest
+        end
+    end
+    return push!(rest, eltype(rest)([x]))
+end
+
+"""`(remove-first x l)` — drop the first element `eq?` to x."""
+function remove_first(x, l)
+    i = findfirst(y -> y === x, l)
+    i === nothing && return collect(l)
+    return vcat(l[1:(i - 1)], l[(i + 1):end])
+end
+
 """`(sort pred? l)` — Chez's list sort, reproduced exactly.
 
 Chez splits at `n >> 1` with the LEFT half short, recurses on the right half

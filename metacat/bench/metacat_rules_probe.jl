@@ -10,6 +10,7 @@ include("../julia/src/concept_mappings.jl")
 include("../julia/src/images.jl")
 include("../julia/src/bonds.jl")
 include("../julia/src/groups.jl")
+include("../julia/src/bridges.jl")
 include("../julia/src/rules.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name

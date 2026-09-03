@@ -52,10 +52,10 @@ From the repo root. This is the single most useful command in the project:
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
-  ruleapply
+  ruleapply ruleabstract
 ```
 
-Expected — seventeen layers, **26,863 trace lines byte-identical**:
+Expected — eighteen layers, **28,572 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -75,6 +75,7 @@ ok    themecodelets (3335 lines identical)
 ok    images (1668 lines identical)
 ok    rules (4620 lines identical)
 ok    ruleapply (1993 lines identical)
+ok    ruleabstract (1709 lines identical)
 all probes matched
 ```
 
@@ -106,7 +107,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~8,800 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~9,250 of ~16,000 lines of non-graphics Scheme**
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -127,6 +128,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | image transforms (the algebra rules compute in) | `images.jl` | `images` | 1668 |
 | rule structure, English transcription, quality | `rules.jl` | `rules` | 4620 |
 | change descriptions, rule application | `rules.jl`, `images.jl` | `ruleapply` | 1993 |
+| rule abstraction: schemas, swaps, templates | `rules.jl` | `ruleabstract` | 1709 |
 
 ---
 
@@ -337,6 +339,14 @@ by reading the code.
   `new-start-letter` walks off the end of the alphabet part-way through.
   `for-each` (Metacat's `for*`) IS left to right. `chez_map` in `utilities.jl`
   reproduces the order; `chez_map_order` gives it for any length.
+- **Chez's `map` order bites again wherever the mapped procedure DRAWS.**
+  `instantiate-rule-clause-template` maps over the change templates and over
+  the reference objects, and both of those pick stochastically. The two sides
+  then consume exactly the same number of draws and still make different
+  choices, because the draws are handed out in a different order — which makes
+  an RNG-state fingerprint look identical at every checkpoint while the picks
+  disagree. When a trace diverges only in what was CHOSEN and the generator
+  state agrees on both sides, suspect `map` order, not the stream.
 - **`pairwise-map` applies its procedure from the deepest suffix outwards**,
   because Chez evaluates `append`'s arguments right to left and the recursive
   call is the second one. The RESULT is still in plain i<j order — it is only
@@ -354,6 +364,11 @@ by reading the code.
   that shows. `apply-before?` in `rules.ss` is deliberately NOT transitive, so
   for it the algorithm IS the specification: use `chez_sort` in `utilities.jl`,
   not Julia's `MergeSort`, which splits the other way.
+- **`(100- (* 1/2 strength))` is an exact rational.** An object with no bridge
+  of its own but whose ENCLOSING GROUP has one takes half that bridge's
+  strength, which is a ratio whenever the strength is odd. The port typed the
+  inter-string unhappiness fields as `Int` and only found out when a rule
+  abstraction run finally built that configuration.
 - **A letter's image is made ONCE, at construction.** It is a mutable object
   that rule application transforms in place and that the letter's enclosing
   groups hold a reference to. Rebuilding it on each `get-image` — which the
@@ -422,9 +437,18 @@ by reading the code.
      in the workspace — what it changes is what the string LOOKS like under the
      rule, which is what has to be computed before anyone can ask whether the
      rule works.
-   - (C) **abstraction and the rule codelets** — `abstract-change-descriptions`
-     and its ~30 helpers, then `rule-scout`, `rule-evaluator`, `rule-builder`.
-     This is the part that needs horizontal bridges, so it goes last.
+   - (C) ~~abstraction~~ — **done**, probe `ruleabstract`:
+     `abstract-change-descriptions` and its helpers, the schemas and swaps it
+     reads off a cluster of bridges, and the rule-clause templates it groups
+     them into, down to instantiating a rule and applying it. A rule is not
+     composed but READ OFF the horizontal bridges, so the probe has to build a
+     real workspace through the coderack first and then abstract from whatever
+     the model happened to perceive.
+   - (D) **the rule codelets** — `rule-scout`, `rule-evaluator`, `rule-builder`,
+     with the workspace's rule storage and the rule's own strength and support
+     methods. `rule-builder` posts `answer-finder`, which is `answers.ss`, so
+     the probe has to drive the three codelets directly and record what they
+     post rather than letting the coderack run it.
 5. **`answers.ss` (1,558)** — needed for a run to reach an answer. Still
    deferred from `images.ss` and waiting on this: `instantiate-as-letter` and
    `instantiate-as-group`, which need the answer string `answers.ss` builds.

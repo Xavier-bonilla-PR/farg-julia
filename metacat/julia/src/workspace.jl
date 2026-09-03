@@ -77,8 +77,11 @@ mutable struct Letter <: WSObject
     raw_importance::Union{Int,Rational{Int}}
     relative_importance::Int
     intra_string_unhappiness::Int
-    horizontal_inter_string_unhappiness::Int
-    vertical_inter_string_unhappiness::Int
+    # `(100- (* 1/2 strength))` for an object whose ENCLOSING GROUP carries the
+    # bridge is an exact rational whenever that strength is odd, so these are
+    # not integers.
+    horizontal_inter_string_unhappiness::Union{Int,Rational{Int}}
+    vertical_inter_string_unhappiness::Union{Int,Rational{Int}}
     average_unhappiness::Int
     intra_string_salience::Int
     horizontal_inter_string_salience::Int
@@ -158,7 +161,12 @@ end
 ungrouped_left_neighbor(o::WSObject) = ungrouped_neighbor(o, all_left_neighbors(o))
 ungrouped_right_neighbor(o::WSObject) = ungrouped_neighbor(o, all_right_neighbors(o))
 
-nested_member(::Letter, ::WSObject) = false
+nested_member(::Letter, _) = false
+
+"""A workspace string's own extent: `sort-templates` and `disjoint-objects?`
+compare it against real objects."""
+left_string_pos(::WorkspaceString) = 0
+right_string_pos(s::WorkspaceString) = string_length(s) - 1
 
 # --- descriptions -----------------------------------------------------------
 
@@ -192,6 +200,37 @@ end
 descriptions, so a group's bond descriptions count too."""
 description_type_present(o::WSObject, t::Node) =
     any(d -> d.description_type === t, all_descriptions(o))
+
+"""`(get-distinguishing-descriptions)`."""
+get_distinguishing_descriptions(o::WSObject, net::Slipnet) =
+    Description[d for d in o.descriptions
+                if distinguishing_descriptor(net, o, d.descriptor)]
+
+"""`(get-relevant-distinguishing-descriptions)`."""
+get_relevant_distinguishing_descriptions(o::WSObject, net::Slipnet) =
+    Description[d for d in get_distinguishing_descriptions(o, net) if relevant(d)]
+
+"""`(get-descriptions-for-rule)` — the descriptions a rule may name an object
+by: where it sits in the string, where it sits in the alphabet, or which letter
+it is (a group only when it is a sameness group, since only then does one letter
+category describe the whole of it)."""
+get_descriptions_for_rule(o::WSObject, net::Slipnet) =
+    Description[d for d in get_relevant_distinguishing_descriptions(o, net)
+                if d.description_type === net[:plato_string_position_category] ||
+                   d.description_type === net[:plato_alphabetic_position_category] ||
+                   (d.description_type === net[:plato_letter_category] &&
+                    (o isa Letter || (o::Group).group_category === net[:plato_samegrp]))]
+
+"""`(choose-description-for-rule)` — by conceptual depth, temperature-adjusted."""
+function choose_description_for_rule(rng::PyRandom, o::WSObject, net::Slipnet)
+    ds = get_descriptions_for_rule(o, net)
+    isempty(ds) && return nothing
+    return stochastic_pick(rng, ds,
+                           temp_adjusted_values([conceptual_depth(d) for d in ds]))
+end
+
+"""`(singleton-group?)` for a string — one top-level object."""
+singleton_group(s::WorkspaceString) = length(get_top_level_objects(s)) == 1
 
 """`(nested-member? object)` for a string — the string contains everything in
 it, at any depth."""
@@ -346,7 +385,10 @@ function choose_right_neighbor(rng::PyRandom, o::WSObject)
     return stochastic_pick(rng, ns, [n.intra_string_salience for n in ns])
 end
 
-disjoint_objects(a::WSObject, b::WSObject) =
+"""`(disjoint-objects? o1 o2)` — untyped in its arguments, as in the Scheme,
+because `sort-templates` compares a template's reference object against another
+that may be the workspace string itself."""
+disjoint_objects(a, b) =
     right_string_pos(a) < left_string_pos(b) || left_string_pos(a) > right_string_pos(b)
 
 """An object is inter-string unhappy to the extent it is NOT bridged: its own
@@ -363,7 +405,10 @@ function update_inter_string_unhappiness!(o::WSObject)
         g = o.enclosing_group
         g === nothing && return 100
         gb = get_bridge(g::WSObject, orientation)
-        return gb === nothing ? 100 : sub_from_100(1 // 2 * (gb::Bridge).strength)
+        # `snorm` because Scheme's tower collapses an exact ratio with
+        # denominator 1 back to an integer, and the value is printed.
+        return gb === nothing ? 100 :
+               snorm(sub_from_100(1 // 2 * (gb::Bridge).strength))
     end
     horizontal_weakness = weakness(:horizontal)
     vertical_weakness = weakness(:vertical)
