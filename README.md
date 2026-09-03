@@ -243,7 +243,7 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      bridges coderack bondcodelets themes \
                                      descriptioncodelets groupcodelets \
                                      bridgecodelets themecodelets images rules \
-                                     ruleapply ruleabstract
+                                     ruleapply ruleabstract rulecodelets
 ```
 
 | layer | Julia | verified |
@@ -266,12 +266,12 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | rules: structure, English transcription, quality metrics | `rules.jl` | 4,620 lines |
 | rule application: transforms run against the string's images | `rules.jl`, `images.jl` | 1,993 lines |
 | rule abstraction: rules read off the horizontal bridges | `rules.jl` | 1,709 lines |
-| the rule codelets | not yet ported | |
+| the rule codelets: scout, evaluator, builder | `rules.jl`, `context.jl` | 3,280 lines |
 | temporal trace, episodic memory, justification | not yet ported | |
 
 ### How much is done
 
-The eighteen verified layers cover roughly 9,250 of the ~16,000 lines of
+The nineteen verified layers cover roughly 9,400 of the ~16,000 lines of
 Metacat's non-graphics Scheme. All three perceptual structures — bonds, groups
 and bridges — build, fight and break each other through the real coderack, and
 the self-watching loop is closed in both directions: the themespace reads what
@@ -280,9 +280,10 @@ for structures that would bear the themespace out. A rule — Metacat's answer t
 "what changed?" — now exists as a structure, ranks itself against its rivals,
 writes itself out in English, is read off the horizontal bridges rather than
 composed, and can be applied to a string to see what that string would look
-like under it. What remains of `rules.ss` is the three codelets that drive all
-of that. Beyond them, `answers.ss`, `trace.ss`, `memory.ss`, `jootsing.ss` and
-`justify.ss` — about 6,100 lines.
+like under it, and the three codelets that drive all of that run through the
+real coderack. `rules.ss` is complete. What remains is `answers.ss`,
+`trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about 4,500 lines —
+after which a run can reach an answer end to end.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is

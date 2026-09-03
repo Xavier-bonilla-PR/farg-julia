@@ -53,6 +53,11 @@ get_subobject_bridges(g::Group, orientation::Symbol) =
     Bridge[b for b in (get_bridge(o, orientation) for o in g.constituent_objects)
            if b !== nothing]
 get_subobject_bridges(::Letter, ::Symbol) = Bridge[]
+"""For a string: the bridges belonging to its TOP-LEVEL objects, which is what
+a rule clause about the whole string rests on."""
+get_subobject_bridges(s::WorkspaceString, orientation::Symbol) =
+    Bridge[b for b in (get_bridge(o, orientation) for o in get_top_level_objects(s))
+           if b !== nothing]
 
 """`(group-incompatible-bridges bridge-orientation object1 object2)` — bridges
 that cross this one because they involve a part of it, or the whole of which it

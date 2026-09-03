@@ -1797,6 +1797,13 @@ function rule_builder(ctx::MetacatCtx, args::Vector{Any})
     return
 end
 
+# `answer-finder` is `answers.ss`, which is not ported. The type is registered
+# so that `rule-builder` can post one — the coderack has to hold it and count
+# it, and a run that reaches an answer will need it — but running one is an
+# error rather than a silent no-op.
+register_codelet_type!(:answer_finder,
+                       (ctx, args) -> error("answer-finder is not ported yet"))
+
 register_codelet_type!(:rule_scout, rule_scout)
 register_codelet_type!(:rule_evaluator, rule_evaluator)
 register_codelet_type!(:rule_builder, rule_builder)

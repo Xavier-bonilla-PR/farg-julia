@@ -52,10 +52,10 @@ From the repo root. This is the single most useful command in the project:
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
-  ruleapply ruleabstract
+  ruleapply ruleabstract rulecodelets
 ```
 
-Expected — eighteen layers, **28,572 trace lines byte-identical**:
+Expected — nineteen layers, **31,852 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -76,6 +76,7 @@ ok    images (1668 lines identical)
 ok    rules (4620 lines identical)
 ok    ruleapply (1993 lines identical)
 ok    ruleabstract (1709 lines identical)
+ok    rulecodelets (3280 lines identical)
 all probes matched
 ```
 
@@ -107,7 +108,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~9,250 of ~16,000 lines of non-graphics Scheme**
+### Metacat — **~9,400 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -129,6 +130,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | rule structure, English transcription, quality | `rules.jl` | `rules` | 4620 |
 | change descriptions, rule application | `rules.jl`, `images.jl` | `ruleapply` | 1993 |
 | rule abstraction: schemas, swaps, templates | `rules.jl` | `ruleabstract` | 1709 |
+| the rule codelets, and the workspace's rules | `rules.jl`, `context.jl` | `rulecodelets` | 3280 |
 
 ---
 
@@ -444,11 +446,16 @@ by reading the code.
      composed but READ OFF the horizontal bridges, so the probe has to build a
      real workspace through the coderack first and then abstract from whatever
      the model happened to perceive.
-   - (D) **the rule codelets** — `rule-scout`, `rule-evaluator`, `rule-builder`,
-     with the workspace's rule storage and the rule's own strength and support
-     methods. `rule-builder` posts `answer-finder`, which is `answers.ss`, so
-     the probe has to drive the three codelets directly and record what they
-     post rather than letting the coderack run it.
+   - (D) ~~the rule codelets~~ — **done**, probe `rulecodelets`:
+     `rule-scout`, `rule-evaluator`, `rule-builder`, the workspace's rule
+     storage, and the rule's own strength, support and revision methods.
+     `rule-builder` posts `answer-finder`, which is `answers.ss`, so the probe
+     drives the three codelets directly and records what they post rather than
+     letting the coderack run it; the Julia `:answer_finder` type is registered
+     with a procedure that raises, so it can be posted and counted but never
+     silently no-ops.
+   `rules.ss` is now complete apart from `set-translated-rule-information`,
+   which needs the translated strings `jootsing.ss` builds.
 5. **`answers.ss` (1,558)** — needed for a run to reach an answer. Still
    deferred from `images.ss` and waiting on this: `instantiate-as-letter` and
    `instantiate-as-group`, which need the answer string `answers.ss` builds.
@@ -460,6 +467,23 @@ by reading the code.
 `breakers.ss` (47) can go in any time.
 
 ---
+
+### Load order of `metacat/julia/src/`
+
+The files are plain `include`s, so a probe has to load everything a source
+file's DEFINITIONS mention — struct fields, method argument types, and anything
+run at load time such as `register_codelet_type!`. Function BODIES resolve at
+call time, so a body may call forward. The order that works:
+
+```
+schemenum utilities slipnet workspace concept_mappings images bonds groups
+bridges coderack themes context codelets_bonds codelets_descriptions
+codelets_groups codelets_bridges codelets_themes rules
+```
+
+`rules.jl` needs `bridges.jl` (it dispatches on `Bridge`), `coderack.jl` and
+`context.jl` (it registers codelet types at load time and dispatches on
+`MetacatCtx`), so every probe that includes it must include those too.
 
 ## 7. Repo map
 
