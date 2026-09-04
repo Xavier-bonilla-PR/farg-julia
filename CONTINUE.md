@@ -8,7 +8,7 @@ Last commit at time of writing: the rule codelets, which complete `rules.ss`
 (see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all twenty probes match on
+section 2 (run the suite). Do not write code until all twenty-one probes match on
 the clean checkout.
 
 ---
@@ -57,10 +57,10 @@ From the repo root. This is the single most useful command in the project:
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
-  ruleapply ruleabstract rulecodelets ruletranslate
+  ruleapply ruleabstract rulecodelets ruletranslate transstring
 ```
 
-Expected — twenty layers, **33,301 trace lines byte-identical**:
+Expected — twenty-one layers, **34,275 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -83,6 +83,7 @@ ok    ruleapply (1993 lines identical)
 ok    ruleabstract (1709 lines identical)
 ok    rulecodelets (3280 lines identical)
 ok    ruletranslate (1449 lines identical)
+ok    transstring (974 lines identical)
 all probes matched
 ```
 
@@ -118,7 +119,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~9,800 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` started
+### Metacat — **~10,000 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -142,6 +143,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | rule abstraction: schemas, swaps, templates | `rules.jl` | `ruleabstract` | 1709 |
 | the rule codelets, and the workspace's rules | `rules.jl`, `context.jl` | `rulecodelets` | 3280 |
 | rule translation: slippage log, coattails | `answers.jl` | `ruletranslate` | 1449 |
+| the translated string, instantiated from an image | `answers.jl`, `images.jl` | `transstring` | 974 |
 
 ---
 
@@ -535,10 +537,9 @@ alarms, not a backlog.
 
 | where | what is missing | when it becomes wrong |
 |---|---|---|
-| `get_equivalent_object` (`context.jl`) | only handles an object that already belongs to the string | as soon as TRANSLATED strings exist — `answers.ss` step B |
 | `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C |
-| `instantiate_as_letter` / `instantiate_as_group` | not ported from `images.ss` | `answers.ss` step B |
-| `set_translated_rule_information` | not ported from `rules.ss` | `answers.ss` step B |
+| `process_snag` | not ported — needs `*trace*`, `*memory*`, `make-snag-event`, `post-initial-codelets` | `trace.ss` / `memory.ss` |
+| translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | `justify.ss` |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |

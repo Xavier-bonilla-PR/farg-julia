@@ -334,3 +334,11 @@ function get_equivalent_bridge(ctx::MetacatCtx, b::Bridge)
 end
 
 bridge_present(ctx::MetacatCtx, b::Bridge) = get_equivalent_bridge(ctx, b) !== nothing
+
+"""`(get-real-object fake-object)` — the workspace object a translated
+string's object corresponds to, if the model actually perceived one."""
+function get_real_object(ctx::MetacatCtx, fake_object)
+    i = findfirst(o -> equivalent_workspace_objects(o, fake_object),
+                  workspace_objects(ctx))
+    return i === nothing ? nothing : workspace_objects(ctx)[i]
+end

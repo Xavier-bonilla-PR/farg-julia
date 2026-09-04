@@ -430,3 +430,62 @@ end
 
 letter!(si::StringImage, net::Slipnet, fail) = fail()
 group!(si::StringImage, net::Slipnet, fail) = fail()
+
+# --- instantiation ----------------------------------------------------------
+#
+# An image describes what a string LOOKS like under a rule. Instantiating it
+# turns that description back into real workspace objects, which is how the
+# translated string gets built: walk the leaves making letters, then walk the
+# interiors bottom-up making the groups over them.
+
+"""`(get-instantiated-object)`."""
+get_instantiated_object(im::Image) = im.instantiated_object
+
+"""`(do-walk walk-method action)` on a string image — run the walk over each
+of the string's sub-images in turn."""
+function do_walk(walk, action, si::StringImage)
+    for im in ordered_sub_images(si)
+        walk(action, im)
+    end
+    return si
+end
+
+"""`(instantiate-as-letter string position)` — make the real letter this leaf
+image describes and put it in the string at `position`."""
+function instantiate_as_letter!(im::Image, s::WorkspaceString, position::Int,
+                                net::Slipnet)
+    letter = make_letter(net, s, im.start_letter::Node, position)
+    im.instantiated_object = letter
+    add_letter!(s, letter, position)
+    return letter
+end
+
+"""`(instantiate-as-group string)` — make the real group over the objects this
+interior image's children were instantiated as.
+
+The bond category comes from whichever relation the group is built on: a
+LetterCtgy group reads its letter relation, anything else its length relation,
+and an `identity` relation means a sameness group. A sameness group has no
+direction."""
+function instantiate_as_group!(im::Image, s::WorkspaceString, net::Slipnet)
+    subs = im.direction === net[:plato_left] ? reverse(im.sub_images) : im.sub_images
+    ordered_objects = WSObject[get_instantiated_object(x)::WSObject for x in subs]
+    left_object = ordered_objects[1]
+    right_object = ordered_objects[end]
+    relation = im.bond_facet === net[:plato_letter_category] ? im.letter_relation :
+                                                               im.length_relation
+    bond_category = relation === net[:plato_identity] ? net[:plato_sameness] :
+                                                        relation::Node
+    group_category = get_related_node(bond_category, net[:plato_group_category],
+                                      net[:plato_identity])::Node
+    group_direction = group_category === net[:plato_samegrp] ? nothing : im.direction
+    group = make_group(net, s, group_category, im.bond_facet, group_direction,
+                       left_object, right_object, ordered_objects, Any[])
+    im.instantiated_object = group
+    add_group!(s, group)
+    for o in ordered_objects
+        o.enclosing_group = group
+    end
+    group.proposal_level = BUILT
+    return group
+end

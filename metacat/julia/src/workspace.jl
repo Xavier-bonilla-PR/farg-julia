@@ -662,3 +662,74 @@ vertical_string(s::WorkspaceString) =
 """`(bottom-string?)`."""
 bottom_string(s::WorkspaceString) =
     s.string_type === :target || s.string_type === :answer
+
+# --- building a string from letter categories --------------------------------
+#
+# `make_workspace_string` builds a string AND its letters, which is what the
+# three real strings need. A TRANSLATED string is built the other way round:
+# the string first, then the letters instantiated into it from an image.
+
+"""`(new-workspace-string string-type letter-categories)` — an EMPTY string of
+the right shape. Its letters arrive through `add_letter!`."""
+function new_workspace_string(net::Slipnet, string_type::Symbol,
+                              letter_categories::Vector{Node})
+    n = length(letter_categories)
+    # The Scheme keeps a letter VECTOR written by position, so letters can in
+    # principle arrive out of order. Allocating undefined slots reproduces that
+    # and fails loudly on a slot never filled, rather than silently holding a
+    # placeholder.
+    s = WorkspaceString(string_type, letter_categories, Vector{WSObject}(undef, n),
+                        WSObject[], Any[],
+                        [WSObject[] for _ in 1:n], [WSObject[] for _ in 1:n],
+                        Dict{Tuple{Int,Int},Vector{Any}}(),
+                        Dict{Tuple{Int,Int},Any}(), Dict{Int,Any}(), Any[],
+                        "", false, 0, 0, nothing)
+    s.string_image = make_string_image(s, net[:plato_right])
+    return s
+end
+
+"""`(make-letter string letter-category position)`."""
+function make_letter(net::Slipnet, s::WorkspaceString, cat::Node, position::Int)
+    letter = Letter(s, cat, position, 0, make_letter_image(cat), Description[],
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nothing, false,
+                    nothing, nothing, Any[], Any[], nothing, nothing, 0, 0, 0)
+    # (make-letter ...) attaches these two, in this order
+    new_description!(letter, net[:plato_object_category], net[:plato_letter])
+    new_description!(letter, net[:plato_letter_category], cat)
+    return letter
+end
+
+"""`(assign-id-num object)`."""
+function assign_id_num!(s::WorkspaceString, o)
+    o.id_num = s.next_id_num
+    s.next_id_num += 1
+    return o
+end
+
+"""`(add-letter letter position)`. The Scheme writes into a vector at
+`position`, so letters may arrive out of order; the list is read off later by
+`set_letter_list!`."""
+function add_letter!(s::WorkspaceString, letter::WSObject, position::Int)
+    assign_id_num!(s, letter)
+    s.letters[position + 1] = letter
+    return s
+end
+
+"""`(set-letter-list)` — freeze the letter vector into the list, and take the
+string's print name from it."""
+function set_letter_list!(s::WorkspaceString)
+    s.print_name = join([print_name(l) for l in s.letters])
+    return s
+end
+
+"""`(mark-as-translated)` on a string."""
+mark_string_as_translated!(s::WorkspaceString) = (s.translated = true; s)
+
+"""`(get-instantiated-image-object)` — the object this one turned into under
+the rule currently being applied, following a swap if one was made."""
+function get_instantiated_image_object(o::WSObject)
+    image = get_image(o)
+    swapped = image.swapped_image
+    return swapped === nothing ? get_instantiated_object(image) :
+                                 get_instantiated_object(swapped::Image)
+end

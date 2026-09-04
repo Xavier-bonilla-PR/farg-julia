@@ -452,3 +452,159 @@ function translate(rng::PyRandom, rule::Rule, initial_string::WorkspaceString,
                        vertical_mapping_supporting_groups,
                        from_string_ref_objects, to_string_ref_objects)
 end
+
+# --- the translated string (answers.ss 1035-1195) ---------------------------
+#
+# Translating a rule says what the answer's RULE is. Building the translated
+# string says what the answer LOOKS like: apply the rule to the string, then
+# instantiate the resulting image back into real letters and groups.
+#
+# `process-snag` is deliberately not ported here. It needs `*trace*`,
+# `*memory*`, `make-snag-event` and `post-initial-codelets` — trace.ss,
+# memory.ss and run.ss — so it belongs with them.
+
+"""`(attach-length-to-appropriate-groups object-transforms)`.
+
+A Length transform means the group's size changed, so the size has to be said
+out loud: on the ORIGINAL group when it had no Length description (the change
+is what makes the length interesting), otherwise on the instantiated one. A
+BondFacet transform onto Length means the group's SUBOBJECTS are now measured
+by length, so each of them gets a Length description instead."""
+function attach_length_to_appropriate_groups!(object_transforms, net::Slipnet)
+    for ot in object_transforms
+        object = ot[1]
+        transforms = ot[2]
+        instantiated = get_instantiated_image_object(object)
+        length_transform = assq(net[:plato_length], transforms)
+        bond_facet_transform = assq(net[:plato_bond_facet], transforms)
+        if instantiated !== nothing && instantiated isa Group
+            if length_transform !== nothing
+                if object isa Group &&
+                   !description_type_present(object, net[:plato_length])
+                    attach_length_description!(object::Group, net)
+                else
+                    attach_length_description!(instantiated::Group, net)
+                end
+            end
+        elseif bond_facet_transform !== nothing &&
+               bond_facet_transform[2] === net[:plato_length]
+            for sub in get_constituent_objects(instantiated::Group)
+                sub isa Group && attach_length_description!(sub::Group, net)
+            end
+        end
+    end
+    return object_transforms
+end
+
+"""`(assq key alist)` — the first entry whose head is `key`, by identity."""
+function assq(key, alist)
+    i = findfirst(e -> e[1] === key, alist)
+    return i === nothing ? nothing : alist[i]
+end
+
+"""`(make-translated-rule-bridges object-transforms string-transform)` — one
+horizontal bridge per object that the rule touched, plus one per subobject of
+a whole-string transform that the rule did NOT touch, so the whole string is
+covered."""
+function make_translated_rule_bridges(object_transforms, string_transform, net::Slipnet)
+    unmapped_string_subobjects = WSObject[]
+    if string_transform !== nothing
+        touched = Any[ot[1] for ot in object_transforms]
+        for o in get_constituent_objects(string_transform[1])
+            any(x -> x === o, touched) || push!(unmapped_string_subobjects, o)
+        end
+    end
+    instantiated_object_transforms =
+        [ot for ot in object_transforms
+         if get_instantiated_image_object(ot[1]) !== nothing]
+
+    horizontal_bridges = Bridge[]
+    for ot in instantiated_object_transforms
+        push!(horizontal_bridges,
+              make_bridge(:horizontal, ot[1],
+                          get_instantiated_image_object(ot[1])::WSObject,
+                          ConceptMapping[], net))
+    end
+    for sub in unmapped_string_subobjects
+        push!(horizontal_bridges,
+              make_bridge(:horizontal, sub,
+                          get_instantiated_image_object(sub)::WSObject,
+                          ConceptMapping[], net))
+    end
+    foreach(mark_as_translated_rule_bridge!, horizontal_bridges)
+    return horizontal_bridges
+end
+
+"""`(irrelevant-translated-string-group? horizontal-bridges)`.
+
+Example: swapping `m` and `[jjj]` in `[m][rr][jjj]` gives `[[jjj]][rr]m`, whose
+outer `[[jjj]]` group is an artefact of the swap and belongs to nothing. A
+group nothing maps to is irrelevant and gets deleted."""
+function irrelevant_translated_string_groups(horizontal_bridges::Vector{Bridge})
+    mapped = Any[b.object2 for b in horizontal_bridges]
+    mapped_nested_groups = WSObject[]
+    for o in mapped
+        o isa Group && append!(mapped_nested_groups, get_all_nested_groups(o))
+    end
+    return g -> !any(x -> x === g, mapped_nested_groups)
+end
+
+"""`(make-translated-string rule string1)` — apply the rule to a string and
+build the string it turns into, as real letters and groups.
+
+The two walks are the whole construction: `leaf_walk` makes the letters left to
+right, then `postorder_interior_walk` makes each group once the objects under
+it exist."""
+function make_translated_string(rule::Rule, string1::WorkspaceString, ctx,
+                                net::Slipnet)
+    result = apply_rule(rule, string1, net, ignore_snag)
+    letter_categories = generate_image_letters(string1)
+    string_type = string1.string_type === :initial ? :modified : :answer
+    string2 = new_workspace_string(net, string_type, letter_categories)
+    object_transforms = [r for r in result if !(r[1] isa WorkspaceString)]
+    string_transform_index = findfirst(r -> r[1] isa WorkspaceString, result)
+    string_transform = string_transform_index === nothing ? nothing :
+                       result[string_transform_index]
+    image1 = get_image(string1)
+
+    mark_string_as_translated!(string2)
+    position = Ref(0)
+    do_walk(leaf_walk, im -> begin
+                instantiate_as_letter!(im, string2, position[], net)
+                position[] += 1
+            end, image1)
+    set_letter_list!(string2)
+    do_walk(postorder_interior_walk,
+            im -> instantiate_as_group!(im, string2, net), image1)
+
+    attach_length_to_appropriate_groups!(object_transforms, net)
+    horizontal_bridges = make_translated_rule_bridges(object_transforms,
+                                                      string_transform, net)
+    irrelevant = irrelevant_translated_string_groups(horizontal_bridges)
+    for group in [g for g in string2.groups if irrelevant(g)]
+        remove_group!(string2, group::Group)
+    end
+    set_translated_rule_information!(rule, horizontal_bridges, ctx, net)
+    return string2
+end
+
+"""`(get-rule-supporting-groups top-rule bottom-rule)` — every group the two
+rules rest on, whether as a reference object or through a supporting bridge."""
+function get_rule_supporting_groups(top_rule::Rule, bottom_rule::Rule, ctx,
+                                    net::Slipnet)
+    supporting_horizontal_bridges =
+        vcat(top_rule.supporting_horizontal_bridges,
+             bottom_rule.supporting_horizontal_bridges)
+    top_rule_ref_objects = get_all_reference_objects(ctx.initial_string, top_rule, net)
+    bottom_rule_ref_objects = get_all_reference_objects(ctx.target_string,
+                                                        bottom_rule, net)
+    all_rule_reference_groups = Any[o for o in vcat(top_rule_ref_objects,
+                                                    bottom_rule_ref_objects)
+                                    if o isa Group]
+    groups = Any[all_rule_reference_groups...]
+    for b in supporting_horizontal_bridges
+        append!(groups, get_all_nested_groups(b.object1))
+        append!(groups, get_all_nested_groups(b.object2))
+    end
+    return remq_duplicates(groups)
+end

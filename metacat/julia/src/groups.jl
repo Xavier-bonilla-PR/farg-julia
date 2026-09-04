@@ -403,3 +403,70 @@ function get_all_nested_groups(object::WSObject)
     end
     return result
 end
+
+# --- plain registration, for instantiated groups ----------------------------
+#
+# `build_group!` is what a group BUILDER does: it activates descriptors, breaks
+# what it conflicts with, and stamps the trace. Instantiating an image into a
+# translated string needs only the registration half.
+
+"""`(add-group group)` — register a group in its string's indexes."""
+function add_group!(s::WorkspaceString, g::Group)
+    assign_id_num!(s, g)
+    pushfirst!(s.left_edge_groups[g.left_string_pos + 1], g)
+    pushfirst!(s.right_edge_groups[g.right_string_pos + 1], g)
+    s.group_by_leftmost_id[g.left_object.id_num] = g
+    pushfirst!(s.groups, g)
+    return s
+end
+
+"""`(delete-group group)` — the plain removal that pairs with `add_group!`.
+NB: this is NOT `break-group!`; it does not touch bonds, bridges or the
+enclosing group, because the groups it removes were never really built."""
+function remove_group!(s::WorkspaceString, g::Group)
+    j = findfirst(x -> x === g, s.groups)
+    j === nothing || deleteat!(s.groups, j)
+    delete!(s.group_by_leftmost_id, g.left_object.id_num)
+    for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
+                        (g.right_string_pos, s.right_edge_groups))
+        k = findfirst(x -> x === g, list[pos + 1])
+        k === nothing || deleteat!(list[pos + 1], k)
+    end
+    return s
+end
+
+"""`(get-equivalent-letter letter)` / `(get-equivalent-group group)` — the
+object at the same place in this string. Both assume the two strings have
+exactly the same letter categories; they may or may not be the same string,
+since one can be a TRANSLATED string."""
+function get_equivalent_letter(s::WorkspaceString, letter::Letter)
+    any(x -> x === letter, s.letters) && return letter
+    equivalent = s.letters[letter.string_pos + 1]
+    return equivalent.letter_category === letter.letter_category ? equivalent : nothing
+end
+
+function get_equivalent_group(s::WorkspaceString, g::Group)
+    any(x -> x === g, s.groups) && return g
+    equivalent = get(s.group_by_leftmost_id, g.left_object.id_num, nothing)
+    equivalent === nothing && return nothing
+    other = equivalent::Group
+    return (same_group_category(g, other) && same_group_direction(g, other) &&
+            g.group_length == other.group_length) ? other : nothing
+end
+
+"""`(equivalent-workspace-objects? o1 o2)` (trace.ss) — same kind, same string,
+same span, and recursively the same constituents. Ported here rather than with
+the trace because it has no trace dependencies and `get-real-object` needs it."""
+function equivalent_workspace_objects(o1, o2)
+    (o1 isa Letter) == (o2 isa Letter) || return false
+    o1.string.string_type === o2.string.string_type || return false
+    left_string_pos(o1) == left_string_pos(o2) || return false
+    right_string_pos(o1) == right_string_pos(o2) || return false
+    o1 isa Letter && return o1.letter_category === o2.letter_category
+    g1, g2 = o1::Group, o2::Group
+    return same_group_category(g1, g2) && same_group_direction(g1, g2) &&
+           g1.group_length == g2.group_length &&
+           length(g1.constituent_objects) == length(g2.constituent_objects) &&
+           all(equivalent_workspace_objects(a, b)
+               for (a, b) in zip(g1.constituent_objects, g2.constituent_objects))
+end

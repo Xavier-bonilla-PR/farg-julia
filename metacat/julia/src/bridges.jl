@@ -431,3 +431,7 @@ bonds (BondCtgy or BondFacet), which is what an enclosing group's bridge
 contributes to translating the objects inside it."""
 get_bond_slippages(b::Bridge, net::Slipnet) =
     ConceptMapping[cm for cm in get_slippages(b) if bond_concept_mapping(cm, net)]
+
+"""`(mark-as-translated-rule-bridge)` — a bridge from a real object to its
+counterpart in a TRANSLATED string, rather than one the model perceived."""
+mark_as_translated_rule_bridge!(b::Bridge) = (b.translated_rule_bridge = true; b)

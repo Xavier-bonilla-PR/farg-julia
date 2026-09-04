@@ -1833,3 +1833,52 @@ function get_all_reference_objects(s::WorkspaceString, rule::Rule, net::Slipnet)
     end
     return result
 end
+
+"""`(attach-description description-type descriptor)` — a description added
+outright, at BUILT, rather than proposed and fought for. Used when filling in
+a translated string's objects from their real counterparts."""
+function attach_description!(o::WSObject, description_type::Node, descriptor::Node)
+    d = make_description(o, description_type, descriptor, 0)
+    d.proposal_level = BUILT
+    pushfirst!(o.descriptions, d)
+    return o
+end
+
+"""`(set-translated-rule-information bridges)` — records what the translated
+rule now rests on.
+
+Each bridge runs from a real object to its counterpart in the translated
+string. Where that counterpart matches a REAL object elsewhere in the
+workspace, the fake object borrows its descriptions; where it does not, the
+bridge's concept mappings are recomputed against the real object instead."""
+function set_translated_rule_information!(r::Rule, bridges::Vector{Bridge},
+                                          ctx, net::Slipnet)
+    for bridge in bridges
+        object1 = bridge.object1
+        fake_object2 = bridge.object2
+        real_object2 = get_real_object(ctx, fake_object2)
+        if real_object2 !== nothing
+            for d in (real_object2::WSObject).descriptions
+                description_type_present(fake_object2, d.description_type) ||
+                    attach_description!(fake_object2, d.description_type, d.descriptor)
+            end
+        else
+            set_concept_mappings!(bridge,
+                all_possible_bridge_cms(:horizontal, object1, object1.descriptions,
+                                        fake_object2, fake_object2.descriptions, net),
+                net)
+        end
+    end
+    r.supporting_horizontal_bridges = bridges
+    r.tagged_supporting_horizontal_bridges = Any[Any[false, Bridge[b]] for b in bridges]
+    relations = Any[]
+    for b in bridges
+        append!(relations, get_associated_thematic_relations(b, net))
+    end
+    # `remove-duplicates` here, not `remq-duplicates`: these are (dimension,
+    # relation) PAIRS compared by value, and it too keeps the LAST of each group.
+    deduped = [x for (i, x) in enumerate(relations)
+               if !any(y -> y == x, relations[(i + 1):end])]
+    r.theme_pattern = Any[r.bridge_theme_type, deduped...]
+    return r
+end
