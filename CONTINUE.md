@@ -4,7 +4,12 @@ Everything below assumes a **fresh container with a fresh clone** — no
 toolchain, nothing cached. Start here.
 
 Branch: `claude/copycat-metacat-folders-iybxko`
-Last commit at time of writing: the themespace port (see `git log -1`)
+Last commit at time of writing: the rule codelets, which complete `rules.ss`
+(see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
+
+**First thing to do in a new session:** section 1 (install the toolchain), then
+section 2 (run the suite). Do not write code until all nineteen probes match on
+the clean checkout.
 
 ---
 
@@ -87,6 +92,8 @@ The reference implementation also runs standalone:
 
 ```bash
 scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42
+# a stray "Type (go) or click on the Workspace to continue..." comes first;
+# the two lines that matter are:
 # OUTCOME  answer  CODELETS  618  TEMP  4
 # ANSWER   abc -> cba, pqrs -> ?   srqp   98   4
 ```
@@ -94,7 +101,9 @@ scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42
 The Copycat side (finished, separate from Metacat):
 
 ```bash
-python3 copycat/bench/verify.py --iterations 5 --seeds 1 2 3  # 51/51 must match
+JULIA=$JULIA python3 copycat/bench/verify.py --iterations 5 --seeds 1 2 3
+# 51/51 must match. NB the JULIA prefix: verify.py defaults to plain `julia`
+# on PATH, which does not exist in a fresh container. Takes a few minutes.
 ```
 
 ---
@@ -181,8 +190,10 @@ by reading the code.
   numeric tower (`sdiv`, `ssqrt`, `sexpt`, `sround`). Never use `Float64`
   where the Scheme is exact; it drifts and eventually branches differently.
 - **Chez evaluates procedure arguments RIGHT TO LEFT.** A call drawing two
-  random numbers draws the rightmost first. Nothing has tripped on this yet,
-  but it will in denser codelet code.
+  random numbers draws the rightmost first. This has bitten repeatedly: a
+  group's local-density walk, `pairwise-map`'s recursion, and — through the
+  implementation of `map` and `sort` — the order transforms and picks are
+  applied in. Assume it applies to every call whose arguments have effects.
 - **Lists are CONSed**, so link lists, descriptions and codelet lists come out
   in *reverse* declaration order — and the model reads the first match out of
   them. Use `pushfirst!`.
@@ -397,7 +408,11 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~8,500 lines of Scheme remain.** Suggested order, with the reasoning:
+**~4,900 lines of Scheme remain**, across seven files (`answers.ss` 1,558,
+`trace.ss` 1,672, `memory.ss` 586, `jootsing.ss` 344, `justify.ss` 352,
+`run.ss` 346, `breakers.ss` 47). Steps 0-4 below are done and
+are kept only for the "not ported, deliberately" notes buried in them; the live
+work starts at step 5.
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -413,8 +428,8 @@ by reading the code.
    the hairiest thing in the port so far; its probe reseeds the coderack every
    `%update-cycle-length%` codelets, mimicking `add-bottom-up-codelets`, because
    without that the rack drains after the seed batch and the builders barely
-   run. Deferred there: incompatible BRIDGES, which the builder is supposed to
-   fight and break — grep `get_incompatible_bridges` in `codelets_groups.jl`.
+   run. Incompatible BRIDGES, which the builder also has to fight and break,
+   were deferred here and filled in with the bridge codelets in step 3.
 3. ~~Bridge codelets~~ — **done**, as `codelets_bridges.jl`, together with the
    workspace-level bridge storage and mapping strengths now in `context.jl`.
    **Not** ported: `propose-singleton-group` and
@@ -456,15 +471,70 @@ by reading the code.
      silently no-ops.
    `rules.ss` is now complete apart from `set-translated-rule-information`,
    which needs the translated strings `jootsing.ss` builds.
-5. **`answers.ss` (1,558)** — needed for a run to reach an answer. Still
-   deferred from `images.ss` and waiting on this: `instantiate-as-letter` and
-   `instantiate-as-group`, which need the answer string `answers.ss` builds.
-6. **`trace.ss` (1,672), `memory.ss` (586), `jootsing.ss` (344),
-   `justify.ss` (352)** — the self-watching layers the paper is actually about.
-7. **The run loop** (`run.ss`, ~350) — then end-to-end comparison becomes
+5. **`answers.ss` (1,558)** — the next thing to do, and the reconnaissance is
+   already done. It is four separable pieces; take them in this order, because
+   each later one needs the earlier:
+
+   - **(A) rule translation** (`answers.ss` 1196-1558, ~360 lines):
+     `make-slippage-log`, `translate`, `translate-rule-clause`,
+     `remove-redundant-ObjCtgy-change`, `translate-object-description`,
+     `apply-to-change` / `apply-to-dimension` / `apply-to-object-description`,
+     `valid-rule-clause?` and friends. **Start here.** It is self-contained:
+     given a workspace with vertical bridges and a built top rule, translating
+     that rule into a bottom one needs nothing from memory, trace or the answer
+     string. The `rulecodelets` probe already builds exactly that state, so its
+     driver can be reused wholesale — run the coderack, drive the rule codelets
+     to build a top rule, then translate it and dump the result.
+   - **(B) the translated string** (1035-1195): `make-translated-string`,
+     `attach-length-to-appropriate-groups`, `make-translated-rule-bridges`,
+     `irrelevant-translated-string-group?`, `process-snag`,
+     `get-rule-supporting-groups`. This is where the two pieces still deferred
+     from `images.ss` are needed — `instantiate-as-letter` and
+     `instantiate-as-group` — and where `set-translated-rule-information` from
+     `rules.ss` finally has something to work on. `get-equivalent-object` in
+     `context.jl` is currently a stub that only handles the "object already
+     belongs to this string" case; translated strings are the other case, and
+     it must be finished here. **That stub is the fifth of its family — see the
+     stub lesson in section 5, and the running list below.**
+   - **(C) `answer-finder` and `report-new-answer`** (20-95, 929-1035): the
+     codelet itself is short, but it asks `*memory*` whether the answer has
+     been found before, so **`memory.ss` (586) has to come with it** — or at
+     least `answer-present?`. `metacat/julia/src/rules.jl` registers
+     `:answer_finder` with a procedure that raises; replacing that is the
+     signal this step is finished.
+   - **(D) the commentary** (95-928, ~830 lines): `explain`, `theme-phrases`,
+     `compare-answers`, `get-answer-comparison-text` — the English prose
+     Metacat writes about its own answers, and the part of the program the
+     thesis is really about. Leaf-ish, and testable the same way the rule
+     transcription was: build the structures by hand and compare the prose.
+6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
+   the self-watching layers. `memory.ss` will already be in by then.
+7. **The run loop** (`run.ss`, 346) — then end-to-end comparison becomes
    possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
+   Until then the benchmark measures layers, not the model.
 
 `breakers.ss` (47) can go in any time.
+
+### Known stubs and deliberate omissions
+
+Every one of these is a place the port answers a question it has not really
+been taught to answer. Four of their predecessors turned into silent bugs the
+moment the state they excluded became reachable, so treat this list as a set of
+alarms, not a backlog.
+
+| where | what is missing | when it becomes wrong |
+|---|---|---|
+| `get_equivalent_object` (`context.jl`) | only handles an object that already belongs to the string | as soon as TRANSLATED strings exist — `answers.ss` step B |
+| `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C |
+| `instantiate_as_letter` / `instantiate_as_group` | not ported from `images.ss` | `answers.ss` step B |
+| `set_translated_rule_information` | not ported from `rules.ss` | `answers.ss` step B |
+| justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | `justify.ss` |
+| themespace state save/restore | not ported | only the GUI history browser uses it |
+| `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
+
+The rule is the one in section 5: a stub justified by "this state cannot arise
+yet" needs a probe the moment that state can arise. Adding a layer means
+re-reading this table first.
 
 ---
 

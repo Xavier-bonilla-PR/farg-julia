@@ -282,8 +282,8 @@ writes itself out in English, is read off the horizontal bridges rather than
 composed, and can be applied to a string to see what that string would look
 like under it, and the three codelets that drive all of that run through the
 real coderack. `rules.ss` is complete. What remains is `answers.ss`,
-`trace.ss`, `memory.ss`, `jootsing.ss` and `justify.ss` — about 4,500 lines —
-after which a run can reach an answer end to end.
+`trace.ss`, `memory.ss`, `jootsing.ss`, `justify.ss` and the run loop — about
+4,900 lines — after which a run can reach an answer end to end.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
