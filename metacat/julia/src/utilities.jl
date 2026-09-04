@@ -269,3 +269,10 @@ function temp_adjusted_values(value_list)
     exponent = sdiv(sub_from_100(TEMPERATURE[]), 30) + 0.5
     return [sround(sexpt(v, exponent)) for v in value_list]
 end
+
+"""`(remq-duplicates l)`. NB: `remove-duplicates-pred` drops an element when an
+identical one appears LATER in the list, so it keeps the LAST of each duplicate
+group, not the first. Identity (`eq?`), not equality — Metacat compares
+workspace and slipnet objects by identity throughout."""
+remq_duplicates(l::AbstractVector) =
+    [x for (i, x) in enumerate(l) if !any(y -> y === x, @view l[(i + 1):end])]

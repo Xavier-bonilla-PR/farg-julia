@@ -156,6 +156,10 @@ mutable struct Rule
     supporting_horizontal_bridges::Vector{Bridge}
     theme_pattern::Any
     translated::Bool
+    """Set by `mark-as-translated`: the rule this one was translated FROM, and
+    which way round (`:top_to_bottom` or `:bottom_to_top`)."""
+    original_rule::Any
+    translation_direction::Union{Nothing,Symbol}
 end
 
 """`(make-rule rule-type rule-clauses)`. The English transcription is computed
@@ -168,7 +172,7 @@ function make_rule(rule_type::Symbol, rule_clauses::Vector{RuleClause},
                 rule_type === :top ? :top_bridge : :bottom_bridge,
                 transcribe_to_english(rule_clauses, s, net),
                 0, 0, 0, 0, 0, codelet_count, 0, 0, nothing,
-                Any[], Any[], Bridge[], nothing, false)
+                Any[], Any[], Bridge[], nothing, false, nothing, nothing)
 end
 
 is_identity_rule(r::Rule) = isempty(r.rule_clauses)
@@ -1807,3 +1811,25 @@ register_codelet_type!(:answer_finder,
 register_codelet_type!(:rule_scout, rule_scout)
 register_codelet_type!(:rule_evaluator, rule_evaluator)
 register_codelet_type!(:rule_builder, rule_builder)
+
+"""`(mark-as-translated rule direction)` — records what this rule was
+translated from, and which way."""
+function mark_as_translated!(r::Rule, original::Rule, direction::Symbol)
+    r.original_rule = original
+    r.translation_direction = direction
+    r.translated = true
+    return r
+end
+
+"""`(get-all-reference-objects rule)` — every object in this string that any
+clause of the rule refers to."""
+function get_all_reference_objects(s::WorkspaceString, rule::Rule, net::Slipnet)
+    result = Any[]
+    for rc in rule.rule_clauses
+        is_verbatim_clause(rc) && continue
+        for od in rc.object_descriptions
+            append!(result, get_object_description_ref_objects(s, od, net))
+        end
+    end
+    return result
+end

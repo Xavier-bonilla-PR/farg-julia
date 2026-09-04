@@ -383,3 +383,23 @@ function break_group!(g::Group, net::Slipnet, ctx = nothing)
         delete_invalid_string_position_middle_descriptions!(s, net, ctx)
     return g
 end
+
+"""`(spanning-group-exists?)`."""
+spanning_group_exists(s::WorkspaceString) = any(spans_whole_string, s.groups)
+
+"""`(get-spanning-group)`."""
+function get_spanning_group(s::WorkspaceString)
+    i = findfirst(spans_whole_string, s.groups)
+    return i === nothing ? nothing : s.groups[i]
+end
+
+"""`(get-all-nested-groups object)` — a group, then every group inside it, all
+the way down. A letter contributes none."""
+function get_all_nested_groups(object::WSObject)
+    object isa Letter && return WSObject[]
+    result = WSObject[object]
+    for o in get_constituent_objects(object::Group)
+        append!(result, get_all_nested_groups(o))
+    end
+    return result
+end

@@ -8,7 +8,7 @@ Last commit at time of writing: the rule codelets, which complete `rules.ss`
 (see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all nineteen probes match on
+section 2 (run the suite). Do not write code until all twenty probes match on
 the clean checkout.
 
 ---
@@ -57,10 +57,10 @@ From the repo root. This is the single most useful command in the project:
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
-  ruleapply ruleabstract rulecodelets
+  ruleapply ruleabstract rulecodelets ruletranslate
 ```
 
-Expected — nineteen layers, **31,852 trace lines byte-identical**:
+Expected — twenty layers, **33,301 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -82,6 +82,7 @@ ok    rules (4620 lines identical)
 ok    ruleapply (1993 lines identical)
 ok    ruleabstract (1709 lines identical)
 ok    rulecodelets (3280 lines identical)
+ok    ruletranslate (1449 lines identical)
 all probes matched
 ```
 
@@ -117,7 +118,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~9,400 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete
+### Metacat — **~9,800 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` started
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -140,6 +141,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | change descriptions, rule application | `rules.jl`, `images.jl` | `ruleapply` | 1993 |
 | rule abstraction: schemas, swaps, templates | `rules.jl` | `ruleabstract` | 1709 |
 | the rule codelets, and the workspace's rules | `rules.jl`, `context.jl` | `rulecodelets` | 3280 |
+| rule translation: slippage log, coattails | `answers.jl` | `ruletranslate` | 1449 |
 
 ---
 
@@ -408,7 +410,7 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~4,900 lines of Scheme remain**, across seven files (`answers.ss` 1,558,
+**~4,500 lines of Scheme remain**, across seven files (`answers.ss` ~1,200 left,
 `trace.ss` 1,672, `memory.ss` 586, `jootsing.ss` 344, `justify.ss` 352,
 `run.ss` 346, `breakers.ss` 47). Steps 0-4 below are done and
 are kept only for the "not ported, deliberately" notes buried in them; the live
@@ -475,17 +477,26 @@ work starts at step 5.
    already done. It is four separable pieces; take them in this order, because
    each later one needs the earlier:
 
-   - **(A) rule translation** (`answers.ss` 1196-1558, ~360 lines):
+   - **(A)** ~~rule translation~~ (`answers.ss` 1196-1558, ~360 lines) —
+     **done**, as `answers.jl`, probe `ruletranslate`:
      `make-slippage-log`, `translate`, `translate-rule-clause`,
      `remove-redundant-ObjCtgy-change`, `translate-object-description`,
      `apply-to-change` / `apply-to-dimension` / `apply-to-object-description`,
-     `valid-rule-clause?` and friends. **Start here.** It is self-contained:
-     given a workspace with vertical bridges and a built top rule, translating
-     that rule into a bottom one needs nothing from memory, trace or the answer
-     string. The `rulecodelets` probe already builds exactly that state, so its
-     driver can be reused wholesale — run the coderack, drive the rule codelets
-     to build a top rule, then translate it and dump the result.
-   - **(B) the translated string** (1035-1195): `make-translated-string`,
+     `valid-rule-clause?` and friends, plus `apply-slippages` on slipnodes and
+     the coattail machinery it drives. The `rulecodelets` driver was reused as
+     predicted. Because translation is stochastic, the probe translates the
+     same rule EIGHT times from the same state rather than once.
+     Configurations were chosen deliberately: `abc->abd :: kji` reaches the
+     succ=>pred slippage that makes the classic answer, and `abc->abd :: cba`
+     (seeds 501, 502) is the only shape found that reaches the COATTAIL branch,
+     where a slippage drags a descriptor it does not map along a lateral
+     sliplink. A translation FAILING (the `(fail)` escape) is still
+     unexercised — no configuration tried produced one.
+     **Not** ported: nothing from this section. `remove-redundant-ObjCtgy-change`
+     IS ported but has zero call sites anywhere in Metacat, and its
+     `record-case` returns void for a verbatim clause, so the probe feeds it
+     only extrinsic and intrinsic ones.
+   - **(B) the translated string** (1035-1195) — **next**: `make-translated-string`,
      `attach-length-to-appropriate-groups`, `make-translated-rule-bridges`,
      `irrelevant-translated-string-group?`, `process-snag`,
      `get-rule-supporting-groups`. This is where the two pieces still deferred
@@ -544,7 +555,7 @@ Two places where the Julia does not reproduce Chez's numeric tower. Both were
 found by porting `themes.ss` a second time from `b296069` and diffing the two
 ports; both were then measured against the current tree. **Neither changes a
 computed number today** — that was checked, not assumed — so nothing is broken
-and the nineteen probes are honestly green. They are filed because the first
+and the probes are honestly green. They are filed because the first
 one is a trip-wire for the next probe someone writes, and section 5's rule
 about exact arithmetic is what makes them worth knowing before they bite.
 
@@ -610,7 +621,7 @@ call time, so a body may call forward. The order that works:
 ```
 schemenum utilities slipnet workspace concept_mappings images bonds groups
 bridges coderack themes context codelets_bonds codelets_descriptions
-codelets_groups codelets_bridges codelets_themes rules
+codelets_groups codelets_bridges codelets_themes rules answers
 ```
 
 `rules.jl` needs `bridges.jl` (it dispatches on `Bridge`), `coderack.jl` and

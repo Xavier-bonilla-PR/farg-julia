@@ -650,3 +650,15 @@ function distinguishing_descriptor(net::Slipnet, o::Letter, descriptor::Node)
     end
     return true
 end
+
+# --- string-level predicates the rule translation needs ---------------------
+
+"""`(top-string?)` — the two strings a TOP rule is about."""
+top_string(s::WorkspaceString) =
+    s.string_type === :initial || s.string_type === :modified
+"""`(vertical-string?)` — the two a VERTICAL bridge runs between."""
+vertical_string(s::WorkspaceString) =
+    s.string_type === :initial || s.string_type === :target
+"""`(bottom-string?)`."""
+bottom_string(s::WorkspaceString) =
+    s.string_type === :target || s.string_type === :answer

@@ -425,3 +425,9 @@ function build_bridge!(b::Bridge, net::Slipnet)
     b.proposal_level = BUILT
     return b
 end
+
+"""`(get-bond-slippages)` — the slippages this bridge carries that are ABOUT
+bonds (BondCtgy or BondFacet), which is what an enclosing group's bridge
+contributes to translating the objects inside it."""
+get_bond_slippages(b::Bridge, net::Slipnet) =
+    ConceptMapping[cm for cm in get_slippages(b) if bond_concept_mapping(cm, net)]
