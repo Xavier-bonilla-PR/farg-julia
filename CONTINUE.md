@@ -538,6 +538,68 @@ re-reading this table first.
 
 ---
 
+### Known exactness divergences from Chez (open, not fixed)
+
+Two places where the Julia does not reproduce Chez's numeric tower. Both were
+found by porting `themes.ss` a second time from `b296069` and diffing the two
+ports; both were then measured against the current tree. **Neither changes a
+computed number today** — that was checked, not assumed — so nothing is broken
+and the nineteen probes are honestly green. They are filed because the first
+one is a trip-wire for the next probe someone writes, and section 5's rule
+about exact arithmetic is what makes them worth knowing before they bite.
+
+**1. `exp` of an exact zero.** R6RS lets `exp` return an exact result where it
+is exactly representable, and Chez does:
+
+```
+Chez:   (exp 0) => 1     exact? #t        so the sigmoid of an exact 0 is exact 0
+Julia:  exp(0)  => 1.0   inexact          so it is 0.0
+```
+
+`bridge_theme_compatibility_sigmoid` (`themes.jl:704`) is
+`2 / (1 + exp(...)) - 1`, so with **no active themes** — average theme support
+an exact 0 — Chez gives an exact `0` and the port gives `0.0`.
+
+- *Does it change a strength?* No. Sweeping every integer and half-integer
+  `intrinsic` from 0..100 through `update_strength!` with weight `0` versus
+  `0.0` gives identical results: the exact and float paths agree at every
+  rounding boundary in range.
+- *When does it surface?* The moment any probe emits a bridge's thematic
+  compatibility through the themes probe's own `num` helper. That helper
+  renders an inexact value as `F<numerator>/<denominator>`, so the two sides
+  print `0` and `F0/1`. Any probe covering a bridge with no active themes will
+  diff on it.
+- *Fix, if wanted:* an exactness-preserving `exp` in the numeric tower,
+  `sexp(x) = (is_exact(x) && iszero(x)) ? 1 : exp(float(x))`, and
+  `sdiv(2, 1 + sexp(...)) - 1` for the sigmoid.
+
+**2. `max` promotes across exactness in Julia, not in Scheme.**
+
+```
+Chez:   (apply max '(9/10 1)) => 1      an exact INTEGER
+Julia:  maximum(Real[9//10, 1]) => 1//1  a Rational
+```
+
+`get_thematic_compatibility(d::Description, ts)` (`themes.jl:728`) folds with
+`maximum` over `get_theme_support_values`, which mixes `pct(...)` rationals
+with integer `0`s. A description whose dimension carries one theme at 100 and
+another at partial activation therefore gets `1//1` where Metacat has `1`.
+Reproduced on real data: `values = Real[9//10, 1]`, compatibility `1//1`.
+
+- *Does it matter?* Less than it looks. Exact-rational arithmetic gives the
+  same answer either way, and the probe renderer runs `snorm`, which turns
+  `1//1` back into `1` — so it is invisible to the current traces. The only
+  way it could bite is a call site that DISPATCHES on `::Integer` (for example
+  `sexpt(b::SExact, e::Integer)`, whose fallback takes the float path), if a
+  compatibility value ever reaches one.
+- *Fix, if wanted:* a `maximum` that returns the winning ELEMENT rather than
+  folding with `max`, so the representation survives.
+
+Note that `maximum(positive_activation, ...)` at `themes.jl:146` and `:344` is
+NOT affected — those are all integers.
+
+---
+
 ### Load order of `metacat/julia/src/`
 
 The files are plain `include`s, so a probe has to load everything a source
