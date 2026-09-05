@@ -8,7 +8,7 @@ Last commit at time of writing: the rule codelets, which complete `rules.ss`
 (see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all twenty-one probes match on
+section 2 (run the suite). Do not write code until all twenty-two probes match on
 the clean checkout.
 
 ---
@@ -57,10 +57,10 @@ From the repo root. This is the single most useful command in the project:
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
-  ruleapply ruleabstract rulecodelets ruletranslate transstring
+  ruleapply ruleabstract rulecodelets ruletranslate transstring memory
 ```
 
-Expected — twenty-one layers, **34,275 trace lines byte-identical**:
+Expected — twenty-two layers, **34,780 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -84,6 +84,7 @@ ok    ruleabstract (1709 lines identical)
 ok    rulecodelets (3280 lines identical)
 ok    ruletranslate (1449 lines identical)
 ok    transstring (974 lines identical)
+ok    memory (505 lines identical)
 all probes matched
 ```
 
@@ -119,7 +120,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~10,000 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done
+### Metacat — **~10,400 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done, `memory.ss` all but its two abstractors
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -144,6 +145,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | the rule codelets, and the workspace's rules | `rules.jl`, `context.jl` | `rulecodelets` | 3280 |
 | rule translation: slippage log, coattails | `answers.jl` | `ruletranslate` | 1449 |
 | the translated string, instantiated from an image | `answers.jl`, `images.jl` | `transstring` | 974 |
+| episodic memory: answer/snag descriptions, distance | `memory.jl` | `memory` | 505 |
 
 ---
 
@@ -412,9 +414,10 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~4,500 lines of Scheme remain**, across seven files (`answers.ss` ~1,200 left,
-`trace.ss` 1,672, `memory.ss` 586, `jootsing.ss` 344, `justify.ss` 352,
-`run.ss` 346, `breakers.ss` 47). Steps 0-4 below are done and
+**~3,900 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
+the commentary, plus the `answer-finder` body that `trace.ss` blocks;
+`trace.ss` 1,672, `jootsing.ss` 344, `justify.ss` ~290 left, `run.ss` 346,
+`breakers.ss` 47). `memory.ss` is done. Steps 0-4 below are done and
 are kept only for the "not ported, deliberately" notes buried in them; the live
 work starts at step 5.
 
@@ -509,19 +512,38 @@ work starts at step 5.
      belongs to this string" case; translated strings are the other case, and
      it must be finished here. **That stub is the fifth of its family — see the
      stub lesson in section 5, and the running list below.**
-   - **(C) `answer-finder` and `report-new-answer`** (20-95, 929-1035): the
-     codelet itself is short, but it asks `*memory*` whether the answer has
-     been found before, so **`memory.ss` (586) has to come with it** — or at
-     least `answer-present?`. `metacat/julia/src/rules.jl` registers
-     `:answer_finder` with a procedure that raises; replacing that is the
-     signal this step is finished.
+   - **(C) `answer-finder` and `report-new-answer`** (20-95, 929-1035) —
+     **half done, and the other half is BLOCKED on the trace.**
+     `memory.ss` is ported (see below), so `answer-present?` is available.
+     What remains is the codelet body, and reading it settles a question the
+     plan left open: `answer-finder` ends by calling `report-new-answer`, and
+     its snag path calls `process-snag`. BOTH need `*trace*` — answer events,
+     `make-answer-event`, `update-everything`, `post-initial-codelets`. So
+     `answer-finder` cannot be finished before step 6. Do `trace.ss` first and
+     come back. `metacat/julia/src/rules.jl` still registers `:answer_finder`
+     with a procedure that raises; replacing that is the signal it is done.
+
+     `memory.ss` (586) is **done**, as `memory.jl`, probe `memory`: the store,
+     answer and snag descriptions, `answer-present?` / `snag-present?` /
+     `get-equivalent-snag`, the `compare` that activates a remembered answer a
+     new one reminds it of, and `calculate-answer-distance` with everything it
+     reads — `intersect-themes`, `get-snag-justified-themes`,
+     `answer-incoherent?`, `theme-abstractness`, and
+     `compare-rule-clause-lists` / `traverse-rule-clauses` pulled forward from
+     `justify.ss`, whose only caller so far this is.
+     **Not** ported: `abstract-answer-description` and
+     `abstract-snag-description`, which read an ANSWER EVENT — they come with
+     `trace.ss`; and the memory window.
    - **(D) the commentary** (95-928, ~830 lines): `explain`, `theme-phrases`,
      `compare-answers`, `get-answer-comparison-text` — the English prose
      Metacat writes about its own answers, and the part of the program the
      thesis is really about. Leaf-ish, and testable the same way the rule
      transcription was: build the structures by hand and compare the prose.
 6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
-   the self-watching layers. `memory.ss` will already be in by then.
+   the self-watching layers, and now the CRITICAL PATH: `answer-finder`,
+   `report-new-answer`, `process-snag` and memory's two abstractors are all
+   waiting on `trace.ss`. `memory.ss` is already in. Part of `justify.ss` is
+   too (`compare-rule-clause-lists` and `traverse-rule-clauses`).
 7. **The run loop** (`run.ss`, 346) — then end-to-end comparison becomes
    possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
    Until then the benchmark measures layers, not the model.
@@ -537,7 +559,8 @@ alarms, not a backlog.
 
 | where | what is missing | when it becomes wrong |
 |---|---|---|
-| `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C |
+| `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C, which is blocked on `trace.ss` |
+| `abstract_answer_description` / `abstract_snag_description` | not ported — they read an ANSWER EVENT | `trace.ss` |
 | `process_snag` | not ported — needs `*trace*`, `*memory*`, `make-snag-event`, `post-initial-codelets` | `trace.ss` / `memory.ss` |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | `justify.ss` |
@@ -622,7 +645,7 @@ call time, so a body may call forward. The order that works:
 ```
 schemenum utilities slipnet workspace concept_mappings images bonds groups
 bridges coderack themes context codelets_bonds codelets_descriptions
-codelets_groups codelets_bridges codelets_themes rules answers
+codelets_groups codelets_bridges codelets_themes rules answers memory
 ```
 
 `rules.jl` needs `bridges.jl` (it dispatches on `Bridge`), `coderack.jl` and
