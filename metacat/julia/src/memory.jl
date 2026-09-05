@@ -29,14 +29,8 @@
 Metacat of each other at all."""
 const DISTANCE_THRESHOLD = 5
 
-"""`(entries pattern)` is `rest`: a theme pattern is `(<theme-type> <entry>
-...)`, and the entries are what gets compared."""
-entries(pattern) = pattern[2:end]
-
-"""`(theme-pattern-entries-equal? e1 e2)` (trace.ss) — a theme entry may carry
-an activation as its third element, but only the dimension and relation are
-ever compared."""
-theme_pattern_entries_equal(e1, e2) = e1[1] === e2[1] && e1[2] === e2[2]
+# `entries` and `theme_pattern_entries_equal` are trace.ss's, and live in
+# trace.jl, which loads first — as trace.ss does before memory.ss.
 
 """`(intersect-themes themes1 themes2)`. NB: built by `cross-product-filter-map`
 keeping the element from the FIRST list, so an entry from `themes1` survives

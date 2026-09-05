@@ -187,6 +187,12 @@ cross_product(l1, l2) = [(x, y) for x in l1 for y in l2]
 sets_equal(s1, s2) = all(x -> any(y -> y === x, s2), s1) &&
                      all(y -> any(x -> x === y, s1), s2)
 
+"""`(sets-equal-pred? pred? s1 s2)` — mutual subset under an arbitrary
+equivalence, which is how theme-pattern entries are compared (they match on
+dimension and relation, ignoring any activation)."""
+sets_equal_pred(pred, s1, s2) = all(x -> any(y -> pred(x, y), s2), s1) &&
+                                all(y -> any(x -> pred(y, x), s1), s2)
+
 """The order in which Chez's `map` applies its procedure — NOT left to right.
 
 Chez's `map` recurses on the tail-but-two before applying the procedure to the

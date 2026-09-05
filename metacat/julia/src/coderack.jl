@@ -288,3 +288,82 @@ end
 
 """Run a codelet: apply its type's procedure to its arguments."""
 run_codelet!(ctx, c::Codelet) = c.codelet_type.codelet_proc(ctx, c.arguments)
+
+# --- clamping (trace.ss drives this) ----------------------------------------
+#
+# A clamped codelet type keeps a fixed urgency: newly made codelets of that
+# type take it (see `make_codelet`), and every one already on the rack is moved
+# to it, which can move it between bins.
+
+"""`*codelet-types*` in declaration order (coderack.ss). The list exists
+independently of whether a procedure has been attached to each type, which is
+what lets `get_complement_codelet_pattern` name every type the model has."""
+const ALL_CODELET_TYPE_NAMES = [
+    :bottom_up_bond_scout, :top_down_bond_scout_category,
+    :top_down_bond_scout_direction, :bond_evaluator, :bond_builder,
+    :top_down_group_scout_category, :top_down_group_scout_direction,
+    :group_scout_whole_string, :group_evaluator, :group_builder,
+    :bottom_up_bridge_scout, :important_object_bridge_scout, :bridge_evaluator,
+    :bridge_builder, :bottom_up_description_scout, :top_down_description_scout,
+    :description_evaluator, :description_builder, :rule_scout, :rule_evaluator,
+    :rule_builder, :answer_finder, :answer_justifier, :thematic_bridge_scout,
+    :progress_watcher, :jootser, :breaker,
+]
+
+"""The `CodeletType` objects, in that order, creating any that no layer has
+registered a procedure for yet."""
+all_codelet_types() =
+    [get!(CODELET_TYPES, n, CodeletType(n)) for n in ALL_CODELET_TYPE_NAMES]
+
+"""`(set-urgency new-value)` on a codelet — may move it to a different bin."""
+function set_urgency!(cr::Coderack, c::Codelet, new_value::Real)
+    new_bin = coderack_bin_for(new_value)
+    if new_bin != c.coderack_bin
+        remove_codelet!(cr.bins[c.coderack_bin + 1], c)
+        c.coderack_bin = new_bin
+        add_codelet!(cr.bins[new_bin + 1], c, c.time_stamp)
+    end
+    c.relative_urgency = new_value
+    return c
+end
+
+"""`(reset-urgency)` — back to the urgency the codelet was posted with."""
+reset_urgency!(cr::Coderack, c::Codelet) = set_urgency!(cr, c, c.original_urgency)
+
+"""`(set-urgencies codelet-type new-value)`."""
+function set_urgencies!(cr::Coderack, ct::CodeletType, new_value::Real)
+    for c in cr.codelet_list
+        c.codelet_type === ct && set_urgency!(cr, c, new_value)
+    end
+    return cr
+end
+
+"""`(reset-urgencies codelet-type)`."""
+function reset_urgencies!(cr::Coderack, ct::CodeletType)
+    for c in cr.codelet_list
+        c.codelet_type === ct && reset_urgency!(cr, c)
+    end
+    return cr
+end
+
+"""`(clamp urgency)` on a codelet type. NB: the Scheme only acts when the
+clamp actually CHANGES something, so re-clamping to the same urgency does not
+disturb the rack."""
+function clamp_codelet_type!(ct::CodeletType, urgency::Real, cr::Coderack)
+    if !ct.urgency_clamped || urgency != ct.clamped_relative_urgency
+        ct.urgency_clamped = true
+        ct.clamped_relative_urgency = urgency
+        set_urgencies!(cr, ct, urgency)
+    end
+    return ct
+end
+
+"""`(unclamp)`. NB: also only acts when there is a clamp to remove."""
+function unclamp_codelet_type!(ct::CodeletType, cr::Coderack)
+    if ct.urgency_clamped
+        ct.urgency_clamped = false
+        ct.clamped_relative_urgency = 0
+        reset_urgencies!(cr, ct)
+    end
+    return ct
+end

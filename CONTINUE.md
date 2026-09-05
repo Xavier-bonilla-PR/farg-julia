@@ -8,7 +8,7 @@ Last commit at time of writing: the rule codelets, which complete `rules.ss`
 (see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all twenty-two probes match on
+section 2 (run the suite). Do not write code until all twenty-three probes match on
 the clean checkout.
 
 ---
@@ -57,10 +57,11 @@ From the repo root. This is the single most useful command in the project:
 JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
-  ruleapply ruleabstract rulecodelets ruletranslate transstring memory
+  ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
+  patterns
 ```
 
-Expected — twenty-two layers, **34,780 trace lines byte-identical**:
+Expected — twenty-three layers, **35,114 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -85,6 +86,7 @@ ok    rulecodelets (3280 lines identical)
 ok    ruletranslate (1449 lines identical)
 ok    transstring (974 lines identical)
 ok    memory (505 lines identical)
+ok    patterns (334 lines identical)
 all probes matched
 ```
 
@@ -120,7 +122,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~10,400 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done, `memory.ss` all but its two abstractors
+### Metacat — **~10,700 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done, `memory.ss` all but its two abstractors, `trace.ss` started
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -146,6 +148,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | rule translation: slippage log, coattails | `answers.jl` | `ruletranslate` | 1449 |
 | the translated string, instantiated from an image | `answers.jl`, `images.jl` | `transstring` | 974 |
 | episodic memory: answer/snag descriptions, distance | `memory.jl` | `memory` | 505 |
+| trace patterns and the clamping they drive | `trace.jl` | `patterns` | 334 |
 
 ---
 
@@ -540,10 +543,27 @@ work starts at step 5.
      thesis is really about. Leaf-ish, and testable the same way the rule
      transcription was: build the structures by hand and compare the prose.
 6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
-   the self-watching layers, and now the CRITICAL PATH: `answer-finder`,
+   the self-watching layers, and the CRITICAL PATH: `answer-finder`,
    `report-new-answer`, `process-snag` and memory's two abstractors are all
-   waiting on `trace.ss`. `memory.ss` is already in. Part of `justify.ss` is
-   too (`compare-rule-clause-lists` and `traverse-rule-clauses`).
+   waiting on `trace.ss`. `memory.ss` is already in, and part of `justify.ss`
+   (`compare-rule-clause-lists` and `traverse-rule-clauses`).
+
+   `trace.ss` splits cleanly and is being taken in slices:
+   - **(A)** ~~patterns and clamping~~ (1412-1672, ~260 lines) — **done**, as
+     `trace.jl`, probe `patterns`: the three pattern kinds and their
+     deliberately blind equality (activations and urgencies are ignored),
+     `negate-theme-pattern-entry`, `get-associated-concept-pattern`, the theme
+     / concept / codelet clamping, `against-background`, and the nine standard
+     codelet patterns. Codelet-type clamping came with it, in `coderack.jl`.
+     **Not** ported: `print-pattern`, which needs `relation-name` from
+     `theme-graphics.ss` — a file the headless harness never loads, so the
+     Scheme cannot run it either.
+   - **(B) the temporal trace and `make-generic-event`** (23-333) — next.
+   - **(C) the seven concrete event types** (333-1310), the biggest piece:
+     answer, clamp, concept-activation, concept-mapping, group, rule, snag.
+   - **(D) the monitors** (1310-1412) that watch the workspace and raise
+     events, and the importance thresholds that decide which are worth
+     recording.
 7. **The run loop** (`run.ss`, 346) — then end-to-end comparison becomes
    possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
    Until then the benchmark measures layers, not the model.
@@ -563,6 +583,7 @@ alarms, not a backlog.
 | `abstract_answer_description` / `abstract_snag_description` | not ported — they read an ANSWER EVENT | `trace.ss` |
 | `process_snag` | not ported — needs `*trace*`, `*memory*`, `make-snag-event`, `post-initial-codelets` | `trace.ss` / `memory.ss` |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
+| `top-down-bond-scout:category` and `:direction` (`bonds.ss` 217, 269) | NOT PORTED, though `slipnet.jl` already names them as top-down codelet types for the pred/succ/sameness and left/right nodes | as soon as an active slipnode posts its top-down codelets — i.e. the run loop. `codelets_bonds.jl` registers only the three bottom-up bond codelets |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | `justify.ss` |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
@@ -645,7 +666,7 @@ call time, so a body may call forward. The order that works:
 ```
 schemenum utilities slipnet workspace concept_mappings images bonds groups
 bridges coderack themes context codelets_bonds codelets_descriptions
-codelets_groups codelets_bridges codelets_themes rules answers memory
+codelets_groups codelets_bridges codelets_themes rules answers trace memory
 ```
 
 `rules.jl` needs `bridges.jl` (it dispatches on `Bridge`), `coderack.jl` and
