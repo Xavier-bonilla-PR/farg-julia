@@ -117,6 +117,18 @@ end
 """`(get-all-descriptions)` — groups also contribute their bond descriptions."""
 all_descriptions(o::Letter) = o.descriptions
 
+"""`(get-concept-pattern)` on a workspace object — every descriptor it carries,
+each clamped only if its description type is currently RELEVANT, so an object
+described along a dimension nobody cares about contributes a 0. Groups fold in
+their bond descriptions, which is what `get-all-descriptions` is for."""
+get_concept_pattern(o::WSObject) =
+    Any[:concepts,
+        Any[Any[d.descriptor, relevant(d) ? MAX_ACTIVATION : 0]
+            for d in all_descriptions(o)]...]
+
+"""`(get-all-descriptors)`."""
+get_all_descriptors(o::WSObject) = Node[d.descriptor for d in o.descriptions]
+
 get_string(o::Letter) = o.string
 left_string_pos(o::Letter) = o.string_pos
 right_string_pos(o::Letter) = o.string_pos

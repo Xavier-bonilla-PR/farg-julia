@@ -193,8 +193,16 @@ get_verbatim_letter_categories(r::Rule) = r.rule_clauses[1].letter_categories
 rules_equal(r1::Rule, r2::Rule, net::Slipnet) =
     rule_clause_lists_equal(r1.rule_clauses, r2.rule_clauses, net)
 
-"""`(get-concept-pattern)` — every slipnode the rule mentions, clamped."""
+"""`(get-concept-pattern)` — every slipnode the rule mentions, clamped, as a
+`(concepts (<node> <activation>) ...)` pattern."""
 function get_concept_pattern(r::Rule)
+    return Any[:concepts,
+               Any[Any[n, MAX_ACTIVATION] for n in rule_concept_nodes(r)]...]
+end
+
+"""The slipnodes of `(flatten rule-clauses)` with the symbols dropped, in the
+order `remq-duplicates` leaves them — it keeps the LAST of each group."""
+function rule_concept_nodes(r::Rule)
     nodes = Node[]
     for rc in r.rule_clauses
         for od in rc.object_descriptions

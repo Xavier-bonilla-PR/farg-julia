@@ -118,7 +118,7 @@ function print_rule(label, r::Rule)
     println("  Q\tunif=", r.uniformity, "\tabst=", r.abstractness,
             "\tsucc=", r.succinctness, "\tintr=", r.intrinsic_quality,
             "\tqual=", r.quality)
-    println("  CONCEPTS\t", slist([n.short_name for n in get_concept_pattern(r)]))
+    println("  CONCEPTS\t", slist([e[1].short_name for e in get_concept_pattern(r)[2:end]]))
     if is_verbatim_rule(r)
         println("  VERBLETTERS\t",
                 slist([n.lowercase_name for n in get_verbatim_letter_categories(r)]))

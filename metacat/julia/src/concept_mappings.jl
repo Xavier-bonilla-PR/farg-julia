@@ -48,6 +48,17 @@ cm_print_name(cm::ConceptMapping, net::Slipnet) =
 cm_short_name(n::Node, net::Slipnet) =
     n === net[:plato_letter_category] ? "LettCtgy" : n.short_name
 
+"""`(get-concept-pattern)` — the slipnodes this mapping is made of, clamped.
+`compress` drops the label entry when the two descriptors are unrelated and
+there is no label to name."""
+function get_concept_pattern(cm::ConceptMapping)
+    entries = Any[Any[cm.description_type1, MAX_ACTIVATION],
+                  Any[cm.descriptor1, MAX_ACTIVATION],
+                  Any[cm.descriptor2, MAX_ACTIVATION]]
+    cm.label !== nothing && push!(entries, Any[cm.label::Node, MAX_ACTIVATION])
+    return Any[:concepts, entries...]
+end
+
 cm_english_name(cm::ConceptMapping) =
     string(cm.descriptor1.lowercase_name, " <=> ", cm.descriptor2.lowercase_name)
 

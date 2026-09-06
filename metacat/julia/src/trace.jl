@@ -504,3 +504,310 @@ function clamp_progress_adjective_phrase(progress)
     progress < 80 && return "an okay"
     return "a pretty good"
 end
+
+# ============================================================================
+# trace.ss slice (C): the concrete event types (trace.ss 333-1310).
+#
+# An event is what the trace remembers: a thing that happened, together with
+# the snapshot `make_generic_event` took at the moment it happened. The four
+# types below are the WORKSPACE and SLIPNET events — the ones raised by the
+# model perceiving something, as opposed to by the model reacting to its own
+# history. Each wraps a `GenericEvent` and adds what it needs to describe
+# itself, compare itself against another of its kind, and say what pattern of
+# themes or concepts it stands for.
+#
+# The three workspace ones (concept-mapping, group, rule) also answer to the
+# type `:workspace`, which is how the trace asks for "anything the model
+# perceived" without naming the kinds.
+#
+# All the graphics halves (`display`, `display-workspace`) are dropped: they
+# only drive SWL windows.
+
+"""The concrete events, so the `GenericEvent` accessors can forward through
+one set of methods rather than one per type."""
+abstract type ConcreteEvent end
+
+generic(e::ConcreteEvent) = e.generic
+
+get_event_number(e::ConcreteEvent) = get_event_number(generic(e))
+set_event_number!(e::ConcreteEvent, n::Int) = (set_event_number!(generic(e), n); e)
+get_event_type(e::ConcreteEvent) = get_event_type(generic(e))
+get_time(e::ConcreteEvent) = get_time(generic(e))
+get_temperature(e::ConcreteEvent) = get_temperature(generic(e))
+get_structures(e::ConcreteEvent) = get_structures(generic(e))
+get_active_theme_types(e::ConcreteEvent) = get_active_theme_types(generic(e))
+get_complete_themespace_patterns(e::ConcreteEvent) =
+    get_complete_themespace_patterns(generic(e))
+get_dominant_themespace_patterns(e::ConcreteEvent) =
+    get_dominant_themespace_patterns(generic(e))
+get_complete_themespace_pattern(e::ConcreteEvent, tt::Symbol) =
+    get_complete_themespace_pattern(generic(e), tt)
+get_dominant_themespace_pattern(e::ConcreteEvent, tt::Symbol) =
+    get_dominant_themespace_pattern(generic(e), tt)
+get_age(e::ConcreteEvent, ctx) = get_age(generic(e), ctx)
+get_clamped_rules(e::ConcreteEvent) = generic(e).clamped_rules
+
+"""`(type? type)` on a concrete event — its own type, or `any`. The three
+workspace types override this to answer to `:workspace` as well."""
+event_type_is(e::ConcreteEvent, type::Symbol) = event_type_is(generic(e), type)
+
+# --- concept-activation events ----------------------------------------------
+
+"""`(make-concept-activation-event slipnode)` — a concept coming fully awake
+is itself a thing that happened, and worth remembering as one."""
+struct ConceptActivationEvent <: ConcreteEvent
+    generic::GenericEvent
+    slipnode::Node
+    print_name::String
+    concept_pattern::Vector{Any}
+end
+
+function make_concept_activation_event(slipnode::Node, ctx)
+    return ConceptActivationEvent(
+        make_generic_event(:concept_activation, ctx),
+        slipnode,
+        string("(", slipnode.short_name, ")"),
+        Any[:concepts, Any[slipnode, MAX_ACTIVATION]])
+end
+
+event_print_name(e::ConceptActivationEvent) = e.print_name
+get_slipnode(e::ConceptActivationEvent) = e.slipnode
+get_concept_pattern(e::ConceptActivationEvent) = e.concept_pattern
+get_event_strength(e::ConceptActivationEvent) = e.slipnode.conceptual_depth
+
+events_equal(e::ConceptActivationEvent, other) =
+    event_type_is(other, :concept_activation) && get_slipnode(other) === e.slipnode
+
+# --- concept-mapping events -------------------------------------------------
+
+"""`(make-concept-mapping-event cm bridge)` — a bridge making a slippage the
+model thinks is worth noticing."""
+struct ConceptMappingEvent <: ConcreteEvent
+    generic::GenericEvent
+    cm::ConceptMapping
+    bridge::Bridge
+    bridge_type::Symbol
+    print_name::String
+    slippage::Bool
+    theme_pattern::Vector{Any}
+    cm_strength::Int
+    concept_pattern::Vector{Any}
+end
+
+function make_concept_mapping_event(cm::ConceptMapping, bridge::Bridge, ctx)
+    bridge_type = bridge.bridge_type
+    tag = bridge_type === :top ? "T" : bridge_type === :vertical ? "V" : "B"
+    return ConceptMappingEvent(
+        make_generic_event(:concept_mapping, ctx),
+        cm, bridge, bridge_type,
+        string(tag, ":", cm_print_name(cm, ctx.net)),
+        is_slippage(cm),
+        Any[bridge_type_to_theme_type(bridge_type), Any[cm_type(cm), cm.label]],
+        cm_strength(cm),
+        get_concept_pattern(cm))
+end
+
+event_print_name(e::ConceptMappingEvent) = e.print_name
+get_concept_mapping(e::ConceptMappingEvent) = e.cm
+get_bridge(e::ConceptMappingEvent) = e.bridge
+get_bridge_type(e::ConceptMappingEvent) = e.bridge_type
+get_cm_type(e::ConceptMappingEvent) = cm_type(e.cm)
+is_cm_type(e::ConceptMappingEvent, t::Node) = t === cm_type(e.cm)
+is_bridge_type(e::ConceptMappingEvent, t::Symbol) = t === e.bridge_type
+get_theme_pattern(e::ConceptMappingEvent) = e.theme_pattern
+get_concept_pattern(e::ConceptMappingEvent) = e.concept_pattern
+get_event_strength(e::ConceptMappingEvent) = e.cm_strength
+is_event_slippage(e::ConceptMappingEvent) = e.slippage
+
+event_type_is(e::ConceptMappingEvent, type::Symbol) =
+    type === :workspace || event_type_is(generic(e), type)
+
+"""`(currently-present?)` — whether the bridge this event describes is still
+in the workspace. The event holds the bridge it was made from, which may since
+have been broken and rebuilt."""
+event_currently_present(e::ConceptMappingEvent, ctx) = bridge_present(ctx, e.bridge)
+get_equivalent_bridge(e::ConceptMappingEvent, ctx) = get_equivalent_bridge(ctx, e.bridge)
+
+relevant_for_answer_description(e::ConceptMappingEvent, ctx) =
+    e.bridge_type === :vertical && event_currently_present(e, ctx)
+
+events_equal(e::ConceptMappingEvent, other, net::Slipnet) =
+    event_type_is(other, :concept_mapping) &&
+    cms_equal(e.cm, get_concept_mapping(other))
+
+# --- group events -----------------------------------------------------------
+
+"""`(group-event-pexp-text-string group)`, from trace-graphics.ss — the group
+spelled out along its bond facet, `a-b-c` or `1-2-3`. It lives in a graphics
+file, but it NAMES the event, so it is algorithm-visible and comes here."""
+function group_event_pexp_text_string(g::Group, net::Slipnet)
+    bond_facet = g.group_bond_facet::Node
+    parts = String[]
+    for o in g.constituent_objects
+        d = get_descriptor_for(o, bond_facet)::Node
+        push!(parts, platonic_number(net, d) ?
+                     string(platonic_number_to_number(net, d)) :
+                     (o isa Letter ? d.lowercase_name : d.uppercase_name))
+    end
+    return join(parts, "-")
+end
+
+"""`(platonic-number? node)` / `(platonic-number->number node)`."""
+platonic_number(net::Slipnet, node::Node) = any(n -> n === node, net.numbers)
+platonic_number_to_number(net::Slipnet, node::Node) =
+    findfirst(n -> n === node, net.numbers)
+
+"""`(make-group-event group flipped?)` — a group being built, or FLIPPED from
+a successor reading to a predecessor one (or back), which is a different kind
+of event about the same group."""
+struct GroupEvent <: ConcreteEvent
+    generic::GenericEvent
+    group::Group
+    flipped::Bool
+    print_name::String
+    group_category::Node
+    direction::Union{Nothing,Node}
+    group_strength::Int
+    concept_pattern::Vector{Any}
+end
+
+function make_group_event(group::Group, flipped::Bool, ctx)
+    net = ctx.net
+    text = group_event_pexp_text_string(group, net)
+    direction = group.direction
+    name = direction === net[:plato_right] ? string(">", text, ">") :
+           direction === net[:plato_left]  ? string("<", text, "<") :
+                                             string("[", text, "]")
+    return GroupEvent(make_generic_event(:group, ctx), group, flipped, name,
+                      group.group_category, direction, group.strength,
+                      get_concept_pattern(group))
+end
+
+event_print_name(e::GroupEvent) = e.print_name
+get_group(e::GroupEvent) = e.group
+is_event_flipped(e::GroupEvent) = e.flipped
+get_group_category(e::GroupEvent) = e.group_category
+get_event_direction(e::GroupEvent) = e.direction
+get_concept_pattern(e::GroupEvent) = e.concept_pattern
+get_event_strength(e::GroupEvent) = e.group_strength
+is_event_spanning(e::GroupEvent) = spans_whole_string(e.group)
+get_event_string_type(e::GroupEvent) = e.group.string.string_type
+is_event_string_type(e::GroupEvent, t::Symbol) = get_event_string_type(e) === t
+event_spans(e::GroupEvent, t::Symbol) =
+    is_event_spanning(e) && is_event_string_type(e, t)
+
+event_type_is(e::GroupEvent, type::Symbol) =
+    type === :workspace || event_type_is(generic(e), type)
+
+event_currently_present(e::GroupEvent) = group_present(e.group.string, e.group)
+get_equivalent_group(e::GroupEvent) = get_equivalent_group(e.group.string, e.group)
+
+relevant_for_answer_description(e::GroupEvent) =
+    is_event_spanning(e) && event_currently_present(e)
+
+events_equal(e::GroupEvent, other) =
+    event_type_is(other, :group) &&
+    equivalent_workspace_objects(get_group(other), e.group)
+
+# --- rule events ------------------------------------------------------------
+
+"""`(make-rule-event rule)` — a rule being built. The reference objects and
+supporting bridges are captured NOW, because what makes the rule interesting
+is what it rested on at the time, which the workspace may since have broken."""
+struct RuleEvent <: ConcreteEvent
+    generic::GenericEvent
+    rule::Rule
+    rule_type::Symbol
+    print_name::String
+    supporting_bridges::Vector{Bridge}
+    reference_objects::Vector{Any}
+    relative_quality::Int
+    concept_pattern::Vector{Any}
+end
+
+function make_rule_event(rule::Rule, ctx)
+    rule_type = rule.rule_type
+    s = rule_type === :top ? ctx.initial_string : ctx.target_string
+    # workspace-strings are filtered out: a rule can refer to the string as a
+    # whole, but the string is not an object anything can be highlighted on.
+    reference_objects = Any[o for o in get_all_reference_objects(s, rule, ctx.net)
+                            if !(o isa WorkspaceString)]
+    return RuleEvent(make_generic_event(:rule, ctx), rule, rule_type,
+                     rule_type === :top ? "[Top Rule]" : "[Bottom Rule]",
+                     copy(rule.supporting_horizontal_bridges),
+                     reference_objects,
+                     get_relative_quality(rule, ctx),
+                     get_concept_pattern(rule))
+end
+
+event_print_name(e::RuleEvent) = e.print_name
+get_rule(e::RuleEvent) = e.rule
+get_rule_type(e::RuleEvent) = e.rule_type
+get_supporting_bridges(e::RuleEvent) = e.supporting_bridges
+get_reference_objects(e::RuleEvent) = e.reference_objects
+get_concept_pattern(e::RuleEvent) = e.concept_pattern
+"""Both `get-relative-quality` and `get-strength` answer with the quality the
+rule had WHEN THE EVENT HAPPENED, not the quality it has now."""
+get_event_relative_quality(e::RuleEvent) = e.relative_quality
+get_event_strength(e::RuleEvent) = e.relative_quality
+
+event_type_is(e::RuleEvent, type::Symbol) =
+    type === :workspace || event_type_is(generic(e), type)
+
+events_equal(e::RuleEvent, other, net::Slipnet) =
+    event_type_is(other, :rule) && rules_equal(e.rule, get_rule(other), net)
+
+# --- names (trace.ss 1258-1310) ---------------------------------------------
+
+"""`(group-present? group)` — the group's own string still holds it, or an
+equivalent one built since."""
+group_present(s::WorkspaceString, g::Group) = get_equivalent_group(s, g) !== nothing
+
+"""`(full-slipnode-name slipnode)` — the reader-facing name of a concept. The
+categories differ from both their short and their lowercase names, and the
+three group categories are spelled out rather than abbreviated."""
+function full_slipnode_name(node::Node, net::Slipnet)
+    node === net[:plato_alphabetic_position_category] && return "Alphabetic-Position"
+    node === net[:plato_bond_facet] && return "Bond-Facet"
+    node === net[:plato_object_category] && return "Object-Category"
+    node === net[:plato_letter_category] && return "Letter-Category"
+    node === net[:plato_length] && return "Length"
+    node === net[:plato_bond_category] && return "Bond-Category"
+    node === net[:plato_group_category] && return "Group-Category"
+    node === net[:plato_direction_category] && return "Direction"
+    node === net[:plato_string_position_category] && return "String-Position"
+    node === net[:plato_opposite] && return "Opposite"
+    node === net[:plato_identity] && return "Identity"
+    node === net[:plato_predgrp] && return "predecessor-group"
+    node === net[:plato_succgrp] && return "successor-group"
+    node === net[:plato_samegrp] && return "sameness-group"
+    return node.lowercase_name
+end
+
+"""`(unflipped-group-name group)` — a flipped group is named by what it was
+BEFORE the flip, which is why the two categories come out swapped. NB the
+Scheme's `cond` has no `else`: a sameness group returns Chez's unspecified
+value, since a sameness group cannot be flipped."""
+function unflipped_group_name(g::Group, net::Slipnet)
+    g.group_category === net[:plato_predgrp] && return "successor-group"
+    g.group_category === net[:plato_succgrp] && return "predecessor-group"
+    return nothing
+end
+
+"""`(full-workspace-object-name object)`. Same missing `else` as above."""
+function full_workspace_object_name(o::WSObject, net::Slipnet)
+    o isa Letter && return "letter"
+    g = o::Group
+    g.group_category === net[:plato_samegrp] && return "sameness-group"
+    g.group_category === net[:plato_predgrp] && return "predecessor-group"
+    g.group_category === net[:plato_succgrp] && return "successor-group"
+    return nothing
+end
+
+"""`(snag-object-phrase object)` — how a snag event names the thing it snagged
+on, in the prose Metacat writes about itself."""
+function snag_object_phrase(o)
+    o isa WorkspaceString && return string("the string \"", o.print_name, "\"")
+    o isa Letter && return string("the letter ", print_name(o))
+    return string("the ", join([print_name(l) for l in get_letters(o)]), " group")
+end
