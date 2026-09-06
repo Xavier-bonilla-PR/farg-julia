@@ -3,9 +3,25 @@
 Everything below assumes a **fresh container with a fresh clone** — no
 toolchain, nothing cached. Start here.
 
-Branch: `claude/copycat-metacat-folders-iybxko`
-Last commit at time of writing: the rule codelets, which complete `rules.ss`
-(see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
+**Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
+`Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
+
+**State at time of writing:** the last commit to touch the port is `1424c49`
+*"Port Metacat's temporal trace to Julia"*, which finished slice (B) of
+`trace.ss`; this document's own update sits on top of it, so `git log -1` will
+show the doc commit, not that one. The tree is clean and `origin` is in sync.
+**Twenty-four probes, 35,711 trace lines byte-identical** — confirmed by a full
+re-run on this exact tree, not carried over from an earlier one.
+
+**Next up:** `trace.ss` slice (C), the seven concrete event types
+(`trace.ss` 333-1310). It is the critical path — `answer-finder`,
+`report-new-answer`, `process-snag` and memory's two abstractors are all
+blocked on it. The plan is in section 6, step 6.
+
+**Toolchain this state was verified against** (section 1 installs exactly
+these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
+version is not incidental — the s3 URL in section 1 pins it, and the probes
+compare bit-exact floating point.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
 section 2 (run the suite). Do not write code until all twenty-four probes match on
@@ -86,9 +102,14 @@ ok    rulecodelets (3280 lines identical)
 ok    ruletranslate (1449 lines identical)
 ok    transstring (974 lines identical)
 ok    memory (505 lines identical)
-ok    patterns trace (334 lines identical)
+ok    patterns (334 lines identical)
+ok    trace (597 lines identical)
 all probes matched
 ```
+
+The whole suite takes about four minutes; `groupcodelets`, `bridgecodelets`
+and `themecodelets` are the slow ones, because each runs a real coderack on
+both sides.
 
 If any probe fails on a clean checkout, something in the environment differs —
 fix that before writing new code.
@@ -122,7 +143,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~11,000 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done, `memory.ss` all but its two abstractors, `trace.ss` two slices in
+### Metacat — **~13,000 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `memory.ss` all but its two trace-reading abstractors, `answers.ss` half done, `trace.ss` two slices of four in
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -418,12 +439,14 @@ by reading the code.
 
 ## 6. What's next, in order
 
-**~3,900 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
+**~3,000 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
 the commentary, plus the `answer-finder` body that `trace.ss` blocks;
-`trace.ss` 1,672, `jootsing.ss` 344, `justify.ss` ~290 left, `run.ss` 346,
-`breakers.ss` 47). `memory.ss` is done. Steps 0-4 below are done and
-are kept only for the "not ported, deliberately" notes buried in them; the live
-work starts at step 5.
+`trace.ss` ~1,100 left — slices (A) and (B) are in, (C) and (D) are not;
+`jootsing.ss` 344, `justify.ss` ~290 left, `run.ss` 346,
+`breakers.ss` 47). `memory.ss` is done apart from its two trace-reading
+abstractors. Steps 0-4 below are done, and step 5 is half done; they are kept
+for the "not ported, deliberately" notes buried in them. **The live work is
+step 6, slice (C).**
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -482,9 +505,9 @@ work starts at step 5.
      silently no-ops.
    `rules.ss` is now complete apart from `set-translated-rule-information`,
    which needs the translated strings `jootsing.ss` builds.
-5. **`answers.ss` (1,558)** — the next thing to do, and the reconnaissance is
-   already done. It is four separable pieces; take them in this order, because
-   each later one needs the earlier:
+5. **`answers.ss` (1,558)** — halfway: (A) and (B) are in, (C) is blocked on
+   the trace and (D) is untouched. It is four separable pieces, in this order,
+   because each later one needs the earlier:
 
    - **(A)** ~~rule translation~~ (`answers.ss` 1196-1558, ~360 lines) —
      **done**, as `answers.jl`, probe `ruletranslate`:
@@ -505,17 +528,23 @@ work starts at step 5.
      IS ported but has zero call sites anywhere in Metacat, and its
      `record-case` returns void for a verbatim clause, so the probe feeds it
      only extrinsic and intrinsic ones.
-   - **(B) the translated string** (1035-1195) — **next**: `make-translated-string`,
+   - **(B)** ~~the translated string~~ (1035-1195) — **done**, probe
+     `transstring`: `make-translated-string`,
      `attach-length-to-appropriate-groups`, `make-translated-rule-bridges`,
-     `irrelevant-translated-string-group?`, `process-snag`,
-     `get-rule-supporting-groups`. This is where the two pieces still deferred
-     from `images.ss` are needed — `instantiate-as-letter` and
-     `instantiate-as-group` — and where `set-translated-rule-information` from
-     `rules.ss` finally has something to work on. `get-equivalent-object` in
-     `context.jl` is currently a stub that only handles the "object already
-     belongs to this string" case; translated strings are the other case, and
-     it must be finished here. **That stub is the fifth of its family — see the
-     stub lesson in section 5, and the running list below.**
+     `irrelevant-translated-string-group?` and `get-rule-supporting-groups`.
+     The two pieces deferred from `images.ss` came with it —
+     `instantiate-as-letter` and `instantiate-as-group` — and
+     `set-translated-rule-information` from `rules.ss` finally has something to
+     work on. `get-equivalent-object` in `context.jl` is no longer a stub:
+     `get-equivalent-letter` and `get-equivalent-group` finish it, which is what
+     translated strings needed. `equivalent-workspace-objects?` was pulled
+     forward from `trace.ss` (it has no trace dependencies), along with
+     `get-real-object`.
+     **Not** ported: `process-snag`, which needs `*trace*`, `make-snag-event`
+     and `post-initial-codelets` — it goes with `trace.ss` slice (C). One trap
+     worth keeping: `make-translated-string` ASSUMES the rule applies, and takes
+     the `car` of a failed application, so the probe applies the rule first and
+     skips on failure exactly as `answer-finder` does.
    - **(C) `answer-finder` and `report-new-answer`** (20-95, 929-1035) —
      **half done, and the other half is BLOCKED on the trace.**
      `memory.ss` is ported (see below), so `answer-present?` is available.
@@ -544,7 +573,7 @@ work starts at step 5.
      thesis is really about. Leaf-ish, and testable the same way the rule
      transcription was: build the structures by hand and compare the prose.
 6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
-   the self-watching layers, and the CRITICAL PATH: `answer-finder`,
+   the self-watching layers, **the live work**, and the CRITICAL PATH: `answer-finder`,
    `report-new-answer`, `process-snag` and memory's two abstractors are all
    waiting on `trace.ss`. `memory.ss` is already in, and part of `justify.ss`
    (`compare-rule-clause-lists` and `traverse-rule-clauses`).

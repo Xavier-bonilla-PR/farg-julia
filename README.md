@@ -243,8 +243,12 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      bridges coderack bondcodelets themes \
                                      descriptioncodelets groupcodelets \
                                      bridgecodelets themecodelets images rules \
-                                     ruleapply ruleabstract rulecodelets
+                                     ruleapply ruleabstract rulecodelets \
+                                     ruletranslate transstring memory \
+                                     patterns trace
 ```
+
+Twenty-four layers, 35,711 trace lines, byte-identical.
 
 | layer | Julia | verified |
 |---|---|---|
@@ -267,11 +271,16 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
 | rule application: transforms run against the string's images | `rules.jl`, `images.jl` | 1,993 lines |
 | rule abstraction: rules read off the horizontal bridges | `rules.jl` | 1,709 lines |
 | the rule codelets: scout, evaluator, builder | `rules.jl`, `context.jl` | 3,280 lines |
-| temporal trace, episodic memory, justification | not yet ported | |
+| rule translation: the slippage log and its coattails | `answers.jl` | 1,449 lines |
+| the translated string, instantiated from an image | `answers.jl`, `images.jl` | 974 lines |
+| episodic memory: answer and snag descriptions, distance | `memory.jl` | 505 lines |
+| trace patterns and the clamping they drive | `trace.jl` | 334 lines |
+| the temporal trace and its generic event | `trace.jl` | 597 lines |
+| the trace's concrete events, justification, the run loop | not yet ported | |
 
 ### How much is done
 
-The nineteen verified layers cover roughly 9,400 of the ~16,000 lines of
+The twenty-four verified layers cover roughly 13,000 of the ~16,000 lines of
 Metacat's non-graphics Scheme. All three perceptual structures — bonds, groups
 and bridges — build, fight and break each other through the real coderack, and
 the self-watching loop is closed in both directions: the themespace reads what
@@ -281,9 +290,15 @@ for structures that would bear the themespace out. A rule — Metacat's answer t
 writes itself out in English, is read off the horizontal bridges rather than
 composed, and can be applied to a string to see what that string would look
 like under it, and the three codelets that drive all of that run through the
-real coderack. `rules.ss` is complete. What remains is `answers.ss`,
-`trace.ss`, `memory.ss`, `jootsing.ss`, `justify.ss` and the run loop — about
-4,900 lines — after which a run can reach an answer end to end.
+real coderack. `rules.ss` is complete, `memory.ss` is in bar the two
+abstractors that read a trace event, and Metacat has begun to watch itself: it translates a rule through the slippages a vertical
+bridge carries, instantiates the string that translation describes, remembers
+the answers and snags it has already met, and keeps a temporal trace of its own
+processing that it can query and clamp itself into. What remains is the trace's
+seven concrete event types and the monitors that raise them, the commentary
+`answers.ss` writes about its own answers, `jootsing.ss`, `justify.ss` and the
+run loop — about 3,000 lines — after which a run can reach an answer end to
+end.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
