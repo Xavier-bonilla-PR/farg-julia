@@ -15,6 +15,7 @@ include("../julia/src/coderack.jl")
 include("../julia/src/themes.jl")
 include("../julia/src/context.jl")
 include("../julia/src/rules.jl")
+include("../julia/src/answers.jl")
 include("../julia/src/trace.jl")
 include("../julia/src/justify.jl")
 

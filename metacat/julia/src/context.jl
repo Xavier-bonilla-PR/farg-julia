@@ -47,6 +47,9 @@ mutable struct MetacatCtx
     """`clamped-rule-list` — rules the user or a jootser has pinned. Read by
     the trace, which records them with every event."""
     clamped_rules::Vector{Any}
+    """`*temperature-clamped?*` — set while a snag holds the temperature up,
+    and cleared by the trace's `undo-snag-condition`."""
+    temperature_clamped::Bool
 end
 
 """A context with empty bridge storage and zeroed workspace averages, which is
@@ -61,7 +64,17 @@ MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                0, 0, 0, 0, 0, 0, 0, 0,
-               Any[], Any[], false, false, Any[])
+               Any[], Any[], false, false, Any[], false)
+
+"""`(get-all-vertical-CMs)` — every concept mapping of every built vertical
+bridge, which is what the whole vertical mapping amounts to."""
+get_all_vertical_cms(ctx::MetacatCtx) =
+    ConceptMapping[cm for b in ctx.vertical_bridges for cm in b.all_concept_mappings]
+
+"""`(clamp-salience)` / `(unclamp-salience)` — hold an object at full salience,
+so the model keeps looking at it. Snag events do this to what tripped them."""
+clamp_salience!(o) = (o.salience_clamped = true; o)
+unclamp_salience!(o) = (o.salience_clamped = false; o)
 
 """`*non-answer-strings*` — the three strings a non-justify-mode run works on."""
 all_strings(ctx::MetacatCtx) =

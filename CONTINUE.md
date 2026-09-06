@@ -6,17 +6,17 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** the last commit to touch the port is the one that
-added `justify.jl` — the rule-unification half of `justify.ss`. The tree is
-clean and `origin` is in sync. **Twenty-five probes, 36,000 trace lines
-byte-identical** — confirmed by a full re-run on this exact tree, not carried
-over from an earlier one.
+**State at time of writing:** the last commit to touch the port finished
+`trace.ss` slice (C) — all seven concrete event types. The tree is clean and
+`origin` is in sync. **Twenty-seven probes, 38281 trace lines byte-identical**
+— confirmed by a full re-run on this exact tree, not carried over from an
+earlier one.
 
-**Next up:** `trace.ss` slice (C), the seven concrete event types
-(`trace.ss` 333-1310). It is the critical path, and more is queued behind it
-than before: `answer-finder`, `report-new-answer`, `process-snag`, memory's two
-abstractors, ALL of `jootsing.ss`, and the `answer-justifier` codelet that is
-the rest of `justify.ss`. The plan is in section 6, step 6.
+**Next up:** `trace.ss` slice (D), the monitors (1310-1412) — small, and it
+unblocks the rest. With (C) in, everything that was queued behind it is now
+reachable: `answer-finder` and `report-new-answer`, `process-snag`, memory's
+two abstractors, ALL of `jootsing.ss`, and the `answer-justifier` codelet that
+is the rest of `justify.ss`. The plan is in section 6, step 6.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -74,10 +74,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns trace justify
+  patterns trace justify wsevents swevents
 ```
 
-Expected — twenty-five layers, **36,000 trace lines byte-identical**:
+Expected — twenty-seven layers, **38281 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -105,6 +105,8 @@ ok    memory (505 lines identical)
 ok    patterns (334 lines identical)
 ok    trace (597 lines identical)
 ok    justify (289 lines identical)
+ok    wsevents (1828 lines identical)
+ok    swevents (453 lines identical)
 all probes matched
 ```
 
@@ -442,7 +444,7 @@ by reading the code.
 
 **~3,000 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
 the commentary, plus the `answer-finder` body that `trace.ss` blocks;
-`trace.ss` ~1,100 left — slices (A) and (B) are in, (C) and (D) are not;
+`trace.ss` ~100 left — slices (A), (B) and (C) are in, only (D) remains;
 `jootsing.ss` 344, `justify.ss` ~160 left — the `answer-justifier` codelet
 only, `run.ss` 346, `breakers.ss` 47). `memory.ss` is done apart from its two
 trace-reading abstractors. Steps 0-4 below are done, and step 5 is half done; they are kept
@@ -575,10 +577,11 @@ step 6, slice (C).**
      thesis is really about. Leaf-ish, and testable the same way the rule
      transcription was: build the structures by hand and compare the prose.
 6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
-   the self-watching layers, **the live work**, and the CRITICAL PATH: `answer-finder`,
-   `report-new-answer`, `process-snag`, memory's two abstractors, ALL of
-   `jootsing.ss` and the rest of `justify.ss` are waiting on `trace.ss`
-   slice (C). `memory.ss` is already in.
+   the self-watching layers, **the live work**. Slice (C) is now IN, so
+   `answer-finder`, `report-new-answer`, `process-snag`, memory's two
+   abstractors, all of `jootsing.ss` and the rest of `justify.ss` are no longer
+   blocked — only slice (D) is still ahead of them, and it is small.
+   `memory.ss` is already in.
 
    **`justify.ss` is half done**, as `justify.jl`, probe `justify`: the
    rule-clause traversal and the two procs that ride it, `unify-rules`,
@@ -640,11 +643,46 @@ step 6, slice (C).**
      **Deferred with (C):** `progress-since-last-clamp`, `undo-last-clamp`,
      `progress-since-last-snag` and `undo-snag-condition`, the four methods
      that reach into a clamp or snag event for its progress evaluator.
-   - **(C) the seven concrete event types** (333-1310), the biggest piece:
-     answer, clamp, concept-activation, concept-mapping, group, rule, snag.
+   - **(C)** ~~the seven concrete event types~~ (333-1310), the biggest piece —
+     **done**, in two commits:
+     - the four WORKSPACE and SLIPNET events (concept-activation,
+       concept-mapping, group, rule), probe `wsevents` — the ones raised by the
+       model perceiving something. A `ConcreteEvent` abstract type forwards the
+       generic accessors through one set of methods; the three workspace types
+       override `type?` to answer to `:workspace` too.
+     - the three SELF-WATCHING events (answer, clamp, snag) and the four trace
+       methods deferred with them, probe `swevents`. Clamp and snag are the
+       only events that are ACTIVATED and DEACTIVATED — they impose a state
+       rather than describe one — and the only ones carrying a PROGRESS
+       EVALUATOR: a clamp scores EVENTS since it went up, a snag scores
+       STRUCTURES built since. The probe dumps the themespace, slipnet and
+       coderack before activating, while active, and after deactivating, which
+       is the only way to see that the imposition and its undoing match.
+     **Not** ported: the clamp event's `get-complement-codelet-pattern`, whose
+     `let*` never binds the variable it reads (the top-level
+     `get-complement-codelet-pattern` is a different name), so calling it
+     raises in Chez. Nothing calls it; it is left absent rather than given a
+     value it does not have.
+     Fixed on the way: `get_concept_pattern(::Rule)` returned a bare
+     `Vector{Node}` where the Scheme returns a full
+     `(concepts (<node> <activation>) ...)`. Only the `rules` probe consumed
+     it, and it stripped the wrapper itself, so the divergence never showed.
+     The node list is still available as `rule_concept_nodes`.
+     Probing note: the Scheme's monitors are live, so a coderack run raises
+     real events into `*trace*` on the Scheme side and none on the Julia side.
+     Both probes therefore never READ `*trace*` except where they put events
+     into it deliberately. Constructing an event draws no random numbers, so
+     the RNG streams stay in step — which is what lets these probes run a real
+     coderack, lifting the bonds-only restriction the `trace` probe worked
+     under.
    - **(D) the monitors** (1310-1412) that watch the workspace and raise
      events, and the importance thresholds that decide which are worth
-     recording.
+     recording. **This is the live work.** It is small — four `monitor-*`
+     procedures and four importance functions — and it is what makes events
+     raise themselves instead of being constructed by hand. Once it is in, the
+     `wsevents`/`swevents` restriction lifts entirely and a probe can compare
+     whole traces. `concept-mapping-importance` calls the themespace's
+     `supported-by-active-theme?`, which IS ported, so nothing blocks it.
 
    **The monitors are already live in the Scheme, and that shapes how (B) and
    (C) can be probed.** Building a group (`groups.ss` 951) or a bridge
@@ -672,10 +710,10 @@ alarms, not a backlog.
 
 | where | what is missing | when it becomes wrong |
 |---|---|---|
-| `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C, which is blocked on `trace.ss` |
-| `abstract_answer_description` / `abstract_snag_description` | not ported — they read an ANSWER EVENT | `trace.ss` |
-| `process_snag` | not ported — needs `make-snag-event` and `post-initial-codelets` | `trace.ss` slice (C) / `run.ss` |
-| the trace's four clamp/snag progress methods | not ported — they read a clamp or snag event's progress evaluator | `trace.ss` slice (C) |
+| `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C, no longer blocked — slice (C) is in |
+| `abstract_answer_description` / `abstract_snag_description` | not ported — they read an ANSWER EVENT | UNBLOCKED: `AnswerEvent` now exists |
+| `process_snag` | not ported — needs `post-initial-codelets` | UNBLOCKED for `make-snag-event`; still needs `run.ss` |
+| ~~the trace's four clamp/snag progress methods~~ | **done** with slice (C) | — |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | `top-down-bond-scout:category` and `:direction` (`bonds.ss` 217, 269) | NOT PORTED, though `slipnet.jl` already names them as top-down codelet types for the pred/succ/sameness and left/right nodes | as soon as an active slipnode posts its top-down codelets — i.e. the run loop. `codelets_bonds.jl` registers only the three bottom-up bond codelets |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | the `answer-justifier` codelet, the unported half of `justify.ss` |
@@ -763,6 +801,11 @@ bridges coderack themes context codelets_bonds codelets_descriptions
 codelets_groups codelets_bridges codelets_themes rules answers trace justify
 memory
 ```
+
+`trace.jl` now needs `answers.jl` BEFORE it, not just at call time: the answer
+and snag event structs have `SlippageLog` FIELDS. A probe that includes
+`trace.jl` without `answers.jl` fails at load with `UndefVarError: SlippageLog`
+— which is exactly how the `justify` probe broke when slice (C) landed.
 
 `justify.jl` loads before `memory.jl`, as justify.ss does before memory.ss:
 memory's distance metric calls `compare_rule_clause_lists`, which lives in

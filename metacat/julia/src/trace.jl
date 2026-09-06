@@ -811,3 +811,442 @@ function snag_object_phrase(o)
     o isa Letter && return string("the letter ", print_name(o))
     return string("the ", join([print_name(l) for l in get_letters(o)]), " group")
 end
+
+# ============================================================================
+# trace.ss slice (C), part 2: the SELF-WATCHING events.
+#
+# Where the four types above record the model perceiving something, these three
+# record it reacting to its own history. An ANSWER event is a result reached; a
+# CLAMP event is the model deciding to force itself into a pattern it has
+# noticed; a SNAG event is a rule that could not be applied and the impasse
+# that follows. The last two are the only events that are ACTIVATED and
+# DEACTIVATED — they do not merely describe a state, they impose one — and the
+# only ones carrying a PROGRESS EVALUATOR, which is how the trace later asks
+# whether the detour was worth taking.
+
+# --- answer events ----------------------------------------------------------
+
+"""`(make-answer-event ...)` — a result reached, with everything it rested on:
+both rules, the vertical mapping that let one be read as the other, the groups
+and reference objects involved, and the slippage log of the translation.
+
+`unjustified_slippages` is non-empty when Metacat settled for an answer it
+could not fully account for, which is the difference between finding an answer
+and justifying one."""
+mutable struct AnswerEvent <: ConcreteEvent
+    generic::GenericEvent
+    initial_string::WorkspaceString
+    modified_string::WorkspaceString
+    target_string::WorkspaceString
+    answer_string::WorkspaceString
+    top_rule::Rule
+    bottom_rule::Rule
+    supporting_vertical_bridges::Vector{Bridge}
+    supporting_groups::Vector{Any}
+    top_rule_ref_objects::Vector{Any}
+    bottom_rule_ref_objects::Vector{Any}
+    slippage_log::SlippageLog
+    unjustified_slippages::Vector{ConceptMapping}
+    """Filled in later by the memory, which abstracts the event into a
+    description it can compare against remembered answers."""
+    answer_description::Any
+end
+
+function make_answer_event(initial_string, modified_string, target_string,
+                           answer_string, top_rule::Rule, bottom_rule::Rule,
+                           supporting_vertical_bridges, supporting_groups,
+                           top_rule_ref_objects, bottom_rule_ref_objects,
+                           slippage_log::SlippageLog, unjustified_slippages, ctx)
+    return AnswerEvent(make_generic_event(:answer, ctx),
+                       initial_string, modified_string, target_string, answer_string,
+                       top_rule, bottom_rule,
+                       Bridge[supporting_vertical_bridges...],
+                       Any[supporting_groups...],
+                       Any[top_rule_ref_objects...], Any[bottom_rule_ref_objects...],
+                       slippage_log, ConceptMapping[unjustified_slippages...],
+                       nothing)
+end
+
+event_print_name(e::AnswerEvent) = string("[Answer ", e.answer_string.print_name, "]")
+
+problem_print_name(e::AnswerEvent) =
+    string(e.initial_string.print_name, " => ", e.modified_string.print_name, "; ",
+           e.target_string.print_name, " => ?")
+
+problem_answer_print_name(e::AnswerEvent) =
+    string(e.initial_string.print_name, " => ", e.modified_string.print_name, "; ",
+           e.target_string.print_name, " => ", e.answer_string.print_name)
+
+get_initial_string(e::AnswerEvent) = e.initial_string
+get_modified_string(e::AnswerEvent) = e.modified_string
+get_target_string(e::AnswerEvent) = e.target_string
+get_answer_string(e::AnswerEvent) = e.answer_string
+get_initial_letters(e::AnswerEvent) = e.initial_string.letter_categories
+get_modified_letters(e::AnswerEvent) = e.modified_string.letter_categories
+get_target_letters(e::AnswerEvent) = e.target_string.letter_categories
+get_answer_letters(e::AnswerEvent) = e.answer_string.letter_categories
+get_slippage_log(e::AnswerEvent) = e.slippage_log
+get_supporting_groups(e::AnswerEvent) = e.supporting_groups
+get_unjustified_slippages(e::AnswerEvent) = e.unjustified_slippages
+is_unjustified(e::AnswerEvent) = !isempty(e.unjustified_slippages)
+get_answer_description(e::AnswerEvent) = e.answer_description
+set_answer_description!(e::AnswerEvent, a) = (e.answer_description = a; e)
+
+get_event_rule(e::AnswerEvent, rule_type::Symbol) =
+    rule_type === :top ? e.top_rule : e.bottom_rule
+
+get_rule_ref_objects(e::AnswerEvent, rule_type::Symbol) =
+    rule_type === :top ? e.top_rule_ref_objects : e.bottom_rule_ref_objects
+
+"""The top and bottom mappings come from the RULES, which hold their own
+supporting bridges; only the vertical one is stored on the event."""
+function get_supporting_bridges(e::AnswerEvent, type::Symbol)
+    type === :top && return e.top_rule.supporting_horizontal_bridges
+    type === :vertical && return e.supporting_vertical_bridges
+    return e.bottom_rule.supporting_horizontal_bridges
+end
+
+"""`(get-absolute-quality)` / `(get-relative-quality)` — how good the answer is,
+60% the rule's quality and 40% how cold the model was when it found it. A cold
+model has settled, so it believes itself more."""
+get_absolute_quality(e::AnswerEvent) =
+    sround(weighted_average([e.top_rule.quality, sub_from_100(get_temperature(e))],
+                            [60, 40]))
+
+get_event_relative_quality(e::AnswerEvent, ctx) =
+    sround(weighted_average([get_relative_quality(e.top_rule, ctx),
+                             sub_from_100(get_temperature(e))], [60, 40]))
+
+get_event_quality(e::AnswerEvent) = get_absolute_quality(e)
+get_event_strength(e::AnswerEvent) = get_absolute_quality(e)
+
+"""NB: ANY two answer events are equal. The trace holds at most one answer for
+a given problem, so the type alone identifies it."""
+events_equal(e::AnswerEvent, other) = event_type_is(other, :answer)
+
+# --- clamp events -----------------------------------------------------------
+
+"""`(make-clamp-event clamp-type patterns rules progress-focus)` — the model
+forcing itself into a pattern it has noticed about its own processing.
+
+The patterns handed in are sorted by kind. A theme pattern also contributes the
+concept pattern it implies, so clamping "string-position opposite" also wakes
+the concepts that idea is made of.
+
+`progress_focus` names the event type that counts as progress while this clamp
+is up: the evaluator scores an event by its strength if it is of that type, and
+0 otherwise."""
+mutable struct ClampEvent <: ConcreteEvent
+    generic::GenericEvent
+    clamp_type::Symbol          # :rule_codelet_clamp | :snag_response_clamp |
+                                # :justify_clamp | :manual_clamp
+    clamped_theme_patterns::Vector{Any}
+    clamped_concept_patterns::Vector{Any}
+    clamped_codelet_patterns::Vector{Any}
+    theme_related_concept_patterns::Vector{Any}
+    rules::Vector{Rule}
+    unifying_slippages::Union{Nothing,Vector{ConceptMapping}}
+    progress_focus::Symbol
+    progress_achieved::Int
+end
+
+function make_clamp_event(clamp_type::Symbol, patterns, rules, progress_focus::Symbol,
+                          ctx)
+    specified_theme_patterns = Any[p for p in patterns if is_theme_pattern(p)]
+    specified_concept_patterns = Any[p for p in patterns if is_concept_pattern(p)]
+    specified_codelet_patterns = Any[p for p in patterns if is_codelet_pattern(p)]
+    theme_related = Any[get_associated_concept_pattern(p, ctx.net)
+                        for p in specified_theme_patterns]
+    rules_v = Rule[rules...]
+    # A justify clamp is clamping two rules it believes unify, so it records
+    # the slippages that unification rests on. Any other clamp has no rules.
+    unifying = nothing
+    if clamp_type === :justify_clamp
+        top = rules_v[findfirst(r -> r.rule_type === :top, rules_v)]
+        bottom = rules_v[findfirst(r -> r.rule_type === :bottom, rules_v)]
+        unifying = get_unifying_slippages(top, bottom, ctx.net)
+    end
+    return ClampEvent(make_generic_event(:clamp, ctx), clamp_type,
+                      specified_theme_patterns,
+                      Any[specified_concept_patterns..., theme_related...],
+                      specified_codelet_patterns, theme_related, rules_v,
+                      unifying, progress_focus, 0)
+end
+
+event_print_name(e::ClampEvent) = "[Clamp]"
+get_clamped_theme_patterns(e::ClampEvent) = e.clamped_theme_patterns
+get_clamped_concept_patterns(e::ClampEvent) = e.clamped_concept_patterns
+get_clamped_codelet_patterns(e::ClampEvent) = e.clamped_codelet_patterns
+get_theme_related_concept_patterns(e::ClampEvent) = e.theme_related_concept_patterns
+get_clamp_type(e::ClampEvent) = e.clamp_type
+is_clamp_type(e::ClampEvent, type::Symbol) = type === e.clamp_type
+get_progress_focus(e::ClampEvent) = e.progress_focus
+get_progress_achieved(e::ClampEvent) = e.progress_achieved
+update_progress_achieved!(e::ClampEvent, v::Int) = (e.progress_achieved = v; e)
+get_event_rules(e::ClampEvent) = e.rules
+get_unifying_slippages(e::ClampEvent) = e.unifying_slippages
+get_event_strength(e::ClampEvent) = 100
+
+# NB: the Scheme's `get-complement-codelet-pattern` method reads a variable that
+# its `let*` never binds — the top-level `get-complement-codelet-pattern` is a
+# different name — so calling it raises an unbound-variable error in Chez.
+# Nothing calls it. It is not ported rather than silently given a value.
+
+function get_event_rule(e::ClampEvent, rule_type::Symbol)
+    i = findfirst(r -> r.rule_type === rule_type, e.rules)
+    return i === nothing ? nothing : e.rules[i]
+end
+
+get_all_clamped_patterns(e::ClampEvent) =
+    Any[e.clamped_theme_patterns..., e.clamped_concept_patterns...,
+        e.clamped_codelet_patterns...]
+
+"""`(get-progress-evaluator)` — score an EVENT: its strength if it is of the
+focused type, 0 otherwise."""
+progress_evaluator(e::ClampEvent, event) =
+    event_type_is(event, e.progress_focus) ? get_event_strength(event) : 0
+
+events_equal(e::ClampEvent, other, net::Slipnet) =
+    event_type_is(other, :clamp) && is_clamp_type(other, e.clamp_type) &&
+    e.progress_focus === get_progress_focus(other) &&
+    sets_equal_pred((r1, r2) -> rules_equal(r1, r2, net), e.rules,
+                    get_event_rules(other))
+
+"""`(activate)` — impose everything the clamp names. The comment window is
+graphics, so only the model-visible half is here."""
+function activate!(e::ClampEvent, tr::TemporalTrace, ctx)
+    undo_snag_condition!(tr, ctx)
+    for rule in e.rules
+        clamp_rule!(ctx, rule)
+    end
+    for pattern in e.clamped_theme_patterns
+        clamp_theme_pattern!(ctx.themespace, pattern)
+    end
+    for pattern in e.clamped_concept_patterns
+        clamp_concept_pattern!(pattern)
+    end
+    for pattern in e.clamped_codelet_patterns
+        clamp_codelet_pattern!(pattern, ctx.coderack)
+    end
+    return e
+end
+
+function deactivate!(e::ClampEvent, ctx)
+    for rule in e.rules
+        unclamp_rule!(ctx, rule)
+    end
+    for pattern in e.clamped_theme_patterns
+        unclamp_theme_pattern!(ctx.themespace, pattern)
+    end
+    for pattern in e.clamped_concept_patterns
+        unclamp_concept_pattern!(pattern)
+    end
+    for pattern in e.clamped_codelet_patterns
+        unclamp_codelet_pattern!(pattern, ctx.coderack)
+    end
+    return e
+end
+
+# --- snag events ------------------------------------------------------------
+
+"""`(get-snag-theme-pattern snag-concept-mappings)` — the vertical theme
+pattern the snag implicates. `remove-duplicates` is VALUE equality here, and
+keeps the LAST of each group."""
+function get_snag_theme_pattern(snag_concept_mappings)
+    raw = Any[Any[cm_type(cm), cm.label] for cm in snag_concept_mappings]
+    deduped = Any[x for (i, x) in enumerate(raw)
+                  if !any(y -> y[1] === x[1] && y[2] === x[2], raw[(i + 1):end])]
+    return Any[:vertical_bridge, deduped...]
+end
+
+"""`(get-snag-concept-pattern snag-objects)` — every descriptor of every object
+the snag involved, clamped. `remq-duplicates` keeps the LAST of each group."""
+function get_snag_concept_pattern(snag_objects)
+    descriptors = Node[]
+    for o in snag_objects
+        append!(descriptors, get_all_descriptors(o))
+    end
+    deduped = Node[n for (i, n) in enumerate(descriptors)
+                   if !any(x -> x === n, descriptors[(i + 1):end])]
+    return Any[:concepts, Any[Any[d, MAX_ACTIVATION] for d in deduped]...]
+end
+
+"""`(make-snag-event ...)` — a rule that could not be applied, and the impasse
+that follows. The failure result says which of the three ways it failed, and
+which objects it failed on; those objects have their salience CLAMPED while the
+snag is active, so the model keeps looking at what tripped it up."""
+mutable struct SnagEvent <: ConcreteEvent
+    generic::GenericEvent
+    failure_result::Vector{Any}
+    snag_type::Symbol                  # :SWAP | :CONFLICT | :CHANGE
+    rule::Rule
+    translated_rule::Rule
+    supporting_vertical_bridges::Vector{Bridge}
+    slippage_log::SlippageLog
+    rule_ref_objects::Vector{Any}
+    snag_objects::Vector{Any}
+    snag_bridges::Vector{Bridge}
+    snag_concept_mappings::Vector{ConceptMapping}
+    snag_theme_pattern::Vector{Any}
+    snag_concept_pattern::Vector{Any}
+    progress_achieved::Int
+end
+
+function make_snag_event(failure_result, rule::Rule, translated_rule::Rule,
+                         supporting_vertical_bridges, slippage_log::SlippageLog,
+                         rule_ref_objects, ctx)
+    snag_type = failure_result[1]::Symbol
+    snag_objects = snag_type === :SWAP     ? Any[failure_result[2]...] :
+                   snag_type === :CONFLICT ? Any[failure_result[2], failure_result[4]] :
+                                             Any[failure_result[2]]
+    snag_bridges = Bridge[b for b in (get_bridge(o, :vertical) for o in snag_objects)
+                          if b !== nothing]
+    # With no vertical bridge on any snagged object, the snag implicates the
+    # whole vertical mapping instead.
+    snag_concept_mappings = isempty(snag_bridges) ?
+        get_all_vertical_cms(ctx) :
+        ConceptMapping[cm for b in snag_bridges for cm in b.all_concept_mappings]
+    return SnagEvent(make_generic_event(:snag, ctx), Any[failure_result...], snag_type,
+                     rule, translated_rule, Bridge[supporting_vertical_bridges...],
+                     slippage_log, Any[rule_ref_objects...], snag_objects,
+                     snag_bridges, snag_concept_mappings,
+                     get_snag_theme_pattern(snag_concept_mappings),
+                     get_snag_concept_pattern(snag_objects), 0)
+end
+
+event_print_name(e::SnagEvent) = "[Snag]"
+get_failure_result(e::SnagEvent) = e.failure_result
+get_snag_type(e::SnagEvent) = e.snag_type
+get_snag_objects(e::SnagEvent) = e.snag_objects
+get_snag_bridges(e::SnagEvent) = e.snag_bridges
+get_snag_concept_mappings(e::SnagEvent) = e.snag_concept_mappings
+get_snag_theme_pattern(e::SnagEvent) = e.snag_theme_pattern
+get_snag_concept_pattern(e::SnagEvent) = e.snag_concept_pattern
+get_slippage_log(e::SnagEvent) = e.slippage_log
+get_rule_ref_objects(e::SnagEvent) = e.rule_ref_objects
+get_progress_achieved(e::SnagEvent) = e.progress_achieved
+update_progress_achieved!(e::SnagEvent, v::Int) = (e.progress_achieved = v; e)
+get_event_strength(e::SnagEvent) = 100
+
+"""The translated rule is the "bottom" one here: it is the reading that failed."""
+get_event_rule(e::SnagEvent, rule_type::Symbol) =
+    rule_type === :top ? e.rule : e.translated_rule
+
+"""A snag has no supporting BOTTOM bridges, because the translated rule failed."""
+get_supporting_bridges(e::SnagEvent, bridge_type::Symbol) =
+    bridge_type === :top ? e.rule.supporting_horizontal_bridges :
+                           e.supporting_vertical_bridges
+
+"""`(get-progress-evaluator)` — score a STRUCTURE, not an event: its strength,
+unless it is a bond, which is too cheap to count as getting anywhere."""
+snag_progress_evaluator(structure) = structure isa Bond ? 0 : structure.strength
+
+events_equal(e::SnagEvent, other, net::Slipnet) =
+    event_type_is(other, :snag) &&
+    rules_equal(e.translated_rule, get_event_rule(other, :bottom), net) &&
+    sets_equal_pred(equivalent_workspace_objects, e.snag_objects,
+                    get_snag_objects(other))
+
+"""`(get-explanation)` — the English Metacat writes about why it snagged."""
+function snag_explanation(e::SnagEvent, net::Slipnet)
+    fr = e.failure_result
+    if e.snag_type === :SWAP
+        objects, dimension = fr[2], fr[3]
+        return string("no ", (dimension::Node).lowercase_name, " swap is possible between ",
+                      punctuate([snag_object_phrase(o) for o in objects]), " in ",
+                      get_string(objects[1]).print_name)
+    elseif e.snag_type === :CONFLICT
+        o1, d1, o2, d2 = fr[2], fr[3], fr[4], fr[5]
+        return string("changing the ", (d1::Node).lowercase_name, " of ",
+                      snag_object_phrase(o1), " conflicts with changing the ",
+                      (d2::Node).lowercase_name, " of ", snag_object_phrase(o2),
+                      " in ", get_string(o1).print_name)
+    end
+    object, transform = fr[2], fr[3]
+    s = get_string(object)
+    if transform[1] === net[:plato_group_category]
+        return string("reversing the starting and ending ",
+                      (transform[3]::Node).lowercase_name, " of ",
+                      snag_object_phrase(object), " is not possible in ", s.print_name)
+    end
+    target = platonic_relation(transform[2]::Node, net) ?
+             string("its ", (transform[2]::Node).lowercase_name) :
+             string("`", (transform[2]::Node).lowercase_name, "'")
+    return string("changing the ", (transform[1]::Node).lowercase_name, " of ",
+                  snag_object_phrase(object), " to ", target, " is not possible in ",
+                  s.print_name)
+end
+
+"""`(activate)` — hold the snagged objects in view and wake the concepts they
+are described by, so the model keeps worrying at what stopped it."""
+function activate!(e::SnagEvent, tr::TemporalTrace, ctx)
+    undo_last_clamp!(tr, ctx)
+    for o in e.snag_objects
+        clamp_salience!(o)
+    end
+    clamp_concept_pattern!(e.snag_concept_pattern)
+    return e
+end
+
+function deactivate!(e::SnagEvent, ctx)
+    for o in e.snag_objects
+        unclamp_salience!(o)
+    end
+    unclamp_concept_pattern!(e.snag_concept_pattern)
+    return e
+end
+
+# --- the four trace methods deferred with these events ----------------------
+
+"""`(progress-since-last-clamp)` — the best any event since the last clamp
+scored under that clamp's own evaluator."""
+function progress_since_last_clamp(tr::TemporalTrace, ctx)
+    last_clamp = get_last_event(tr, :clamp)
+    last_clamp === nothing && return 0
+    new_events = get_new_events_since_last(tr, :clamp)
+    return maximum_or_zero([progress_evaluator(last_clamp::ClampEvent, ev)
+                            for ev in new_events])
+end
+
+"""`(undo-last-clamp)` — end the clamp period, record what the clamp achieved,
+and take back everything it imposed."""
+function undo_last_clamp!(tr::TemporalTrace, ctx)
+    tr.within_clamp_period || return tr
+    last_clamp = get_last_event(tr, :clamp)
+    progress = progress_since_last_clamp(tr, ctx)
+    tr.within_clamp_period = false
+    tr.last_unclamp_time = ctx.codelet_count
+    if last_clamp !== nothing
+        update_progress_achieved!(last_clamp::ClampEvent, progress)
+        deactivate!(last_clamp::ClampEvent, ctx)
+    end
+    return tr
+end
+
+"""`(progress-since-last-snag)` — the best STRUCTURE built since the last snag,
+scored by that snag's evaluator. Structures, not events: getting past a snag
+means building something, not noticing something."""
+function progress_since_last_snag(tr::TemporalTrace, ctx)
+    last_snag = get_last_event(tr, :snag)
+    last_snag === nothing && return 0
+    new_structures = get_new_structures_since_last(tr, :snag, ctx)
+    return maximum_or_zero([snag_progress_evaluator(s) for s in new_structures])
+end
+
+"""`(undo-snag-condition)`. NB the Scheme also clears `*temperature-clamped?*`,
+which the port keeps on the context."""
+function undo_snag_condition!(tr::TemporalTrace, ctx)
+    tr.within_snag_period || return tr
+    last_snag = get_last_event(tr, :snag)
+    tr.within_snag_period = false
+    if last_snag !== nothing
+        update_progress_achieved!(last_snag::SnagEvent,
+                                  progress_since_last_snag(tr, ctx))
+        deactivate!(last_snag::SnagEvent, ctx)
+    end
+    ctx.temperature_clamped = false
+    return tr
+end
+
+"""`(maximum l)` — 0 for the empty list, as utilities.ss has it."""
+maximum_or_zero(l) = isempty(l) ? 0 : maximum(l)
