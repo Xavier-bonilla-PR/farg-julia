@@ -6,17 +6,17 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** the last commit to touch the port is `1424c49`
-*"Port Metacat's temporal trace to Julia"*, which finished slice (B) of
-`trace.ss`; this document's own update sits on top of it, so `git log -1` will
-show the doc commit, not that one. The tree is clean and `origin` is in sync.
-**Twenty-four probes, 35,711 trace lines byte-identical** — confirmed by a full
-re-run on this exact tree, not carried over from an earlier one.
+**State at time of writing:** the last commit to touch the port is the one that
+added `justify.jl` — the rule-unification half of `justify.ss`. The tree is
+clean and `origin` is in sync. **Twenty-five probes, 36,000 trace lines
+byte-identical** — confirmed by a full re-run on this exact tree, not carried
+over from an earlier one.
 
 **Next up:** `trace.ss` slice (C), the seven concrete event types
-(`trace.ss` 333-1310). It is the critical path — `answer-finder`,
-`report-new-answer`, `process-snag` and memory's two abstractors are all
-blocked on it. The plan is in section 6, step 6.
+(`trace.ss` 333-1310). It is the critical path, and more is queued behind it
+than before: `answer-finder`, `report-new-answer`, `process-snag`, memory's two
+abstractors, ALL of `jootsing.ss`, and the `answer-justifier` codelet that is
+the rest of `justify.ss`. The plan is in section 6, step 6.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -74,10 +74,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns trace
+  patterns trace justify
 ```
 
-Expected — twenty-four layers, **35,711 trace lines byte-identical**:
+Expected — twenty-five layers, **36,000 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -104,6 +104,7 @@ ok    transstring (974 lines identical)
 ok    memory (505 lines identical)
 ok    patterns (334 lines identical)
 ok    trace (597 lines identical)
+ok    justify (289 lines identical)
 all probes matched
 ```
 
@@ -442,9 +443,9 @@ by reading the code.
 **~3,000 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
 the commentary, plus the `answer-finder` body that `trace.ss` blocks;
 `trace.ss` ~1,100 left — slices (A) and (B) are in, (C) and (D) are not;
-`jootsing.ss` 344, `justify.ss` ~290 left, `run.ss` 346,
-`breakers.ss` 47). `memory.ss` is done apart from its two trace-reading
-abstractors. Steps 0-4 below are done, and step 5 is half done; they are kept
+`jootsing.ss` 344, `justify.ss` ~160 left — the `answer-justifier` codelet
+only, `run.ss` 346, `breakers.ss` 47). `memory.ss` is done apart from its two
+trace-reading abstractors. Steps 0-4 below are done, and step 5 is half done; they are kept
 for the "not ported, deliberately" notes buried in them. **The live work is
 step 6, slice (C).**
 
@@ -562,8 +563,9 @@ step 6, slice (C).**
      new one reminds it of, and `calculate-answer-distance` with everything it
      reads — `intersect-themes`, `get-snag-justified-themes`,
      `answer-incoherent?`, `theme-abstractness`, and
-     `compare-rule-clause-lists` / `traverse-rule-clauses` pulled forward from
-     `justify.ss`, whose only caller so far this is.
+     `compare-rule-clause-lists` / `traverse-rule-clauses`, which have since
+     moved to `justify.jl` — the file they came from — now that justify.ss has
+     its own use for them.
      **Not** ported: `abstract-answer-description` and
      `abstract-snag-description`, which read an ANSWER EVENT — they come with
      `trace.ss`; and the memory window.
@@ -574,9 +576,45 @@ step 6, slice (C).**
      transcription was: build the structures by hand and compare the prose.
 6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
    the self-watching layers, **the live work**, and the CRITICAL PATH: `answer-finder`,
-   `report-new-answer`, `process-snag` and memory's two abstractors are all
-   waiting on `trace.ss`. `memory.ss` is already in, and part of `justify.ss`
-   (`compare-rule-clause-lists` and `traverse-rule-clauses`).
+   `report-new-answer`, `process-snag`, memory's two abstractors, ALL of
+   `jootsing.ss` and the rest of `justify.ss` are waiting on `trace.ss`
+   slice (C). `memory.ss` is already in.
+
+   **`justify.ss` is half done**, as `justify.jl`, probe `justify`: the
+   rule-clause traversal and the two procs that ride it, `unify-rules`,
+   `get-unifying-slippages`, `remove-whole/single-concept-mappings`,
+   `get-vertical-theme-pattern-to-clamp` and the two heuristics it applies
+   (`add-direction-entry`, `replace-bond-category-entry`). Unification is pure
+   structure — it never reads the workspace — so the probe writes its rule
+   PAIRS by hand from the grammar, the way the `rules` probe writes its clause
+   table, and walks every arm deliberately: identical nodes, slip-linked nodes,
+   unrelated nodes, shape mismatches at each level (changes, clauses, scope
+   symbols, clause kinds), the `'string`/plato-group special case both ways
+   round, and verbatim rules, which unify with nothing.
+   `compare-rule-clause-lists` and `traverse-rule-clauses` moved here from
+   `memory.jl`; `traverse-rule-clauses` regained the `proc` argument the
+   Scheme always had, since memory needs `rule-clause-comparison-proc` and
+   unification needs `concept-mapping-proc`.
+   **Not** ported: the `answer-justifier` codelet (justify.ss 20-180), which
+   needs `report-new-answer` (answers.ss step C), `clamp-rules` →
+   `make-clamp-event` (slice C), `monitor-new-rules` (slice D) and the answer
+   string that only justify mode builds.
+   Two traps worth keeping. `remove-whole/single-concept-mappings` is
+   `(remq (select ...) cms)` — `select` returns only the FIRST match, so a
+   SECOND whole/single mapping survives; the `whole-single-twice` pair pins
+   that down. And `retention-probability` returns exactly 1 for a
+   string-position entry, which short-circuits `prob?` WITHOUT drawing, so the
+   RNG stream depends on which dimensions a pattern names.
+
+   **`jootsing.ss` is entirely blocked on slice (C)** and was not started.
+   Both its codelets (`jootser`, `progress-watcher`) and
+   `get-clamp-jootsing-probability` read clamp and snag EVENTS —
+   `get-clamp-type`, `get-progress-achieved`, `get-snag-theme-pattern`,
+   `get-snag-objects` — and build new ones with `make-clamp-event`;
+   `get-most-recent-event-set` is generic over event type but has only clamp
+   and snag callers. `%satisfactory-rule-quality%` and `%settling-period%`
+   go with them (`%max-clamp-period%` and `%grace-period%` are already in
+   `trace.jl`). Do slice (C) first; jootsing then follows almost mechanically.
 
    `trace.ss` splits cleanly and is being taken in slices:
    - **(A)** ~~patterns and clamping~~ (1412-1672, ~260 lines) — **done**, as
@@ -640,7 +678,7 @@ alarms, not a backlog.
 | the trace's four clamp/snag progress methods | not ported — they read a clamp or snag event's progress evaluator | `trace.ss` slice (C) |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | `top-down-bond-scout:category` and `:direction` (`bonds.ss` 217, 269) | NOT PORTED, though `slipnet.jl` already names them as top-down codelet types for the pred/succ/sameness and left/right nodes | as soon as an active slipnode posts its top-down codelets — i.e. the run loop. `codelets_bonds.jl` registers only the three bottom-up bond codelets |
-| justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | `justify.ss` |
+| justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | the `answer-justifier` codelet, the unported half of `justify.ss` |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
 
@@ -722,8 +760,13 @@ call time, so a body may call forward. The order that works:
 ```
 schemenum utilities slipnet workspace concept_mappings images bonds groups
 bridges coderack themes context codelets_bonds codelets_descriptions
-codelets_groups codelets_bridges codelets_themes rules answers trace memory
+codelets_groups codelets_bridges codelets_themes rules answers trace justify
+memory
 ```
+
+`justify.jl` loads before `memory.jl`, as justify.ss does before memory.ss:
+memory's distance metric calls `compare_rule_clause_lists`, which lives in
+`justify.jl`.
 
 `rules.jl` needs `bridges.jl` (it dispatches on `Bridge`), `coderack.jl` and
 `context.jl` (it registers codelet types at load time and dispatches on

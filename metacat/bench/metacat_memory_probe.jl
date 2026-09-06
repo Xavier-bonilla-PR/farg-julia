@@ -19,6 +19,7 @@ include("../julia/src/codelets_bridges.jl")
 include("../julia/src/rules.jl")
 include("../julia/src/answers.jl")
 include("../julia/src/trace.jl")
+include("../julia/src/justify.jl")
 include("../julia/src/memory.jl")
 
 nm(n) = n === nothing ? "-" : n.lowercase_name

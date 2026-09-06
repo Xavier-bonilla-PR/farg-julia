@@ -31,6 +31,11 @@ const DISTANCE_THRESHOLD = 5
 
 # `entries` and `theme_pattern_entries_equal` are trace.ss's, and live in
 # trace.jl, which loads first — as trace.ss does before memory.ss.
+#
+# `compare_rule_clause_lists` and the rule-clause traversal underneath it are
+# justify.ss's, and live in justify.jl, which loads first for the same reason.
+# The memory's distance metric was their first caller; `unify_rules` and
+# `get_unifying_slippages` are the rest of justify.ss's own use of them.
 
 """`(intersect-themes themes1 themes2)`. NB: built by `cross-product-filter-map`
 keeping the element from the FIRST list, so an entry from `themes1` survives
@@ -194,85 +199,6 @@ answers_equal(a::AnswerDescription, other::AnswerDescription, net::Slipnet) =
                              other.top_rule_clauses, other.bottom_rule_clauses, net)
 
 # --- how far apart two answers are ------------------------------------------
-
-"""`(compare-rule-clause-lists rc-list1 rc-list2)` (justify.ss) — the pairs of
-slipnodes at which two rules differ, or `nothing` when they differ so much
-that no correspondence can be made at all.
-
-Ported here rather than with the rest of `justify.ss` because the memory's
-distance metric is its only caller so far."""
-function compare_rule_clause_lists(rc_list1::Vector{RuleClause},
-                                   rc_list2::Vector{RuleClause}, net::Slipnet)
-    if verbatim_rule_clause_list(rc_list1) && verbatim_rule_clause_list(rc_list1)
-        # NB: the Scheme tests rc-list1 TWICE — rc-list2 is never looked at.
-            return rule_clause_lists_equal(rc_list1, rc_list2, net) ? Any[] : nothing
-    end
-    return traverse_rule_clauses(rc_list1, rc_list2, net)
-end
-
-"""`(verbatim-rule-clause-list? rc-list)`."""
-verbatim_rule_clause_list(rc_list) =
-    length(rc_list) == 1 && is_verbatim_clause(rc_list[1])
-
-"""`(traverse-rule-clauses clauses1 clauses2 fail proc)` with
-`rule-clause-comparison-proc`: walk two rules in parallel and collect the
-slipnode pairs where they disagree, failing outright if their SHAPES differ.
-
-NB the `'string` special case: a rule that says "the string" and one that says
-"the whole group" are talking about the same thing."""
-function traverse_rule_clauses(clauses1, clauses2, net::Slipnet)
-    results = Any[]
-    failed = false
-    function walk(x1, x2)
-        failed && return
-        empty1 = x1 isa AbstractVector && isempty(x1)
-        empty2 = x2 isa AbstractVector && isempty(x2)
-        (empty1 && empty2) && return
-        (empty1 || empty2) && (failed = true; return)
-        if x1 isa AbstractVector && x2 isa AbstractVector
-            # The Scheme walks the REST first, then the head, so the results
-            # list comes out in order.
-            walk(x1[2:end], x2[2:end])
-            walk(x1[1], x2[1])
-            return
-        end
-        (x1 isa AbstractVector || x2 isa AbstractVector) && (failed = true; return)
-        if x1 isa Symbol && x2 isa Symbol
-            x1 === x2 || (failed = true)
-            return
-        end
-        x1 === :string && (x2 === net[:plato_group] || (failed = true); return)
-        x2 === :string && (x1 === net[:plato_group] || (failed = true); return)
-        (x1 isa Symbol || x2 isa Symbol) && (failed = true; return)
-        x1 === x2 || pushfirst!(results, Any[x1, x2])
-        return
-    end
-    walk(rule_clauses_as_lists(clauses1, net), rule_clauses_as_lists(clauses2, net))
-    return failed ? nothing : results
-end
-
-"""The rule clauses as the nested lists the Scheme walks, so the traversal can
-compare their shapes as well as their contents."""
-function rule_clauses_as_lists(clauses, net::Slipnet)
-    out = Any[]
-    for rc in clauses
-        if is_verbatim_clause(rc)
-            push!(out, Any[:verbatim, Any[rc.letter_categories...]])
-        elseif is_intrinsic_clause(rc)
-            push!(out, Any[:intrinsic,
-                           Any[Any[od.object_type, od.description_type, od.descriptor]
-                               for od in rc.object_descriptions],
-                           Any[Any[c.scope, c.dimension, c.descriptor]
-                               for c in rc.changes]])
-        else
-            push!(out, Any[:extrinsic,
-                           Any[Any[od.object_type, od.description_type, od.descriptor]
-                               for od in rc.object_descriptions],
-                           Any[rc.dimensions...]])
-        end
-    end
-    return out
-end
 
 """`(average-theme-abstractness answer)`."""
 function average_theme_abstractness(a::AnswerDescription, net::Slipnet)
