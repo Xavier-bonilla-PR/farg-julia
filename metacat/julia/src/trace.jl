@@ -20,10 +20,11 @@
 # noticed about itself — it is the whole mechanism behind jootsing and
 # justification.
 #
-# The rest of trace.ss — the temporal trace itself and its eight event types,
-# and the monitors that watch the workspace and raise events — is not ported
-# yet. `print-pattern` is also skipped: it needs `relation-name` from
-# theme-graphics.ss, which the headless harness never loads.
+# The TEMPORAL TRACE and `make-generic-event` (trace.ss 23-333) are ported at
+# the foot of this file. Still to come: the seven concrete event types
+# (333-1310) and the monitors that raise them (1310-1412). `print-pattern` is
+# skipped for good — it needs `relation-name` from theme-graphics.ss, a file
+# the headless harness never loads, so the Scheme cannot run it either.
 
 # --- what kind of pattern is this -------------------------------------------
 
@@ -274,3 +275,232 @@ description_codelet_pattern() = Any[:codelets,
 answer_codelet_pattern() = Any[:codelets,
     Any[ct(:answer_finder), EXTREMELY_HIGH_URGENCY],
     Any[ct(:answer_justifier), EXTREMELY_HIGH_URGENCY]]
+
+# --- the temporal trace (trace.ss 23-333) -----------------------------------
+#
+# The TEMPORAL TRACE is Metacat's record of its own processing: a list of
+# EVENTS, newest first, each a snapshot of the moment it happened. This is what
+# separates Metacat from Copycat — Copycat has a workspace and no memory of how
+# it got there, and cannot notice that it has been going round in circles.
+#
+# An event carries the time, the temperature, every structure the workspace had
+# built by then, which rules were clamped, and the themespace's complete and
+# dominant patterns. Those snapshots are what the later questions are asked of:
+# how long since the last snag, what has been built since the last clamp, is
+# there a current answer.
+#
+# The trace also tracks two PERIODS. A clamp period runs from a clamp event
+# until the clamp is undone, and a grace period follows it, during which no new
+# clamp is allowed — together they stop Metacat clamping constantly. A snag
+# period runs from a snag until the snag condition is undone.
+#
+# The seven concrete event types (answer, clamp, concept-activation,
+# concept-mapping, group, rule, snag) and the monitors that raise them are not
+# ported yet, so the four trace methods that reach into a clamp or snag event —
+# `progress-since-last-clamp`, `undo-last-clamp`, `progress-since-last-snag`
+# and `undo-snag-condition` — come with them.
+
+"""`%max-clamp-period%` and `%grace-period%` (jootsing.ss) — how long a clamp
+may last, and how long after one before another is allowed."""
+const MAX_CLAMP_PERIOD = 750
+const GRACE_PERIOD = 100
+
+"""`(make-generic-event event-type)` — a snapshot of the model at the moment
+the event happened. Every concrete event type is built on one of these.
+
+NB: the snapshot is taken at CONSTRUCTION, not when the event is added to the
+trace, so it records the state that gave rise to the event."""
+mutable struct GenericEvent
+    event_type::Symbol
+    event_number::Union{Nothing,Int}
+    time_of_occurrence::Int
+    temperature::Int
+    workspace_structures::Vector{Any}
+    clamped_rules::Vector{Any}
+    active_theme_types::Vector{Symbol}
+    complete_themespace_patterns::Vector{Any}
+    dominant_themespace_patterns::Vector{Any}
+end
+
+function make_generic_event(event_type::Symbol, ctx)
+    return GenericEvent(event_type, nothing, ctx.codelet_count, ctx.temperature,
+                        get_structures(ctx), copy(get_clamped_rules(ctx)),
+                        copy(ctx.themespace.active_theme_types),
+                        get_all_complete_theme_patterns(ctx.themespace),
+                        get_all_dominant_theme_patterns(ctx.themespace))
+end
+
+event_print_name(e::GenericEvent) =
+    string("Event #", e.event_number === nothing ? "#f" : e.event_number,
+           "  Type: ", replace(String(e.event_type), "_" => "-"),
+           "  Time: ", e.time_of_occurrence, "  Temperature: ", e.temperature)
+
+"""`(type? type)` — `any` matches every event."""
+event_type_is(e::GenericEvent, type::Symbol) =
+    type === :any || type === e.event_type
+
+get_event_number(e::GenericEvent) = e.event_number
+set_event_number!(e::GenericEvent, n::Int) = (e.event_number = n; e)
+get_event_type(e::GenericEvent) = e.event_type
+get_time(e::GenericEvent) = e.time_of_occurrence
+get_temperature(e::GenericEvent) = e.temperature
+get_structures(e::GenericEvent) = e.workspace_structures
+get_active_theme_types(e::GenericEvent) = e.active_theme_types
+get_complete_themespace_patterns(e::GenericEvent) = e.complete_themespace_patterns
+get_dominant_themespace_patterns(e::GenericEvent) = e.dominant_themespace_patterns
+
+"""`(get-age)` — how many codelets ago this happened."""
+get_age(e::GenericEvent, ctx) = ctx.codelet_count - e.time_of_occurrence
+
+"""`(get-complete-themespace-pattern theme-type)` — `assq` on the stored
+patterns, so `nothing` when the type is not among the possible ones."""
+function get_complete_themespace_pattern(e::GenericEvent, theme_type::Symbol)
+    i = findfirst(p -> p[1] === theme_type, e.complete_themespace_patterns)
+    return i === nothing ? nothing : e.complete_themespace_patterns[i]
+end
+
+function get_dominant_themespace_pattern(e::GenericEvent, theme_type::Symbol)
+    i = findfirst(p -> p[1] === theme_type, e.dominant_themespace_patterns)
+    return i === nothing ? nothing : e.dominant_themespace_patterns[i]
+end
+
+"""`(make-temporal-trace)`. NB: `event-list` is CONSed, so it is NEWEST FIRST,
+and every `select` over it therefore finds the most recent match."""
+mutable struct TemporalTrace
+    event_list::Vector{Any}
+    next_event_number::Int
+    last_clamp_time::Union{Nothing,Int}
+    last_unclamp_time::Union{Nothing,Int}
+    within_clamp_period::Bool
+    within_snag_period::Bool
+end
+
+make_temporal_trace() = TemporalTrace(Any[], 1, nothing, nothing, false, false)
+
+function initialize!(tr::TemporalTrace)
+    tr.event_list = Any[]
+    tr.next_event_number = 1
+    tr.last_clamp_time = nothing
+    tr.last_unclamp_time = nothing
+    tr.within_clamp_period = false
+    tr.within_snag_period = false
+    return tr
+end
+
+get_all_events(tr::TemporalTrace) = tr.event_list
+
+"""`(get-event n)` — by event number."""
+function get_event(tr::TemporalTrace, n::Int)
+    i = findfirst(e -> get_event_number(e) == n, tr.event_list)
+    return i === nothing ? nothing : tr.event_list[i]
+end
+
+get_events(tr::TemporalTrace, event_type::Symbol) =
+    Any[e for e in tr.event_list if event_type_is(e, event_type)]
+
+get_num_of_events(tr::TemporalTrace, event_type::Symbol) =
+    count(e -> event_type_is(e, event_type), tr.event_list)
+
+"""`(get-last-event event-type/s)` — the most recent event of that type, or of
+any of those types. The list is newest first, so this is just the first match."""
+function get_last_event(tr::TemporalTrace, event_type::Symbol)
+    i = findfirst(e -> event_type_is(e, event_type), tr.event_list)
+    return i === nothing ? nothing : tr.event_list[i]
+end
+
+function get_last_event(tr::TemporalTrace, event_types::AbstractVector{Symbol})
+    i = findfirst(e -> get_event_type(e) in event_types, tr.event_list)
+    return i === nothing ? nothing : tr.event_list[i]
+end
+
+"""`(get-new-events-since-last event-type/s)`.
+
+NB: this counts back by EVENT NUMBER, not by scanning — the newest
+`(length - number)` events are the ones after it. With no such event yet, every
+event counts as new."""
+function get_new_events_since_last(tr::TemporalTrace, event_type)
+    last_event = get_last_event(tr, event_type)
+    last_event === nothing && return tr.event_list
+    n = length(tr.event_list) - get_event_number(last_event)
+    return tr.event_list[1:min(n, length(tr.event_list))]
+end
+
+"""`(get-new-structures-since-last event-type/s)` — what the workspace has
+built since that event, by set difference against the snapshot it stored."""
+function get_new_structures_since_last(tr::TemporalTrace, event_type, ctx)
+    last_event = get_last_event(tr, event_type)
+    current = get_structures(ctx)
+    last_event === nothing && return current
+    old = get_structures(last_event)
+    return Any[s for s in current if !any(x -> x === s, old)]
+end
+
+"""`(get-elapsed-time event-type)` — how long since the last event of that
+type, or the whole run so far if there has been none."""
+function get_elapsed_time(tr::TemporalTrace, event_type::Symbol, ctx)
+    last_event = get_last_event(tr, event_type)
+    return last_event === nothing ? ctx.codelet_count : get_age(last_event, ctx)
+end
+
+get_last_clamp_time(tr::TemporalTrace) = tr.last_clamp_time
+get_last_unclamp_time(tr::TemporalTrace) = tr.last_unclamp_time
+within_clamp_period(tr::TemporalTrace) = tr.within_clamp_period
+within_snag_period(tr::TemporalTrace) = tr.within_snag_period
+
+"""`(within-grace-period?)` — the quiet spell after a clamp is undone."""
+within_grace_period(tr::TemporalTrace, ctx) =
+    !tr.within_clamp_period && tr.last_unclamp_time !== nothing &&
+    ctx.codelet_count < (tr.last_unclamp_time::Int) + GRACE_PERIOD
+
+"""`(permission-to-clamp?)` — not while clamped, and not during the grace
+period that follows one."""
+permission_to_clamp(tr::TemporalTrace, ctx) =
+    SELF_WATCHING_ENABLED[] && !tr.within_clamp_period &&
+    !within_grace_period(tr, ctx)
+
+"""`(clamp-period-expired?)`."""
+clamp_period_expired(tr::TemporalTrace, ctx) =
+    tr.within_clamp_period && tr.last_clamp_time !== nothing &&
+    ctx.codelet_count > (tr.last_clamp_time::Int) + MAX_CLAMP_PERIOD
+
+"""`(current-answer?)` — an answer event exists and happened just now."""
+current_answer(tr::TemporalTrace, ctx) =
+    get_last_event(tr, :answer) !== nothing &&
+    get_elapsed_time(tr, :answer, ctx) == 0
+
+"""`(immediate-snag-condition?)`."""
+immediate_snag_condition(tr::TemporalTrace, ctx) =
+    tr.within_snag_period && get_elapsed_time(tr, :snag, ctx) == 0
+
+"""`(add-event new-event)`. NB: a clamp event opens the clamp period AND stamps
+the clamp time; a snag event opens the snag period but stamps nothing."""
+function add_event!(tr::TemporalTrace, new_event, ctx)
+    set_event_number!(new_event, tr.next_event_number)
+    tr.next_event_number += 1
+    pushfirst!(tr.event_list, new_event)
+    if event_type_is(new_event, :clamp)
+        tr.within_clamp_period = true
+        tr.last_clamp_time = ctx.codelet_count
+    end
+    if event_type_is(new_event, :snag)
+        tr.within_snag_period = true
+    end
+    return tr
+end
+
+"""`(clamp-progress-amount-phrase progress)` and
+`(clamp-progress-adjective-phrase progress)` — how the commentary describes
+how much a clamp achieved."""
+function clamp_progress_amount_phrase(progress)
+    progress == 0 && return "zero"
+    progress < 50 && return "very little"
+    progress < 80 && return "some"
+    return "a lot of"
+end
+
+function clamp_progress_adjective_phrase(progress)
+    progress == 0 && return "a pretty useless"
+    progress < 50 && return "not such a great"
+    progress < 80 && return "an okay"
+    return "a pretty good"
+end

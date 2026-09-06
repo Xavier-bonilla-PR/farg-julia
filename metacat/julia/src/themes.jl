@@ -796,3 +796,13 @@ function get_associated_thematic_relations(b::Bridge, net::Slipnet)
     end
     return result
 end
+
+"""`(get-all-complete-theme-patterns)` / `(get-all-dominant-theme-patterns)` —
+one PATTERN per possible theme type, each with its type as its head, which is
+the form the trace stores and `assq`s on. `get_complete_theme_pattern` above
+returns the entries alone."""
+get_all_complete_theme_patterns(ts::Themespace) =
+    Any[Any[tt, get_complete_theme_pattern(ts, tt)...] for tt in get_possible_theme_types()]
+
+get_all_dominant_theme_patterns(ts::Themespace) =
+    Any[Any[tt, get_dominant_theme_pattern(ts, tt)...] for tt in get_possible_theme_types()]

@@ -8,7 +8,7 @@ Last commit at time of writing: the rule codelets, which complete `rules.ss`
 (see `git log -1`). Next up is `answers.ss` — the plan for it is in section 6.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all twenty-three probes match on
+section 2 (run the suite). Do not write code until all twenty-four probes match on
 the clean checkout.
 
 ---
@@ -58,10 +58,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns
+  patterns trace
 ```
 
-Expected — twenty-three layers, **35,114 trace lines byte-identical**:
+Expected — twenty-four layers, **35,711 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -86,7 +86,7 @@ ok    rulecodelets (3280 lines identical)
 ok    ruletranslate (1449 lines identical)
 ok    transstring (974 lines identical)
 ok    memory (505 lines identical)
-ok    patterns (334 lines identical)
+ok    patterns trace (334 lines identical)
 all probes matched
 ```
 
@@ -122,7 +122,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~10,700 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done, `memory.ss` all but its two abstractors, `trace.ss` started
+### Metacat — **~11,000 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `answers.ss` half done, `memory.ss` all but its two abstractors, `trace.ss` two slices in
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -149,6 +149,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | the translated string, instantiated from an image | `answers.jl`, `images.jl` | `transstring` | 974 |
 | episodic memory: answer/snag descriptions, distance | `memory.jl` | `memory` | 505 |
 | trace patterns and the clamping they drive | `trace.jl` | `patterns` | 334 |
+| the temporal trace and its generic event | `trace.jl` | `trace` | 597 |
 
 ---
 
@@ -558,12 +559,37 @@ work starts at step 5.
      **Not** ported: `print-pattern`, which needs `relation-name` from
      `theme-graphics.ss` — a file the headless harness never loads, so the
      Scheme cannot run it either.
-   - **(B) the temporal trace and `make-generic-event`** (23-333) — next.
+   - **(B)** ~~the temporal trace and `make-generic-event`~~ (23-333) —
+     **done**, probe `trace`: the event list and its numbering, the per-type
+     lookups, `get-new-events-since-last` and
+     `get-new-structures-since-last`, the clamp and snag periods with the
+     grace window, and the snapshot a generic event takes (time, temperature,
+     structures, clamped rules, active theme types, complete and dominant
+     themespace patterns). `get-structures` and the clamped-rule list came
+     with it, in `context.jl`, and `get-all-{complete,dominant}-theme-patterns`
+     in `themes.jl` — note those return patterns WITH their theme-type head,
+     unlike the singular `get_complete_theme_pattern`, which returns the
+     entries alone.
+     **Deferred with (C):** `progress-since-last-clamp`, `undo-last-clamp`,
+     `progress-since-last-snag` and `undo-snag-condition`, the four methods
+     that reach into a clamp or snag event for its progress evaluator.
    - **(C) the seven concrete event types** (333-1310), the biggest piece:
      answer, clamp, concept-activation, concept-mapping, group, rule, snag.
    - **(D) the monitors** (1310-1412) that watch the workspace and raise
      events, and the importance thresholds that decide which are worth
      recording.
+
+   **The monitors are already live in the Scheme, and that shapes how (B) and
+   (C) can be probed.** Building a group (`groups.ss` 951) or a bridge
+   (`bridges.ss` 1221, 1416), building a rule (`rules.ss` 485) and changing a
+   slipnode's activation far enough (`slipnet.ss` 140, 153, 167) each raise a
+   real trace event. So a probe that runs the coderack fills the Scheme's
+   trace with event types the port does not have, and the two sides diverge
+   for a reason that is not a porting bug — the first draft of the `trace`
+   probe did exactly that, and its first hand-raised event came back numbered
+   2 instead of 1. The probe now stays inside the slice: it builds BONDS,
+   the only structure with no monitor, and leaves slipnode activations alone.
+   Once (C) and (D) are in, that restriction lifts.
 7. **The run loop** (`run.ss`, 346) — then end-to-end comparison becomes
    possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
    Until then the benchmark measures layers, not the model.
@@ -581,7 +607,8 @@ alarms, not a backlog.
 |---|---|---|
 | `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C, which is blocked on `trace.ss` |
 | `abstract_answer_description` / `abstract_snag_description` | not ported — they read an ANSWER EVENT | `trace.ss` |
-| `process_snag` | not ported — needs `*trace*`, `*memory*`, `make-snag-event`, `post-initial-codelets` | `trace.ss` / `memory.ss` |
+| `process_snag` | not ported — needs `make-snag-event` and `post-initial-codelets` | `trace.ss` slice (C) / `run.ss` |
+| the trace's four clamp/snag progress methods | not ported — they read a clamp or snag event's progress evaluator | `trace.ss` slice (C) |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | `top-down-bond-scout:category` and `:direction` (`bonds.ss` 217, 269) | NOT PORTED, though `slipnet.jl` already names them as top-down codelet types for the pred/succ/sameness and left/right nodes | as soon as an active slipnode posts its top-down codelets — i.e. the run loop. `codelets_bonds.jl` registers only the three bottom-up bond codelets |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | `justify.ss` |

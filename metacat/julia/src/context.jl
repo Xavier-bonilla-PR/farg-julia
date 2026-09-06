@@ -44,6 +44,9 @@ mutable struct MetacatCtx
     bottom_rules::Vector{Any}
     top_rule_possible::Bool
     bottom_rule_possible::Bool
+    """`clamped-rule-list` — rules the user or a jootser has pinned. Read by
+    the trace, which records them with every event."""
+    clamped_rules::Vector{Any}
 end
 
 """A context with empty bridge storage and zeroed workspace averages, which is
@@ -58,7 +61,7 @@ MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                0, 0, 0, 0, 0, 0, 0, 0,
-               Any[], Any[], false, false)
+               Any[], Any[], false, false, Any[])
 
 """`*non-answer-strings*` — the three strings a non-justify-mode run works on."""
 all_strings(ctx::MetacatCtx) =
@@ -341,4 +344,25 @@ function get_real_object(ctx::MetacatCtx, fake_object)
     i = findfirst(o -> equivalent_workspace_objects(o, fake_object),
                   workspace_objects(ctx))
     return i === nothing ? nothing : workspace_objects(ctx)[i]
+end
+
+"""`(get-structures)` — every built structure in the workspace, in the order
+the Scheme appends them: bonds, groups, then the three bridge lists and the two
+rule lists. The trace snapshots this with every event, which is how it can say
+later what had been built by then."""
+get_structures(ctx::MetacatCtx) =
+    Any[workspace_bonds(ctx)..., workspace_groups(ctx)...,
+        ctx.top_bridges..., ctx.bottom_bridges..., ctx.vertical_bridges...,
+        ctx.top_rules..., ctx.bottom_rules...]
+
+"""`(get-clamped-rules)`."""
+get_clamped_rules(ctx::MetacatCtx) = ctx.clamped_rules
+
+"""`(clamp-rule rule)` / `(unclamp-rule rule)`. NB: CONSed, so the list is in
+reverse order of clamping."""
+clamp_rule!(ctx::MetacatCtx, rule) = (pushfirst!(ctx.clamped_rules, rule); ctx)
+function unclamp_rule!(ctx::MetacatCtx, rule)
+    i = findfirst(x -> x === rule, ctx.clamped_rules)
+    i === nothing || deleteat!(ctx.clamped_rules, i)
+    return ctx
 end
