@@ -207,10 +207,13 @@ end
 """Pick the string to work in, weighted by how relevant the concept already is
 there and how unhappy the string is. `relevance` is per-string."""
 function choose_string_by(ctx::MetacatCtx, relevance)
+    # `(if %justify-mode% *all-strings* *non-answer-strings*)`, which is what
+    # `all_strings` already is. The Scheme's weight list always has four
+    # entries, the last being 0 outside justify mode; here the lists are the
+    # same length, and a trailing zero could not change the pick anyway.
     strings = all_strings(ctx)
     weights = [sdiv(relevance(s) + s.average_intra_string_unhappiness, 2) for s in strings]
-    # the answer string contributes a 0 weight outside justify mode
-    return stochastic_pick(ctx.rng, strings, vcat(weights, [0]))
+    return stochastic_pick(ctx.rng, strings, weights)
 end
 
 """The head shared by both top-down group scouts: choose a string, choose an
@@ -314,7 +317,7 @@ function group_scout_whole_string(ctx::MetacatCtx, args::Vector{Any})
     net = ctx.net
     strings = all_strings(ctx)
     s = stochastic_pick(ctx.rng, strings,
-                        vcat([x.average_intra_string_unhappiness for x in strings], [0]))
+                        [x.average_intra_string_unhappiness for x in strings])
     isempty((s::WorkspaceString).bonds) && return
     leftmost_object = choose_leftmost_object(ctx.rng, s::WorkspaceString, net)
     leftmost_object === nothing && return

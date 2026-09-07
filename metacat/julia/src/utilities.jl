@@ -10,6 +10,27 @@
 #     expression draws more than one random number in a single call, the
 #     rightmost draw happens first, and the port has to do the same.
 
+# --- setup.ss's configuration flags -----------------------------------------
+#
+# These live here, in the first file every probe loads, because they are read
+# from all over the model — the workspace values, the themespace, the coderack
+# — and a `Ref` resolved at call time in a file loaded LATER would work only by
+# accident of which probes happen to include that file.
+
+"""`%self-watching-enabled%` from setup.ss, and ON by default, as it is there.
+With self-watching off and no display, `add-theme` refuses to create themes at
+all, and the jootser, progress-watcher and thematic-bridge-scout never post."""
+const SELF_WATCHING_ENABLED = Ref{Bool}(true)
+
+"""`%justify-mode%` from setup.ss, and OFF by default. Justify mode is what
+Metacat does when given the answer as well as the problem and asked WHY: the
+workspace gains a fourth string, so there is a bottom (target -> answer)
+mapping to build, a bottom rule to find, and bottom themes to settle. The flag
+and `MetacatCtx.answer_string` go together — `init-mcat` builds the string iff
+the flag is on — and code with a context to hand tests the string."""
+const JUSTIFY_MODE = Ref{Bool}(false)
+
+
 """Metacat's global `*temperature*`, an exact integer in 0..100."""
 const TEMPERATURE = Ref{Int}(100)
 

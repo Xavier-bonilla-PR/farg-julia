@@ -13,6 +13,15 @@ mutable struct MetacatCtx
     initial_string::WorkspaceString
     modified_string::WorkspaceString
     target_string::WorkspaceString
+    """`*answer-string*` — the fourth string, and the whole of what
+    `%justify-mode%` turns on. With it the workspace has a target-to-answer
+    mapping to build (the BOTTOM bridges), a bottom rule to find, and bottom
+    themes to settle; without it the field is `nothing` and every justify-mode
+    branch in the model reduces to what it always did. The Scheme keeps the
+    global bound to `#f` outside justify mode and tests `%justify-mode%`; the
+    port tests for the string, which is the same question asked of the state
+    rather than of a flag."""
+    answer_string::Union{Nothing,WorkspaceString}
     temperature::Int
     codelet_count::Int
     # Built bridges, CONSed, one list per bridge type. The Scheme also keeps a
@@ -73,8 +82,9 @@ end
 what `(tell *workspace* 'initialize)` leaves behind."""
 MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
            initial::WorkspaceString, modified::WorkspaceString, target::WorkspaceString,
-           temperature::Int, codelet_count::Int) =
-    MetacatCtx(net, rng, coderack, ts, initial, modified, target, temperature,
+           temperature::Int, codelet_count::Int;
+           answer::Union{Nothing,WorkspaceString} = nothing) =
+    MetacatCtx(net, rng, coderack, ts, initial, modified, target, answer, temperature,
                codelet_count,
                Bridge[], Bridge[], Bridge[],
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
@@ -93,9 +103,37 @@ so the model keeps looking at it. Snag events do this to what tripped them."""
 clamp_salience!(o) = (o.salience_clamped = true; o)
 unclamp_salience!(o) = (o.salience_clamped = false; o)
 
-"""`*non-answer-strings*` — the three strings a non-justify-mode run works on."""
-all_strings(ctx::MetacatCtx) =
+"""`%justify-mode%` — asked of the state rather than of a flag: the mode IS the
+answer string."""
+justify_mode(ctx::MetacatCtx) = ctx.answer_string !== nothing
+
+"""`*non-answer-strings*` — the three strings every run works on."""
+non_answer_strings(ctx::MetacatCtx) =
     WorkspaceString[ctx.initial_string, ctx.modified_string, ctx.target_string]
+
+"""`*all-strings*` — the four, or the three when there is no answer string.
+
+NB the Scheme's `*all-strings*` always has four entries, the last being `#f`
+outside justify mode, and every reader guards it with
+`(if %justify-mode% *all-strings* *non-answer-strings*)`. Dropping the entry
+here rather than carrying a `nothing` makes the readers guard-free and cannot
+change a decision, because the weight paired with that entry is always 0."""
+all_strings(ctx::MetacatCtx) =
+    ctx.answer_string === nothing ? non_answer_strings(ctx) :
+    WorkspaceString[ctx.initial_string, ctx.modified_string, ctx.target_string,
+                    ctx.answer_string::WorkspaceString]
+
+"""`*top-strings*`, `*bottom-strings*` and `*vertical-strings*` — the string
+pairs the three bridge types map between. NB `*bottom-strings*` holds `#f` for
+the answer string outside justify mode, and only `get-possible-bridge-objects`
+reads it, always for a bridge type that cannot exist then."""
+top_strings(ctx::MetacatCtx) =
+    WorkspaceString[ctx.initial_string, ctx.modified_string]
+vertical_strings(ctx::MetacatCtx) =
+    WorkspaceString[ctx.initial_string, ctx.target_string]
+bottom_strings(ctx::MetacatCtx) =
+    ctx.answer_string === nothing ? WorkspaceString[ctx.target_string] :
+    WorkspaceString[ctx.target_string, ctx.answer_string::WorkspaceString]
 
 workspace_objects(ctx::MetacatCtx) = vcat((objects(s) for s in all_strings(ctx))...)
 workspace_bonds(ctx::MetacatCtx) = vcat((s.bonds for s in all_strings(ctx))...)
@@ -193,7 +231,9 @@ spanning_bridge_exists(ctx::MetacatCtx, bridge_type::Symbol) =
 """The two strings a bridge type maps between."""
 bridge_type_strings(ctx::MetacatCtx, bridge_type::Symbol) =
     bridge_type === :top ? (ctx.initial_string, ctx.modified_string) :
-                           (ctx.initial_string, ctx.target_string)
+    bridge_type === :bottom ?
+        (ctx.target_string, ctx.answer_string::WorkspaceString) :
+        (ctx.initial_string, ctx.target_string)
 
 """`(spanning-group-possible? string)` — a whole-string group already exists, or
 the string's top-level objects run in one unbroken relation under some bond

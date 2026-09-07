@@ -879,10 +879,31 @@ ported, deliberately" notes buried in them. **The live work is step 5's slice
    runs through the whole model, and every one of those branches is currently
    unexercised.
 
-   What it needs, in order:
-   - an `answer_string` on `MetacatCtx`, and `all_strings` / the string-group
-     accessors respecting it;
-   - the 54 unported branches, read one file at a time;
+   **PARTLY STARTED** — the tree carries a WIP commit with roughly the first
+   third of it, and the suite is green with it in (justify mode is off
+   everywhere, so none of it is exercised yet). Already done:
+   - `answer_string` on `MetacatCtx`, plus `all_strings`, `non_answer_strings`,
+     `top_strings`, `bottom_strings`, `vertical_strings` and
+     `bridge_type_strings` respecting it;
+   - `JUSTIFY_MODE` and `SELF_WATCHING_ENABLED` moved from `themes.jl` to
+     `utilities.jl`, because `workspace.jl` now reads `JUSTIFY_MODE` and loads
+     first — a `Ref` defined in a later file resolves only by accident of which
+     probes include it;
+   - the bottom bridge type in `choose_bridge_type` (order `top vertical
+     bottom`, and the order decides the pick);
+   - the target string's horizontal unhappiness and salience, and the
+     three-way averages that go with them (`workspace.jl`);
+   - the group scouts' string weights, which no longer append a spurious
+     trailing zero now that `all_strings` is justify-aware.
+
+   What it still needs, in order:
+   - the rest of the 54 unported branches, read one file at a time. Known
+     remaining: `rules.ss` 400 (rule-scout picks top OR bottom for a verbatim
+     rule) and 489 (rule-builder posts `answer-justifier`); `answers.ss`'s
+     `currently-works?` for a BOTTOM rule, which is checked against the answer
+     string; `run.ss`'s `init-workspace` and `init-mcat` building the fourth
+     string; and `workspace-strings.ss` 490 (reallocating bottom-bridge
+     storage when the target string grows);
    - `clamp-rules` (justify.ss 162-180), which builds the `justify-clamp` event
      — that also makes `joots-from-justify-clamps` (`codelets_jootsing.jl`)
      reachable, where it currently raises;

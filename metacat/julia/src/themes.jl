@@ -33,13 +33,6 @@ const POSITIVE_TO_NEGATIVE_WEIGHT = -75
 const POSITIVE_TO_POSITIVE_WEIGHT = -2
 const SELF_TO_SELF_WEIGHT = 10
 
-"""`%self-watching-enabled%` from setup.ss. With self-watching off and no
-display, `add-theme` refuses to create themes at all."""
-const SELF_WATCHING_ENABLED = Ref{Bool}(true)
-"""`%justify-mode%` from setup.ss. Justify mode adds the bottom bridge (target
--> answer) as a third mappable pair."""
-const JUSTIFY_MODE = Ref{Bool}(false)
-
 clip_positive(x) = max(0, min(x, MAX_THEME_ACTIVATION))
 clip_negative(x) = max(-MAX_THEME_ACTIVATION, min(x, 0))
 

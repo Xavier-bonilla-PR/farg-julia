@@ -432,6 +432,10 @@ function update_inter_string_unhappiness!(o::WSObject)
         o.horizontal_inter_string_unhappiness = horizontal_weakness
     elseif t === :target
         o.vertical_inter_string_unhappiness = vertical_weakness
+        # In justify mode the target string is bridged HORIZONTALLY too, to the
+        # answer string, so it has a horizontal unhappiness like the initial
+        # string does.
+        JUSTIFY_MODE[] && (o.horizontal_inter_string_unhappiness = horizontal_weakness)
     elseif t === :answer
         o.horizontal_inter_string_unhappiness = horizontal_weakness
     end
@@ -445,8 +449,12 @@ function update_average_unhappiness!(o::WSObject)
                               o.vertical_inter_string_unhappiness] :
            t === :modified ? [o.intra_string_unhappiness,
                               o.horizontal_inter_string_unhappiness] :
-           t === :target   ? [o.intra_string_unhappiness,
-                              o.vertical_inter_string_unhappiness] :
+           t === :target   ? (JUSTIFY_MODE[] ?
+                              [o.intra_string_unhappiness,
+                               o.vertical_inter_string_unhappiness,
+                               o.horizontal_inter_string_unhappiness] :
+                              [o.intra_string_unhappiness,
+                               o.vertical_inter_string_unhappiness]) :
                              [o.intra_string_unhappiness,
                               o.horizontal_inter_string_unhappiness]
     o.average_unhappiness = sround(sdiv(ssum(vals), length(vals)))
@@ -477,6 +485,7 @@ function update_inter_string_salience!(o::WSObject)
         o.horizontal_inter_string_salience = h()
     elseif t === :target
         o.vertical_inter_string_salience = v()
+        JUSTIFY_MODE[] && (o.horizontal_inter_string_salience = h())
     elseif t === :answer
         o.horizontal_inter_string_salience = h()
     end
@@ -490,8 +499,12 @@ function update_average_salience!(o::WSObject)
                               o.vertical_inter_string_salience] :
            t === :modified ? [o.intra_string_salience,
                               o.horizontal_inter_string_salience] :
-           t === :target   ? [o.intra_string_salience,
-                              o.vertical_inter_string_salience] :
+           t === :target   ? (JUSTIFY_MODE[] ?
+                              [o.intra_string_salience,
+                               o.vertical_inter_string_salience,
+                               o.horizontal_inter_string_salience] :
+                              [o.intra_string_salience,
+                               o.vertical_inter_string_salience]) :
                              [o.intra_string_salience,
                               o.horizontal_inter_string_salience]
     o.average_salience = sround(sdiv(ssum(vals), length(vals)))

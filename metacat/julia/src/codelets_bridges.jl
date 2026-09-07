@@ -362,7 +362,10 @@ end
 """The bridge type both scouts pick, weighted by how weak that mapping still
 is."""
 function choose_bridge_type(ctx::MetacatCtx)
-    types = Symbol[:top, :vertical]
+    # NB the ORDER, which decides the pick: `(top vertical bottom)`, with bottom
+    # last and present only in justify mode.
+    types = ctx.answer_string === nothing ? Symbol[:top, :vertical] :
+                                            Symbol[:top, :vertical, :bottom]
     weights = [sub_from_100(get_mapping_strength(ctx, t)) for t in types]
     return stochastic_pick(ctx.rng, types, weights)::Symbol
 end
