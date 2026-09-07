@@ -116,7 +116,15 @@
       (printf "MA\t~a\t~a\t~a\t~a\t~a\t~a~%" tag
         (tell a 'problem-print-name) (tell a 'get-answer-print-name)
         (tell a 'get-quality) (tell a 'get-temperature)
-        (tell a 'get-activation)))
+        (tell a 'get-activation))
+      ;; Whether the model could JUSTIFY the answer, and if not, which
+      ;; slippages it could not account for. An answer carrying unjustified
+      ;; slippages can only have come from `joots-from-justify-clamps`: every
+      ;; other call to `report-new-answer` passes '() here. So this line is the
+      ;; visible trace of the model settling for an answer it cannot defend.
+      (printf "MAJ\t~a\t~a\t~a\t~a~%" tag (tell a 'get-answer-print-name)
+        (yn (tell a 'unjustified?))
+        (join (tell-all (tell a 'get-unjustified-slippages) 'english-name))))
     (for* each s in (tell *memory* 'get-snags) do
       (printf "MS\t~a\t~a\t~a\t~a~%" tag
         (tell s 'problem-print-name) (tell s 'get-explanation)
@@ -152,3 +160,21 @@
 ;; notices the repetition and gives up. That run exercises the jootser inside
 ;; justify mode, which nothing else does.
 (probe 'wrong 'abc 'abd 'ijk 'xyz 6 12000)
+
+;; SETTLING FOR AN UNJUSTIFIED ANSWER -- `joots-from-justify-clamps`, the one
+;; jootser arm that does not give up.
+;;
+;; Three EQUIVALENT justify clamps have to be the most recent cluster in the
+;; trace, and the gate is narrow: for a justify clamp the clamp-type factor is
+;; 1 only when the trace's LAST event is itself a clamp, and the jootser also
+;; refuses to look while a clamp period is running. Then, having re-translated
+;; the clamped top rule, it settles with probability 1/n for n unjustified
+;; slippages.
+;;
+;; `mrrjjj -> mrrjjjj` is the case the Scheme's own comment discusses -- the
+;; bottom rule increases the length of the j group, and the top rule cannot be
+;; walked onto it cleanly. Here the model clamps the two rules together
+;; repeatedly, notices the repetition, and settles: the answer it reports
+;; carries the slippages it could not account for, which the MAJ line shows.
+;; No other configuration in this suite reaches that arm.
+(probe 'unjustified 'abc 'abd 'mrrjjj 'mrrjjjj 6 10000)

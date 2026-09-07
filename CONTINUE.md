@@ -13,7 +13,7 @@ Scheme run for run in both configurations: `run-problem` for an ordinary run,
 temperatures, same trace, same memory, on runs up to 20,000 codelets with
 reminding live. `%self-watching-enabled%` is ON, which is the model's real
 configuration. The tree is clean and `origin` is in sync. **Thirty-three probes,
-39,881 trace lines byte-identical** — confirmed by a full re-run on this exact
+39,946 trace lines byte-identical** — confirmed by a full re-run on this exact
 tree.
 
 The `run` and `justifymode` probes are the strongest tests in the project, and
@@ -91,7 +91,7 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   runloop run justifymode
 ```
 
-Expected — thirty-three layers, **39,881 trace lines byte-identical**:
+Expected — thirty-three layers, **39,946 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -126,7 +126,7 @@ ok    abstract (119 lines identical)
 ok    commentary (72 lines identical)
 ok    runloop (246 lines identical)
 ok    run (161 lines identical)
-ok    justifymode (169 lines identical)
+ok    justifymode (234 lines identical)
 all probes matched
 ```
 
@@ -200,7 +200,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | the commentary: what the model says about its answers | `commentary.jl` | `commentary` | 72 |
 | **the run loop, self-watching ON** | `run.jl`, `codelets_jootsing.jl`, `codelets_breaker.jl` | `runloop` | 246 |
 | **the whole model, driven by `run-problem`** | `run.jl` (`init-mcat`, `step-mcat`, `run-mcat`) | `run` | 161 |
-| **justify mode: the model with a fourth string** | `justify.jl` (`answer-justifier`, `clamp-rules`) and the 54 branches through the rest | `justifymode` | 169 |
+| **justify mode: the model with a fourth string** | `justify.jl` (`answer-justifier`, `clamp-rules`) and the 54 branches through the rest | `justifymode` | 234 |
 
 ---
 
@@ -922,11 +922,24 @@ discretionary.
    codelets of clamping), and one with a WRONG answer, which the model clamps
    at over and over until the jootser notices the repetition and gives up.
 
-   **Not** reached by any probe: `joots-from-justify-clamps`, the arm where the
-   jootser settles for an unjustified answer. It needs three EQUIVALENT justify
-   clamps to be the most recent cluster in the trace, and twenty seeds across
-   five problems produced runs with three to seven clamps that always clustered
-   as something else. It is ported, and it is in the alarm table.
+   `joots-from-justify-clamps` — the arm where the jootser settles for an
+   answer it cannot justify — is reached by the `unjustified` problem
+   (`abc -> abd, mrrjjj -> mrrjjjj`, seed 6). The gate is narrow, which is why
+   the first search missed it: three EQUIVALENT justify clamps must be the most
+   recent cluster in the trace; the clamp-type factor is 1 only when the
+   trace's LAST event is itself a clamp; the jootser refuses to look while a
+   clamp period is running; and it then settles with probability 1/n for n
+   unjustified slippages. Finding it took instrumenting the arm and the
+   probability function and sweeping eight problems — `abc -> abd, ijk -> xyz`,
+   the obvious "wrong answer" candidate, turns out to produce NO justify clamps
+   at all, only rule-codelet and snag-response ones.
+
+   The run settles for `mrrjjjj` and names the slippage it could not account
+   for: **letter-category <=> length**. That is the thesis's own example, and
+   the `MAJ` line prints it, so the coverage is visible rather than merely
+   asserted. An answer carrying unjustified slippages can ONLY come from this
+   arm — every other call to `report-new-answer` passes an empty list — which
+   is what makes `MAJ` a sound witness.
 
 ~~`breakers.ss` (47)~~ — **done**, as `codelets_breaker.jl`.
 
@@ -964,7 +977,7 @@ believing such an entry, instrument the function itself and count the calls.
 | ~~translating an EXTRINSIC (swap) clause~~ | **covered**, by the `run` probe's `again`, `swaptranslate` and `swapanswer` — and it turned out `again` had been covering it all along. The entry said "no configuration tried produces a swap rule", which was read off traces that never printed a rule; `MAR`/`MAX` print them now | — |
 | ~~`top-down-bond-scout:category` and `:direction`~~ | **done**, with the run loop, exactly when the alarm said they would be needed | — |
 | ~~justify mode~~ | **done** — all 64 branches, probe `justifymode` | — |
-| `joots_from_justify_clamps` | ported, but NO probe reaches it: it needs three equivalent justify clamps to be the most recent cluster in the trace, and twenty seeds across five problems never produced that | the first time a run does cluster three — it is live code on an untested path, which is the shape every other entry in this table had before it bit |
+| ~~`joots_from_justify_clamps`~~ | **covered**, by the `justifymode` probe's `unjustified` problem — found by instrumenting the arm and sweeping, not by grepping traces | — |
 | the `*comment-window*` sends | the prose is all ported (`commentary.jl`); what is dropped is the DRAWING of it, and the running commentary individual codelets write about what they just did (`how-strings-change`, the two `joots-from-*-clamps` messages) | never — it is graphics |
 | the run.ss INTERACTIVE half | breakpoints, step mode, `go`, `rerun`, `runtil` | never headless — all of it hands control back to the SWL repl |
 | the GRAPHICS | out of scope by design: vendored, skipped by `load-core.ss`, no GUI in the port | never — it is the boundary the project was drawn around |

@@ -97,6 +97,15 @@ function dump_memory(tag)
         println("MA\t", tag, "\t", problem_print_name(a), "\t",
                 letters_print_name(a.answer_letters), "\t", a.quality, "\t",
                 a.temperature, "\t", a.activation)
+        # Whether the model could JUSTIFY the answer, and if not, which
+        # slippages it could not account for. An answer carrying unjustified
+        # slippages can only have come from `joots_from_justify_clamps`: every
+        # other call to `report_new_answer!` passes an empty list here. So this
+        # line is the visible trace of the model settling for an answer it
+        # cannot defend.
+        println("MAJ\t", tag, "\t", letters_print_name(a.answer_letters), "\t",
+                yn(is_unjustified(a)), "\t",
+                join_or_dash([cm_english_name(cm) for cm in a.unjustified_slippages]))
     end
     for s in get_snags(mem)
         println("MS\t", tag, "\t", problem_print_name(s), "\t", s.snag_explanation,
@@ -139,3 +148,21 @@ probe("again", "abc", "abd", "ijk", "ijl", 99, 20000)
 # notices the repetition and gives up. That run exercises the jootser inside
 # justify mode, which nothing else does.
 probe("wrong", "abc", "abd", "ijk", "xyz", 6, 12000)
+
+# SETTLING FOR AN UNJUSTIFIED ANSWER -- `joots_from_justify_clamps`, the one
+# jootser arm that does not give up.
+#
+# Three EQUIVALENT justify clamps have to be the most recent cluster in the
+# trace, and the gate is narrow: for a justify clamp the clamp-type factor is
+# 1 only when the trace's LAST event is itself a clamp, and the jootser also
+# refuses to look while a clamp period is running. Then, having re-translated
+# the clamped top rule, it settles with probability 1/n for n unjustified
+# slippages.
+#
+# `mrrjjj -> mrrjjjj` is the case the Scheme's own comment discusses -- the
+# bottom rule increases the length of the j group, and the top rule cannot be
+# walked onto it cleanly. Here the model clamps the two rules together
+# repeatedly, notices the repetition, and settles: the answer it reports
+# carries the slippages it could not account for, which the MAJ line shows.
+# No other configuration in this suite reaches that arm.
+probe("unjustified", "abc", "abd", "mrrjjj", "mrrjjjj", 6, 10000)

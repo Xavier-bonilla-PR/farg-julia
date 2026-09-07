@@ -250,7 +250,7 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      justifymode
 ```
 
-Thirty-three layers, 39,881 trace lines, byte-identical.
+Thirty-three layers, 39,946 trace lines, byte-identical.
 
 The last two are the whole model. `run` calls the same `run-problem` the
 reference runner above calls and compares what Metacat *did*: six problems,
@@ -294,7 +294,7 @@ temperatures, same trace, same memory.
 | the commentary: what the model says about its answers | `commentary.jl` | 72 lines |
 | the run loop, cycle by cycle, self-watching on | `run.jl`, `codelets_jootsing.jl` | 246 lines |
 | **the whole model, driven by `run-problem`** | `run.jl` | 161 lines |
-| **justify mode: the model with a fourth string** | `justify.jl` and 54 branches through the rest | 169 lines |
+| **justify mode: the model with a fourth string** | `justify.jl` and 54 branches through the rest | 234 lines |
 
 ### How much is done
 
@@ -340,8 +340,12 @@ tries to show that the two halves of the analogy say the same thing. When it
 cannot find the matching rule, it *clamps* the two rules it has together with
 the theme pattern that would unify them and waits for the workspace to bear that
 out — and if it keeps having to do that, the jootser notices the repetition and
-gives up. `%justify-mode%` is one flag, but it branches 64 times through
-sixteen files of the model; all of it is ported and exercised.
+either gives up or *settles*: it reports the answer anyway, carrying the
+slippages it could not account for. On `abc → abd :: mrrjjj → mrrjjjj` the port
+does exactly that, and names the one it could not justify — letter-category ⇔
+length, which is precisely the slippage that makes the analogy work.
+`%justify-mode%` is one flag, but it branches 64 times through sixteen files of
+the model; all of it is ported and exercised.
 
 What is not ported is the GRAPHICS. Metacat 1.0 is driven entirely from an SWL
 GUI, and the reference implementation here runs headless; the port has no GUI
