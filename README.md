@@ -245,10 +245,17 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      bridgecodelets themecodelets images rules \
                                      ruleapply ruleabstract rulecodelets \
                                      ruletranslate transstring memory \
-                                     patterns trace
+                                     patterns trace justify wsevents swevents \
+                                     monitors abstract runloop run
 ```
 
-Twenty-four layers, 35,711 trace lines, byte-identical.
+Thirty-one layers, 39,543 trace lines, byte-identical.
+
+The last one is the whole model. `run` calls the same `run-problem` the
+reference runner above calls and compares what Metacat *did*: six problems,
+three of them run to an answer, with the episodic memory carried across so that
+a later run is reminded of an earlier one. Same answers, same codelet counts,
+same temperatures, same trace, same memory.
 
 | layer | Julia | verified |
 |---|---|---|
@@ -276,29 +283,47 @@ Twenty-four layers, 35,711 trace lines, byte-identical.
 | episodic memory: answer and snag descriptions, distance | `memory.jl` | 505 lines |
 | trace patterns and the clamping they drive | `trace.jl` | 334 lines |
 | the temporal trace and its generic event | `trace.jl` | 597 lines |
-| the trace's concrete events, justification, the run loop | not yet ported | |
+| rule unification and the slippages it yields | `justify.jl` | 289 lines |
+| the workspace's concrete trace events | `trace.jl` | 1,828 lines |
+| the self-watching events: answer, clamp, snag | `trace.jl` | 453 lines |
+| the trace monitors and what they judge important | `trace.jl` | 808 lines |
+| memory's two trace-reading abstractors | `memory.jl` | 119 lines |
+| the run loop, cycle by cycle, self-watching on | `run.jl`, `codelets_jootsing.jl` | 246 lines |
+| **the whole model, driven by `run-problem`** | `run.jl` | 89 lines |
 
 ### How much is done
 
-The twenty-four verified layers cover roughly 13,000 of the ~16,000 lines of
-Metacat's non-graphics Scheme. All three perceptual structures — bonds, groups
-and bridges — build, fight and break each other through the real coderack, and
-the self-watching loop is closed in both directions: the themespace reads what
-the workspace builds, and `thematic-bridge-scout` sends the workspace looking
-for structures that would bear the themespace out. A rule — Metacat's answer to
-"what changed?" — now exists as a structure, ranks itself against its rivals,
-writes itself out in English, is read off the horizontal bridges rather than
-composed, and can be applied to a string to see what that string would look
-like under it, and the three codelets that drive all of that run through the
-real coderack. `rules.ss` is complete, `memory.ss` is in bar the two
-abstractors that read a trace event, and Metacat has begun to watch itself: it translates a rule through the slippages a vertical
-bridge carries, instantiates the string that translation describes, remembers
-the answers and snags it has already met, and keeps a temporal trace of its own
-processing that it can query and clamp itself into. What remains is the trace's
-seven concrete event types and the monitors that raise them, the commentary
-`answers.ss` writes about its own answers, `jootsing.ss`, `justify.ss` and the
-run loop — about 3,000 lines — after which a run can reach an answer end to
-end.
+**The model runs.** Given a problem and a seed, the Julia port initializes
+itself, posts its own codelets, and runs until it finds an answer, gives up, or
+exhausts a codelet budget — and it does so in step with the Scheme, which is
+what the `run` probe checks. The thirty-one verified layers cover roughly
+15,000 of the ~16,000 lines of Metacat's non-graphics Scheme.
+
+All three perceptual structures — bonds, groups and bridges — build, fight and
+break each other through the real coderack. The self-watching loop is closed in
+both directions: the themespace reads what the workspace builds, and
+`thematic-bridge-scout` sends the workspace looking for structures that would
+bear the themespace out. A rule — Metacat's answer to "what changed?" — is read
+off the horizontal bridges, ranks itself against its rivals, writes itself out
+in English, and can be applied to a string to see what that string would look
+like under it. It is then translated through the slippages a vertical bridge
+carries, and the string that translation describes is instantiated: that string
+is the answer.
+
+And Metacat watches itself do all of it. Every group built, every rule, every
+concept mapping that matters and every slipnode that wakes up far enough raises
+an event in a *temporal trace*, which the model then reads back: a snag holds
+the temperature at 100 until enough progress has been made to stop worrying
+about it; a *jootser* that sees the same clamp three times gives up, and one
+that sees the same snag three times clamps the NEGATION of the themes those
+snags keep implicating — the model telling itself to stop assuming what it has
+been assuming. Answers and snags are abstracted into an episodic memory that
+outlives the run, so a later run on a related problem is reminded of an earlier
+one, with a strength that falls off with the distance between them.
+
+What remains is about 1,000 lines, all of it prose: the commentary
+`answers.ss` writes about its own answers, and the `answer-justifier` codelet
+that is the rest of `justify.ss`.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
@@ -338,6 +363,43 @@ stub-shaped bug of the same family: the cleanup that removes a "middle"
 description once a grouping makes it false is also supposed to strip the
 matching concept mapping from any bridge resting on it, and break a bridge left
 with none. None of these was visible by reading the code.
+
+Getting the model to run end to end surfaced four more of the same shape, none
+of which any layer probe could reach. A codelet that changes urgency bins is
+RE-STAMPED by the destination bin, so clamping a codelet pattern makes
+everything it moved briefly immune to being culled — the port kept the old
+stamp, which is tidier and diverges one cycle after the first clamp.
+Initializing the coderack unclamps every codelet *type*, and types are global,
+so one run's clamps were leaking into the next. `get-equivalent-object` is not
+an identity test: a group rebuilt by consolidation is a different object in the
+same slot, and finding it is what keeps a rule *supported* across the rebuild.
+And rules are workspace structures, so their strength is updated with
+everything else's — it is a rule's quality *relative* to its rivals, so two
+rules of quality 90 and 99 have strengths 50 and 100. The port had left
+`strength` at build-time quality, which is the right ordering and therefore
+looks right, until the first codelet that has to choose between two rules.
+
+### How fast
+
+`metacat/bench/metacat_bench.{ss,jl}` runs six identical workloads on both
+sides with matching checksums. Five are micro-benchmarks of single layers; the
+sixth is the model — three problems run to an answer or a 2,000-codelet budget,
+twenty times over, checksummed on codelet count, final temperature and whether
+an answer was found, so a run that got faster by doing different work would not
+pass.
+
+| workload | iterations | Chez 9.5.8 | Julia 1.10.9 | speedup |
+|---|---:|---:|---:|---:|
+| slipnet, 50 activation cycles | 400 | 0.481 s | 0.017 s | 28.1x |
+| workspace initialisation | 2000 | 0.610 s | 0.088 s | 7.0x |
+| concept mappings | 2000 | 0.998 s | 0.553 s | 1.8x |
+| bonds and groups | 2000 | 2.107 s | 0.584 s | 3.6x |
+| themespace, 50 activation cycles | 200 | 1.652 s | 0.091 s | 18.2x |
+| **whole runs of the model** | 20 | **7.172 s** | **2.253 s** | **3.2x** |
+
+The layer numbers are there to locate cost, not to be quoted: each exercises
+one thing in a tight loop and flatters whichever implementation happens to suit
+it. **3.2x** is the number for Metacat.
 
 ## Licence
 

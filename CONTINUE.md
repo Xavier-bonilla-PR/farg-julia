@@ -1038,11 +1038,27 @@ harness has `give-up` record which it was, so `run-problem` can return
 Copycat is fully benchmarked (`copycat/results/benchmark.json`, table in
 `README.md`): **7.5x** over 1.4M codelets, range 3.3x–11.3x per problem.
 
-Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`) covering the
-ported layers with matching checksums — five workloads now, the newest being
-50 themespace activation cycles over all 27 clusters. The numbers are
-**micro-benchmarks of layers, not of the model**, and should not be quoted as
-"Metacat in Julia is Nx faster". Wait for the run loop.
+Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`), six workloads,
+all with matching checksums. Five are micro-benchmarks of layers. The sixth,
+`full-runs`, is **the model**: three problems run from `init-mcat` to an answer
+or a 2,000-codelet budget, twenty times over, checksummed on codelet count,
+final temperature and whether an answer was found — so a run that got faster by
+doing different work would not pass.
+
+Measured on this tree (Chez 9.5.8, Julia 1.10.9):
+
+| workload | iterations | Chez (s) | Julia (s) | speedup | checksum |
+|---|---:|---:|---:|---:|---:|
+| slipnet-50-cycles | 400 | 0.481 | 0.017 | 28.1x | 4800 |
+| workspace-init | 2000 | 0.610 | 0.088 | 7.0x | 1720000 |
+| concept-mappings | 2000 | 0.998 | 0.553 | 1.8x | 14268000 |
+| bonds-and-groups | 2000 | 2.107 | 0.584 | 3.6x | 2096000 |
+| themespace-50-cycles | 200 | 1.652 | 0.091 | 18.2x | 9506200 |
+| **full-runs** | 20 | 7.172 | 2.253 | **3.2x** | 59320 |
+
+**Quote the full-runs number, not the others.** The layer workloads exercise
+one thing in a tight loop and flatter whichever implementation happens to suit
+it; only `full-runs` has the model's real mixture of work.
 
 When adding a workload, check the checksum is not trivially constant: the
 themespace one summed activations after 50 cycles, by which point everything

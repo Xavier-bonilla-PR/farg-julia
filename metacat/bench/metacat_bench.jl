@@ -10,7 +10,22 @@ include("../julia/src/images.jl")
 include("../julia/src/bonds.jl")
 include("../julia/src/groups.jl")
 include("../julia/src/bridges.jl")
+include("../julia/src/coderack.jl")
 include("../julia/src/themes.jl")
+include("../julia/src/context.jl")
+include("../julia/src/codelets_bonds.jl")
+include("../julia/src/codelets_descriptions.jl")
+include("../julia/src/codelets_groups.jl")
+include("../julia/src/codelets_bridges.jl")
+include("../julia/src/codelets_themes.jl")
+include("../julia/src/codelets_breaker.jl")
+include("../julia/src/rules.jl")
+include("../julia/src/answers.jl")
+include("../julia/src/trace.jl")
+include("../julia/src/justify.jl")
+include("../julia/src/memory.jl")
+include("../julia/src/codelets_jootsing.jl")
+include("../julia/src/run.jl")
 
 const net = build_slipnet()
 current_strings = WorkspaceString[]
@@ -137,9 +152,29 @@ function themespace_workload()
     return acc
 end
 
+#--- workload 6: whole runs of the model -----------------------------------
+#
+# The only workload that measures Metacat rather than one of its layers: three
+# problems, each run from `init-mcat` to an answer or a codelet budget, with a
+# fresh memory so every iteration does identical work. The checksum is the
+# codelet count, the final temperature and whether an answer was found, which
+# together pin down the trajectory and not just its cost.
+function full_run_workload()
+    mem = make_memory()
+    acc = 0
+    for (i, m, t, seed) in [("abc", "abd", "ijk", 11), ("abc", "cba", "pqrs", 12),
+                            ("mrrjjj", "mrrkkk", "xyz", 13)]
+        (outcome, ctx) = run_problem(net, i, m, t, seed, 2000;
+                                     memory = mem, trace = make_temporal_trace())
+        acc += ctx.codelet_count + ctx.temperature + (outcome === :answer ? 1 : 0)
+    end
+    return acc
+end
+
 timeit("slipnet-50-cycles", 400, slipnet_cycle_workload)
 timeit("workspace-init", 2000, workspace_init_workload)
 workspace_init_workload()
 timeit("concept-mappings", 2000, cm_workload)
 timeit("bonds-and-groups", 2000, bonds_groups_workload)
 timeit("themespace-50-cycles", 200, themespace_workload)
+timeit("full-runs", 20, full_run_workload)

@@ -132,9 +132,30 @@
                       'get-absolute-activation))
                (count-meth (tell *themespace* 'get-all-themes) 'dominant?))))))))
 
+;; workload 6: whole runs of the model
+;;
+;; The only workload that measures Metacat rather than one of its layers: three
+;; problems, each run from `init-mcat` to an answer or a codelet budget, with
+;; the memory cleared first so every iteration does identical work. The
+;; checksum is the codelet count, the final temperature and whether an answer
+;; was found, which together pin down the trajectory and not just its cost.
+(define full-run-workload
+  (lambda ()
+    (tell *memory* 'clear)
+    (let loop ((problems '((abc abd ijk 11) (abc cba pqrs 12) (mrrjjj mrrkkk xyz 13)))
+               (acc 0))
+      (if (null? problems)
+        acc
+        (let* ((p (1st problems))
+               (outcome (run-problem (1st p) (2nd p) (3rd p) (4th p) 2000)))
+          (loop (rest problems)
+            (+ acc *codelet-count* *temperature*
+               (if (eq? outcome 'answer) 1 0))))))))
+
 (timeit "slipnet-50-cycles" 400 slipnet-cycle-workload)
 (timeit "workspace-init" 2000 workspace-init-workload)
 (workspace-init-workload)
 (timeit "concept-mappings" 2000 cm-workload)
 (timeit "bonds-and-groups" 2000 bonds-groups-workload)
 (timeit "themespace-50-cycles" 200 themespace-workload)
+(timeit "full-runs" 20 full-run-workload)
