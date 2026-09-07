@@ -435,3 +435,15 @@ get_bond_slippages(b::Bridge, net::Slipnet) =
 """`(mark-as-translated-rule-bridge)` — a bridge from a real object to its
 counterpart in a TRANSLATED string, rather than one the model perceived."""
 mark_as_translated_rule_bridge!(b::Bridge) = (b.translated_rule_bridge = true; b)
+
+"""`(supports-theme-pattern? pattern)` — whether any concept mapping of this
+bridge is exactly one of the pattern's entries. The whole/single mappings are
+dropped first, for the reason justify.ss gives: keeping them would drag in the
+StrPos:diff theme and only confuse things."""
+function supports_theme_pattern(b::Bridge, pattern, net::Slipnet)
+    cms = remove_whole_single_concept_mappings(b.all_concept_mappings, net)
+    for entry in pattern[2:end], cm in cms
+        cm_type(cm) === entry[1] && cm.label === entry[2] && return true
+    end
+    return false
+end

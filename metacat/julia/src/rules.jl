@@ -1618,7 +1618,18 @@ function set_abstracted_rule_information!(r::Rule, templates, ctx)
             end
         end
     end
-    r.theme_pattern = get_dominant_theme_pattern(ctx.themespace, r.bridge_theme_type)
+    # NB the theme-type HEAD. The Scheme's themespace `get-dominant-theme-pattern`
+    # conses the theme type on; the port's singular accessor returns the entries
+    # alone (see the note in CONTINUE.md), so the head is added here. Without it
+    # this rule's theme-pattern is shaped differently from the one
+    # `set-translated-rule-information` builds, and anything reading both breaks
+    # — which is how this was found, by the memory abstractors reading a rule
+    # built this way for the first time.
+    r.theme_pattern =
+        Any[r.bridge_theme_type,
+            Any[Any[dim, rel]
+                for (dim, rel) in get_dominant_theme_pattern(ctx.themespace,
+                                                             r.bridge_theme_type)]...]
     return r
 end
 

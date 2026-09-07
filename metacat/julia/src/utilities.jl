@@ -282,3 +282,39 @@ group, not the first. Identity (`eq?`), not equality — Metacat compares
 workspace and slipnet objects by identity throughout."""
 remq_duplicates(l::AbstractVector) =
     [x for (i, x) in enumerate(l) if !any(y -> y === x, @view l[(i + 1):end])]
+
+"""`(select-extreme min/max proc l)` — the element whose `proc` value is
+extreme. NB the Scheme builds `(map list values l)` and `assv`s the extreme
+value, so on a TIE it returns the FIRST element holding that value."""
+function select_extreme(extreme, proc, l)
+    isempty(l) && return nothing
+    values = [proc(x) for x in l]
+    target = extreme(values)
+    return l[findfirst(v -> v == target, values)]
+end
+
+"""`(partition pred? l)` — group into equivalence classes under `pred?`.
+
+NB the Scheme recurses on the REST first and then inserts the head, so the list
+is consumed back to front: the LAST element seeds the first class, and each
+earlier element is prepended to the first class all of whose members it
+matches. Reproduced exactly, because which class an element lands in when it
+matches more than one depends on it."""
+function partition_pred(pred, l)
+    clusters = Vector{Any}[]
+    for x in Iterators.reverse(l)
+        placed = false
+        for c in clusters
+            if all(y -> pred(x, y), c)
+                pushfirst!(c, x)
+                placed = true
+                break
+            end
+        end
+        placed || push!(clusters, Any[x])
+    end
+    return clusters
+end
+
+"""`(member-equal? x l)` — membership by value rather than identity."""
+member_equal(x, l) = any(y -> y == x, l)

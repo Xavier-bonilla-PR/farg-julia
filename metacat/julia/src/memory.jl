@@ -18,12 +18,12 @@
 # difference counts double, and being unable to justify a theme the other one
 # justified counts too.
 #
-# Not ported here, with the layers they need:
-#   - `abstract-answer-description` and `abstract-snag-description`, which read
-#     an ANSWER EVENT and the trace's recent events, so they come with
-#     trace.ss;
-#   - the memory window and every icon, highlight and bounding-box method;
-#   - the commentary `compare` writes, which is `*comment-window*`.
+# `abstract-answer-description` and `abstract-snag-description` — which read an
+# ANSWER or SNAG EVENT and the trace's recent events — are at the foot of this
+# file; they waited on trace.ss and came with answers.ss step (C).
+#
+# Not ported: the memory window and every icon, highlight and bounding-box
+# method, and the commentary `compare` writes, which is `*comment-window*`.
 
 """`%distance-threshold%` — how far apart two answers can be and still remind
 Metacat of each other at all."""
@@ -398,4 +398,68 @@ function add_snag_description!(m::Memory, new_snag::SnagDescription)
     pushfirst!(m.snag_descriptions, new_snag)
     pushfirst!(m.all_descriptions, new_snag)
     return m
+end
+
+# --- abstracting an event into something the memory can compare -------------
+#
+# These are what turn a moment into a memory. An answer or snag EVENT records
+# what happened in terms of the workspace that produced it — particular groups,
+# particular bridges. A DESCRIPTION records it in terms that outlive that
+# workspace, so a later run on a different problem can be reminded of it.
+
+"""`(abstract-answer-description answer-event)` — build the abstract
+characterization of an answer from the workspace and the trace, hang it on the
+event, and store it in memory."""
+function abstract_answer_description!(answer_event::AnswerEvent, mem::Memory, ctx)
+    net = ctx.net
+    vertical_theme_pattern = abstract_answer_description_theme_pattern(
+        most_recent_group_and_concept_mapping_events(ctx), ctx)
+    unjustified_theme_pattern = get_unjustified_theme_pattern(
+        get_unjustified_slippages(answer_event), net)
+    top_rule = get_event_rule(answer_event, :top)
+    bottom_rule = get_event_rule(answer_event, :bottom)
+    new_answer = make_answer_description(
+        get_initial_letters(answer_event), get_modified_letters(answer_event),
+        get_target_letters(answer_event), get_answer_letters(answer_event),
+        top_rule.rule_clauses, bottom_rule.rule_clauses,
+        top_rule.english_transcription, bottom_rule.english_transcription,
+        top_rule.abstractness, bottom_rule.abstractness,
+        get_temperature(answer_event),
+        # NB the Scheme comment: "This is relative quality" — but it sends
+        # `get-quality`, which is ABSOLUTE quality. The comment is wrong, not
+        # the code, and the port follows the code.
+        get_event_quality(answer_event),
+        vertical_theme_pattern, top_rule.theme_pattern, bottom_rule.theme_pattern,
+        unjustified_theme_pattern, get_unjustified_slippages(answer_event))
+    set_answer_description!(answer_event, new_answer)
+    add_answer_description!(mem, new_answer, net)
+    return new_answer
+end
+
+"""`(abstract-snag-description snag-event)`.
+
+The snag's theme pattern is thinned to the DOMINANT themes only: any dimension
+the snag implicates more than once is dropped entirely, because a dimension
+pulling in two directions says nothing about what went wrong."""
+function abstract_snag_description!(snag_event::SnagEvent, mem::Memory, ctx)
+    net = ctx.net
+    clusters = partition_pred((e1, e2) -> e1[1] === e2[1],
+                              get_snag_theme_pattern(snag_event)[2:end])
+    snag_theme_pattern = Any[:vertical_bridge,
+                             Any[c[1] for c in clusters if length(c) == 1]...]
+    rule = get_event_rule(snag_event, :top)
+    translated_rule = get_event_rule(snag_event, :bottom)
+    # The bridges the snag itself implicated, when there are any; otherwise
+    # whichever vertical bridges happen to hold the thinned pattern up.
+    snag_bridges = get_snag_bridges(snag_event)
+    theme_supporting_bridges = isempty(snag_bridges) ?
+        Bridge[b for b in get_bridges(ctx, :vertical)
+               if supports_theme_pattern(b, snag_theme_pattern, net)] :
+        snag_bridges
+    new_snag = make_snag_description(
+        ctx, rule.rule_clauses, translated_rule.rule_clauses,
+        rule.english_transcription, translated_rule.english_transcription,
+        snag_explanation(snag_event, net), snag_theme_pattern)
+    add_snag_description!(mem, new_snag)
+    return new_snag
 end

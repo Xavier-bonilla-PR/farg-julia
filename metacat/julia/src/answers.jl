@@ -608,3 +608,184 @@ function get_rule_supporting_groups(top_rule::Rule, bottom_rule::Rule, ctx,
     end
     return remq_duplicates(groups)
 end
+
+# --- answers.ss (C): what an answer event is abstracted FROM -----------------
+#
+# The helpers below live in answers.ss's commentary half (108-265), but nothing
+# in the prose needs them — the MEMORY does, to turn an answer or snag event
+# into a description it can compare against what it already remembers. They
+# come here with step (C) rather than with the commentary.
+
+"""`(answer-quality-phrase quality)` — how Metacat describes an answer's quality
+to itself, in the comment it writes when it finds one."""
+function answer_quality_phrase(quality)
+    quality < 50 && return "really terrible"
+    quality < 60 && return "pretty bad"
+    quality < 70 && return "pretty dumb"
+    quality < 75 && return "pretty mediocre"
+    quality < 80 && return "halfway decent"
+    quality < 85 && return "pretty good"
+    quality < 90 && return "very good"
+    return "great"
+end
+
+"""`(pick-most-recent-event events)` — the youngest of a cluster, by age."""
+pick_most_recent_event(events, ctx) =
+    select_extreme(minimum, e -> get_age(e, ctx), events)
+
+"""`(most-recent-group-and-concept-mapping-events)` — one event per distinct
+group or concept mapping that is still relevant to an answer description, each
+the most recent of its equivalents. A structure built, broken and rebuilt shows
+up once, at its latest moment."""
+function most_recent_group_and_concept_mapping_events(ctx)
+    tr = ctx.trace
+    tr === nothing && return Any[]
+    relevant = Any[]
+    for e in get_all_events(tr::TemporalTrace)
+        t = get_event_type(e)
+        (t === :concept_mapping || t === :group) || continue
+        ok = t === :group ? relevant_for_answer_description(e::GroupEvent) :
+                            relevant_for_answer_description(e::ConceptMappingEvent, ctx)
+        ok && push!(relevant, e)
+    end
+    clusters = partition_pred((e1, e2) -> trace_events_equal(e1, e2, ctx), relevant)
+    return Any[pick_most_recent_event(c, ctx) for c in clusters]
+end
+
+"""`equal?` across the two event types this clustering mixes."""
+function trace_events_equal(e1, e2, ctx)
+    e1 isa GroupEvent && return events_equal(e1, e2)
+    e1 isa ConceptMappingEvent && return events_equal(e1, e2, ctx.net)
+    return false
+end
+
+"""`(get-entry dimension pattern/s)` — `assq` over one pattern's entries, or
+over the entries of a LIST of patterns."""
+function get_entry(dimension, patterns)
+    isempty(patterns) && return nothing
+    entries_of = patterns[1] isa Symbol ? patterns[2:end] :
+                 Any[e for p in patterns for e in p[2:end]]
+    i = findfirst(e -> e[1] === dimension, entries_of)
+    return i === nothing ? nothing : entries_of[i]
+end
+
+in_patterns(dimension, patterns) = get_entry(dimension, patterns) !== nothing
+
+"""`(whole-string-identity-concept-mapping? cm-type initial-group target-group)`
+— whether the spanning vertical bridge maps this dimension to ITSELF. Used to
+notice a theme that holds trivially between the two whole strings."""
+function whole_string_identity_concept_mapping(dimension, initial_group,
+                                               target_group, net)
+    (initial_group === nothing || target_group === nothing) && return false
+    bridge = get_bridge_between(:vertical, initial_group, target_group)
+    bridge === nothing && return false
+    # NB `get-concept-mapping` searches ALL the concept mappings, bond ones
+    # included, not just the bridge's own list.
+    i = findfirst(cm -> cm_type(cm) === dimension,
+                  (bridge::Bridge).all_concept_mappings)
+    i === nothing && return false
+    return (bridge::Bridge).all_concept_mappings[i].identity
+end
+
+"""`(abstract-answer-description-theme-pattern important-events)` — the vertical
+theme pattern an answer is really about.
+
+Only five dimensions contribute. For each, the concept-mapping events of the
+run are consulted first; string-position gets three fallbacks (agree with
+Direction if there is one, else the dominant StringPos theme, else identity —
+a string-position theme is ALWAYS included, whatever happens); bond-facet
+identity is never included; and anything else is included only when the two
+whole strings map it to itself."""
+function abstract_answer_description_theme_pattern(important_events, ctx)
+    net = ctx.net
+    dominant = get_dominant_theme_pattern(ctx.themespace, :vertical_bridge)
+    whole_initial = nothing
+    whole_target = nothing
+    for e in important_events
+        e isa GroupEvent || continue
+        if is_event_string_type(e, :initial) && whole_initial === nothing
+            whole_initial = e
+        elseif is_event_string_type(e, :target) && whole_target === nothing
+            whole_target = e
+        end
+    end
+    initial_group = whole_initial === nothing ? nothing : get_group(whole_initial)
+    target_group = whole_target === nothing ? nothing : get_group(whole_target)
+    cm_patterns = Any[get_theme_pattern(e) for e in important_events
+                      if e isa ConceptMappingEvent]
+    entries_out = Any[]
+    for dim in (net[:plato_alphabetic_position_category],
+                net[:plato_string_position_category],
+                net[:plato_direction_category],
+                net[:plato_group_category],
+                net[:plato_bond_facet])
+        if in_patterns(dim, cm_patterns)
+            push!(entries_out, get_entry(dim, cm_patterns))
+        elseif dim === net[:plato_string_position_category]
+            if in_patterns(net[:plato_direction_category], cm_patterns)
+                # StringPos and Direction themes should agree if possible
+                push!(entries_out,
+                      Any[net[:plato_string_position_category],
+                          get_entry(net[:plato_direction_category], cm_patterns)[2]])
+            else
+                dom = get_entry(net[:plato_string_position_category], Any[dominant])
+                push!(entries_out, dom !== nothing ? dom :
+                      Any[net[:plato_string_position_category], net[:plato_identity]])
+            end
+        elseif dim === net[:plato_bond_facet]
+            continue  # bond-facet identity themes are never included
+        elseif whole_string_identity_concept_mapping(dim, initial_group, target_group,
+                                                     net)
+            push!(entries_out, Any[dim, net[:plato_identity]])
+        end
+    end
+    return Any[:vertical_bridge, entries_out...]
+end
+
+"""`(get-theme-supporting-concept-mappings theme-pattern bridges)` — the
+mappings that actually hold the pattern up. A BondCtgy mapping counts for a
+GroupCtgy entry with the same relation: bonding a run one way is what makes the
+group that way."""
+function get_theme_supporting_concept_mappings(theme_pattern, bridges, net::Slipnet)
+    all_cms = ConceptMapping[]
+    for b in bridges
+        append!(all_cms, (b::Bridge).all_concept_mappings)
+    end
+    kept = remove_whole_single_concept_mappings(all_cms, net)
+    pattern_entries = theme_pattern[2:end]
+    result = ConceptMapping[]
+    for cm in kept
+        entry = Any[cm_type(cm), cm.label]
+        matches = member_equal(entry, pattern_entries) ||
+                  (entry[1] === net[:plato_bond_category] &&
+                   member_equal(Any[net[:plato_group_category], entry[2]],
+                                pattern_entries))
+        matches && push!(result, cm)
+    end
+    return result
+end
+
+"""`(get-unjustified-theme-pattern unjustified-slippages)` — the themes an
+answer rests on but could not account for.
+
+A BondFacet theme implies groups, so a group-category and a direction theme are
+added alongside it when they are not already there. The BondFacet theme alone
+says nothing about WHICH group-category or direction, so identity is the
+default in both cases."""
+function get_unjustified_theme_pattern(unjustified_slippages, net::Slipnet)
+    pattern_entries = Any[Any[cm_type(s), s.label] for s in unjustified_slippages]
+    has(dim) = findfirst(e -> e[1] === dim, pattern_entries)
+    has(net[:plato_bond_facet]) === nothing &&
+        return Any[:vertical_bridge, pattern_entries...]
+    gi = has(net[:plato_group_category])
+    di = has(net[:plato_direction_category])
+    group_entry = gi === nothing ?
+        Any[net[:plato_group_category], net[:plato_identity]] : pattern_entries[gi]
+    direction_entry = di === nothing ?
+        Any[net[:plato_direction_category], net[:plato_identity]] : pattern_entries[di]
+    combined = Any[group_entry, direction_entry, pattern_entries...]
+    # remove-duplicates is VALUE equality and keeps the LAST of each group
+    deduped = Any[x for (i, x) in enumerate(combined)
+                  if !any(y -> y == x, combined[(i + 1):end])]
+    return Any[:vertical_bridge, deduped...]
+end

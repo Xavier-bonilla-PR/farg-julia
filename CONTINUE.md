@@ -6,17 +6,25 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** the last commit to touch the port finished
-`trace.ss` slice (C) — all seven concrete event types. The tree is clean and
-`origin` is in sync. **Twenty-seven probes, 38281 trace lines byte-identical**
-— confirmed by a full re-run on this exact tree, not carried over from an
-earlier one.
+**State at time of writing:** `trace.ss` is COMPLETE (all four slices), and so
+is the first half of `answers.ss` step (C) — the two memory abstractors. The
+tree is clean and `origin` is in sync. **Twenty-nine probes, 39,208 trace lines
+byte-identical** — confirmed by a full re-run on this exact tree, not carried
+over from an earlier one.
 
-**Next up:** `trace.ss` slice (D), the monitors (1310-1412) — small, and it
-unblocks the rest. With (C) in, everything that was queued behind it is now
-reachable: `answer-finder` and `report-new-answer`, `process-snag`, memory's
-two abstractors, ALL of `jootsing.ss`, and the `answer-justifier` codelet that
-is the rest of `justify.ss`. The plan is in section 6, step 6.
+With the monitors live, the `monitors` probe runs a real coderack on both sides
+and diffs the WHOLE EVENT LIST end to end — the first test here that compares
+traces rather than individual pieces.
+
+**Next up:** the rest of `answers.ss` step (C) — the `answer-finder` codelet
+body, `report-new-answer` and `process-snag`. `metacat/julia/src/rules.jl` still
+registers `:answer_finder` with a procedure that raises; replacing that is the
+signal it is done. It drags in four pieces of `run.ss` (`update-everything`,
+`post-initial-codelets`, `update-temperature`, the two `add-*-codelets`), which
+is fine — that is movement toward the end-to-end run. After that:
+`jootsing.ss` (344, fully unblocked), the `answer-justifier` codelet that is the
+rest of `justify.ss`, `answers.ss` step (D) (the commentary, ~830), then the
+rest of `run.ss`. The plan is in section 6, step 6.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -24,7 +32,7 @@ version is not incidental — the s3 URL in section 1 pins it, and the probes
 compare bit-exact floating point.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all twenty-four probes match on
+section 2 (run the suite). Do not write code until all twenty-nine probes match on
 the clean checkout.
 
 ---
@@ -74,10 +82,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns trace justify wsevents swevents monitors
+  patterns trace justify wsevents swevents monitors abstract
 ```
 
-Expected — twenty-seven layers, **38281 trace lines byte-identical**:
+Expected — twenty-nine layers, **39,208 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -108,6 +116,7 @@ ok    justify (289 lines identical)
 ok    wsevents (1828 lines identical)
 ok    swevents (453 lines identical)
 ok    monitors (808 lines identical)
+ok    abstract (119 lines identical)
 all probes matched
 ```
 
@@ -147,7 +156,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~13,000 of ~16,000 lines of non-graphics Scheme**, `rules.ss` complete, `memory.ss` all but its two trace-reading abstractors, `answers.ss` half done, `trace.ss` two slices of four in
+### Metacat — **~2,000 lines of non-graphics Scheme left**: `trace.ss`, `rules.ss`, `themes.ss` and `memory.ss` complete; `answers.ss` step (C) half done and (D) untouched; `justify.ss` all but its codelet; `jootsing.ss` and `run.ss` outstanding
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -509,8 +518,8 @@ step 6, slice (C).**
      silently no-ops.
    `rules.ss` is now complete apart from `set-translated-rule-information`,
    which needs the translated strings `jootsing.ss` builds.
-5. **`answers.ss` (1,558)** — halfway: (A) and (B) are in, (C) is blocked on
-   the trace and (D) is untouched. It is four separable pieces, in this order,
+5. **`answers.ss` (1,558)** — (A) and (B) are in, (C) is HALF done and no
+   longer blocked, (D) is untouched. It is four separable pieces, in this order,
    because each later one needs the earlier:
 
    - **(A)** ~~rule translation~~ (`answers.ss` 1196-1558, ~360 lines) —
@@ -550,7 +559,37 @@ step 6, slice (C).**
      the `car` of a failed application, so the probe applies the rule first and
      skips on failure exactly as `answer-finder` does.
    - **(C) `answer-finder` and `report-new-answer`** (20-95, 929-1035) —
-     **half done, and the other half is BLOCKED on the trace.**
+     **half done; nothing blocks the rest now that `trace.ss` is complete.**
+
+     The MEMORY ABSTRACTORS half is **done**, probe `abstract`:
+     `abstract-answer-description` and `abstract-snag-description` from
+     memory.ss, plus the helpers they need from answers.ss's commentary half
+     (108-265) — `most-recent-group-and-concept-mapping-events`,
+     `abstract-answer-description-theme-pattern`,
+     `get-theme-supporting-concept-mappings`, `get-unjustified-theme-pattern`,
+     `answer-quality-phrase` — and `supports-theme-pattern?` on bridges,
+     `select-extreme`, `partition` and `member-equal?` in utilities.
+     These turn a moment into a memory: an event describes what happened in
+     terms of the workspace that produced it, a description in terms that
+     outlive it. They could not be done before slice (D), because
+     `most-recent-group-and-concept-mapping-events` reads the group and
+     concept-mapping events only the MONITORS raise.
+     What the differential test caught here: `set-abstracted-rule-information`
+     was assigning the themespace's dominant theme pattern to the rule WITHOUT
+     the theme-type head, while `set-translated-rule-information` added one —
+     so the same field had two shapes depending on how the rule was built.
+     The Scheme's themespace accessor conses the head on; the port's singular
+     accessor deliberately does not (see the load-order note), so the head has
+     to be added at the call site. Nothing had read an abstracted rule's
+     theme-pattern before, which is why it had gone unnoticed.
+     Two Scheme quirks worth keeping: a snag-description exposes
+     `get-translated-rule-phrases` but NO `get-rule-phrases`, though it stores
+     both; and its `get-activation` is hardwired to 0, unlike an
+     answer-description's, which is real. Also, `abstract-answer-description`
+     comments the quality it stores as "relative quality" and then sends
+     `get-quality`, which is ABSOLUTE. The comment is wrong, not the code.
+
+     What REMAINS of (C) is the codelet body:
      `memory.ss` is ported (see below), so `answer-present?` is available.
      What remains is the codelet body, and reading it settles a question the
      plan left open: `answer-finder` ends by calling `report-new-answer`, and
@@ -569,9 +608,9 @@ step 6, slice (C).**
      `compare-rule-clause-lists` / `traverse-rule-clauses`, which have since
      moved to `justify.jl` — the file they came from — now that justify.ss has
      its own use for them.
-     **Not** ported: `abstract-answer-description` and
-     `abstract-snag-description`, which read an ANSWER EVENT — they come with
-     `trace.ss`; and the memory window.
+     ~~**Not** ported: `abstract-answer-description` and
+     `abstract-snag-description`~~ — **both done**, with `answers.ss` step (C);
+     see there. Still not ported: the memory window.
    - **(D) the commentary** (95-928, ~830 lines): `explain`, `theme-phrases`,
      `compare-answers`, `get-answer-comparison-text` — the English prose
      Metacat writes about its own answers, and the part of the program the
