@@ -25,8 +25,11 @@ function get_other_string(ctx::MetacatCtx, s::WorkspaceString, orientation::Symb
     t === :initial && return orientation === :horizontal ? ctx.modified_string :
                                                            ctx.target_string
     t === :modified && return ctx.initial_string
-    t === :target && return ctx.initial_string
-    return ctx.target_string
+    # The target string has TWO partners in justify mode: the initial string
+    # vertically, and the answer string horizontally.
+    t === :target && return orientation === :horizontal ?
+                            ctx.answer_string::WorkspaceString : ctx.initial_string
+    return ctx.target_string                                    # :answer
 end
 
 """`(all-description-types-present? description-types)`."""

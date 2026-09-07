@@ -210,9 +210,12 @@ Which of the two depends on which string the object is in, since a bridge is
 keyed by (object1 id, object2 id) and object ids are only unique per string."""
 function delete_proposed_bridges!(ctx::MetacatCtx, o::WSObject)
     s = get_string(o)
-    for (table, from_string, to_string) in
-        ((ctx.proposed_vertical_bridges, ctx.initial_string, ctx.target_string),
-         (ctx.proposed_top_bridges, ctx.initial_string, ctx.modified_string))
+    tables = Any[(ctx.proposed_vertical_bridges, ctx.initial_string, ctx.target_string),
+                 (ctx.proposed_top_bridges, ctx.initial_string, ctx.modified_string)]
+    ctx.answer_string === nothing ||
+        push!(tables, (ctx.proposed_bottom_bridges, ctx.target_string,
+                       ctx.answer_string::WorkspaceString))
+    for (table, from_string, to_string) in tables
         for key in collect(keys(table))
             if (s === from_string && key[1] == o.id_num) ||
                (s === to_string && key[2] == o.id_num)
@@ -288,6 +291,14 @@ function update_workspace_averages!(ctx::MetacatCtx)
     ctx.average_top_inter_string_unhappiness =
         sround(weighted_average([o.horizontal_inter_string_unhappiness for o in top_objs],
                                 importances(top_objs)))
+    if ctx.answer_string !== nothing
+        bottom_objs = vcat(objects(ctx.target_string),
+                           objects(ctx.answer_string::WorkspaceString))
+        ctx.average_bottom_inter_string_unhappiness =
+            sround(weighted_average(
+                [o.horizontal_inter_string_unhappiness for o in bottom_objs],
+                importances(bottom_objs)))
+    end
     ctx.average_vertical_inter_string_unhappiness =
         sround(weighted_average([o.vertical_inter_string_unhappiness for o in vertical_objs],
                                 importances(vertical_objs)))
@@ -302,6 +313,16 @@ function update_workspace_averages!(ctx::MetacatCtx)
         (spanning_group_possible(ctx.initial_string, net) &&
          spanning_group_possible(ctx.modified_string, net)) ? sround(1 // 2 * raw_top) :
         maximal_mapping(ctx, :top) ? sround(100 * tanh(1 // 40 * raw_top)) : raw_top
+    if ctx.answer_string !== nothing
+        raw_bottom = sub_from_100(ctx.average_bottom_inter_string_unhappiness)
+        ctx.bottom_mapping_strength =
+            spanning_bridge_exists(ctx, :bottom) ? raw_bottom :
+            (spanning_group_possible(ctx.target_string, net) &&
+             spanning_group_possible(ctx.answer_string::WorkspaceString, net)) ?
+                sround(1 // 2 * raw_bottom) :
+            maximal_mapping(ctx, :bottom) ? sround(100 * tanh(1 // 40 * raw_bottom)) :
+                raw_bottom
+    end
     ctx.vertical_mapping_strength =
         spanning_bridge_exists(ctx, :vertical) ? raw_vertical :
         (spanning_group_possible(ctx.initial_string, net) &&
@@ -316,7 +337,10 @@ get_mapping_strength(ctx::MetacatCtx, bridge_type::Symbol) =
     bridge_type === :bottom ? ctx.bottom_mapping_strength : ctx.vertical_mapping_strength
 
 get_min_mapping_strength(ctx::MetacatCtx) =
-    min(ctx.top_mapping_strength, ctx.vertical_mapping_strength)
+    ctx.answer_string === nothing ?
+        min(ctx.top_mapping_strength, ctx.vertical_mapping_strength) :
+        min(ctx.top_mapping_strength, ctx.bottom_mapping_strength,
+            ctx.vertical_mapping_strength)
 
 """`(update-workspace-values)` in full: structures — bonds, then groups, then
 bridges — followed by the objects and the per-string and workspace-level
@@ -373,6 +397,15 @@ function check_if_rules_possible!(ctx::MetacatCtx)
                   for o in get_covered_letters(b)]
     letters = vcat(ctx.initial_string.letters, ctx.modified_string.letters)
     ctx.top_rule_possible = all(l -> any(c -> c === l, covered), letters)
+    if ctx.answer_string !== nothing
+        bottom_covered = Any[o for b in ctx.bottom_bridges
+                             if rule_describable_bridge(b, ctx.net)
+                             for o in get_covered_letters(b)]
+        bottom_letters = vcat(ctx.target_string.letters,
+                              (ctx.answer_string::WorkspaceString).letters)
+        ctx.bottom_rule_possible =
+            all(l -> any(c -> c === l, bottom_covered), bottom_letters)
+    end
     return ctx
 end
 
@@ -402,7 +435,8 @@ function get_equivalent_bridge(ctx::MetacatCtx, b::Bridge)
     any(x -> x === b, list) && return b
     string1 = b.bridge_type === :bottom ? ctx.target_string : ctx.initial_string
     string2 = b.bridge_type === :top ? ctx.modified_string :
-              b.bridge_type === :vertical ? ctx.target_string : nothing
+              b.bridge_type === :vertical ? ctx.target_string :
+              ctx.answer_string          # :bottom, which needs justify mode
     o1 = get_equivalent_object(string1, b.object1)
     o2 = string2 === nothing ? nothing : get_equivalent_object(string2, b.object2)
     (o1 !== nothing && o2 !== nothing &&
@@ -450,8 +484,12 @@ get_average_unhappiness(ctx::MetacatCtx) = ctx.average_unhappiness
 """`(get-max-inter-string-unhappiness)` — the worst of the mappings. The bottom
 one only counts in justify mode, where an answer string exists to map onto."""
 get_max_inter_string_unhappiness(ctx::MetacatCtx) =
-    max(ctx.average_top_inter_string_unhappiness,
-        ctx.average_vertical_inter_string_unhappiness)
+    ctx.answer_string === nothing ?
+        max(ctx.average_top_inter_string_unhappiness,
+            ctx.average_vertical_inter_string_unhappiness) :
+        max(ctx.average_top_inter_string_unhappiness,
+            ctx.average_bottom_inter_string_unhappiness,
+            ctx.average_vertical_inter_string_unhappiness)
 
 """`(ungrouped? object)` — not itself the whole string, and not inside a group."""
 ungrouped(o::WSObject) = !spans_whole_string(o) && o.enclosing_group === nothing
@@ -472,7 +510,12 @@ function unmapped(o::WSObject)
     t === :initial && return !(o.vertical_bridge !== nothing &&
                                o.horizontal_bridge !== nothing)
     t === :modified && return o.horizontal_bridge === nothing
-    t === :target && return o.vertical_bridge === nothing
+    # In justify mode the target string is mapped in BOTH directions: vertically
+    # to the initial string and horizontally to the answer string.
+    t === :target && return JUSTIFY_MODE[] ?
+                            !(o.vertical_bridge !== nothing &&
+                              o.horizontal_bridge !== nothing) :
+                            o.vertical_bridge === nothing
     return o.horizontal_bridge === nothing            # :answer
 end
 
@@ -496,6 +539,10 @@ rough_num_of_unmapped_objects(ctx::MetacatCtx) =
 """`(get-supported-rules rule-type)` / `(supported-rule-exists? rule-type)`."""
 get_supported_rules(ctx::MetacatCtx, rule_type::Symbol) =
     Any[r for r in get_rules(ctx, rule_type) if rule_supported(r, ctx)]
+"""`(get-all-supported-rules)` — both types, top first, as `get-all-rules`
+appends them. The answer-justifier picks from these, so the ORDER matters."""
+get_all_supported_rules(ctx::MetacatCtx) =
+    Any[r for r in get_all_rules(ctx) if rule_supported(r, ctx)]
 supported_rule_exists(ctx::MetacatCtx, rule_type::Symbol) =
     any(r -> rule_supported(r, ctx), get_rules(ctx, rule_type))
 
@@ -530,7 +577,7 @@ end
 function delete_all_proposed_bridges!(ctx::MetacatCtx)
     empty!(ctx.proposed_vertical_bridges)
     empty!(ctx.proposed_top_bridges)
-    JUSTIFY_MODE[] && empty!(ctx.proposed_bottom_bridges)
+    ctx.answer_string === nothing || empty!(ctx.proposed_bottom_bridges)
     return ctx
 end
 

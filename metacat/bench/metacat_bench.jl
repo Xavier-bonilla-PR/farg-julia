@@ -171,6 +171,25 @@ function full_run_workload()
     return acc
 end
 
+#--- workload 7: whole runs in JUSTIFY MODE --------------------------------
+#
+# The same shape as full_runs, but with the fourth string: four strings to
+# scout in, a bottom mapping to build, a bottom rule to find, and the
+# answer-justifier trying to show the two halves agree. It costs more per
+# codelet than an ordinary run, which is the point of measuring it separately.
+function justify_run_workload()
+    mem = make_memory()
+    acc = 0
+    for (i, m, t, a, seed) in [("abc", "abd", "ijk", "ijl", 21),
+                               ("abc", "cba", "pqrs", "srqp", 22),
+                               ("abc", "abd", "ijk", "ijd", 23)]
+        (outcome, ctx) = run_problem(net, i, m, t, seed, 2000; answer_sym = a,
+                                     memory = mem, trace = make_temporal_trace())
+        acc += ctx.codelet_count + ctx.temperature + (outcome === :answer ? 1 : 0)
+    end
+    return acc
+end
+
 timeit("slipnet-50-cycles", 400, slipnet_cycle_workload)
 timeit("workspace-init", 2000, workspace_init_workload)
 workspace_init_workload()
@@ -178,3 +197,4 @@ timeit("concept-mappings", 2000, cm_workload)
 timeit("bonds-and-groups", 2000, bonds_groups_workload)
 timeit("themespace-50-cycles", 200, themespace_workload)
 timeit("full-runs", 20, full_run_workload)
+timeit("justify-runs", 20, justify_run_workload)

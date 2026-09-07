@@ -12,12 +12,13 @@
 # joined by a lateral sliplink. Where they merely slip, the traversal records a
 # concept mapping; where the shapes disagree at all, it fails outright.
 #
-# SCOPE — the `answer-justifier` codelet (justify.ss 20-180) is NOT here. It
-# needs `report-new-answer` (answers.ss step C), `clamp-rules` →
-# `make-clamp-event` (trace.ss slice C), `monitor-new-rules` (trace.ss slice D)
-# and the answer string that only justify mode builds. What IS here is
-# everything that codelet reasons WITH, which is self-contained and testable
-# on its own: the traversal, the two procs that ride it, rule unification, the
+# The file is in two halves. The first is the unification machinery, which is
+# pure structure — it never reads the workspace — and so is testable on its own
+# (probe `justify`). The second, at the bottom, is `clamp-rules` and the
+# `answer-justifier` codelet, which are justify mode proper and need a running
+# model to say anything (probe `justifymode`).
+#
+# The unification half is: the traversal, the two procs that ride it, the
 # unifying slippages, and the theme pattern a unification asks to be clamped.
 #
 # `compare_rule_clause_lists` and `traverse_rule_clauses` were ported ahead of
@@ -248,3 +249,161 @@ function get_vertical_theme_pattern_to_clamp(unifying_pattern, rng::PyRandom,
     isempty(final_entries) && return unifying_pattern
     return Any[theme_type, final_entries...]
 end
+
+# --- clamping two rules together (justify.ss 162-180) -----------------------
+
+"""`(clamp-rules rules vertical-theme-pattern . concept-patterns)` — the model
+deciding to WORK ON a justification it cannot yet see.
+
+A justify clamp says: these two rules ought to be two readings of the same
+idea; hold the themes that would make them so, hold the concepts they name, and
+push the top-down and thematic codelets, until the workspace either bears that
+out or the clamp period runs out. It is the one clamp type built from RULES
+rather than from something that went wrong.
+
+NB the ordering comment in the Scheme: the event is added to the trace BEFORE
+it is activated, so that the concept-activation events the clamp causes appear
+in the trace after the clamp itself rather than before it."""
+function clamp_rules!(rules, vertical_theme_pattern, concept_patterns, ctx)
+    all_patterns = Any[]
+    for r in rules
+        push!(all_patterns, (r::Rule).theme_pattern)
+    end
+    push!(all_patterns, vertical_theme_pattern)
+    append!(all_patterns, concept_patterns)
+    push!(all_patterns, top_down_codelet_pattern())
+    push!(all_patterns, thematic_codelet_pattern())
+    clamp_event = make_clamp_event(:justify_clamp, all_patterns, rules, :workspace, ctx)
+    tr = ctx.trace::TemporalTrace
+    add_event!(tr, clamp_event, ctx)
+    activate!(clamp_event, tr, ctx)
+    return clamp_event
+end
+
+# --- the answer-justifier (justify.ss 20-160) -------------------------------
+#
+# The codelet justify mode exists for. Where the `answer-finder` asks "what
+# answer does this rule give?", the answer-justifier already HAS the answer and
+# asks "do the two halves of this analogy say the same thing?".
+#
+# It picks a supported rule from either half, translates it into the other
+# half's terms, and then looks for the rule it should have matched:
+#
+#   * a rule already in the workspace that EQUALS the translation — the two
+#     halves agree, and if that rule is still supported the answer is reported;
+#   * no such rule, but the translation WORKS when applied — so it is built,
+#     added, and the answer reported through it;
+#   * neither — the model cannot see the justification yet, so it CLAMPS the
+#     rules it has together and tries to make the workspace produce it.
+#
+# The last case is the interesting one, and it is why justify mode needs the
+# trace: the clamp is an act of self-direction, recorded as an event, and the
+# jootser watches for the model doing it over and over.
+
+"""`answer-justifier` — try to justify the answer the run was given."""
+function answer_justifier(ctx::MetacatCtx, args::Vector{Any})
+    TEMPERATURE[] = ctx.temperature
+    net = ctx.net
+    mem = ctx.memory
+    answer_string = ctx.answer_string::WorkspaceString
+    # NB the Scheme binds the three mapping strengths first and never reads
+    # them again. They draw nothing, so the only visible difference would be
+    # their absence.
+    supported = get_all_supported_rules(ctx)
+    # `stochastic-pick` on an empty list falls through to `random-pick`, which
+    # returns #f WITHOUT drawing; the codelet then fizzles.
+    isempty(supported) && return
+    chosen_rule = stochastic_pick(ctx.rng, supported,
+                                  [(r::Rule).strength for r in supported])
+    rule = chosen_rule::Rule
+    rule_type = rule.rule_type
+    other_rules = get_rules(ctx, rule_type === :top ? :bottom : :top)
+    result = translate(ctx.rng, rule, ctx.initial_string, ctx.target_string, net)
+    if result !== nothing
+        translated_rule = result.translated_rule
+        ref_objs1 = rule_type === :top ? result.from_string_ref_objects :
+                                         result.to_string_ref_objects
+        ref_objs2 = rule_type === :top ? result.to_string_ref_objects :
+                                         result.from_string_ref_objects
+        i = findfirst(r -> rules_equal(r::Rule, translated_rule, net), other_rules)
+        matching_rule = i === nothing ? nothing : other_rules[i]::Rule
+        if matching_rule !== nothing
+            rule1 = rule_type === :top ? rule : matching_rule::Rule
+            rule2 = rule_type === :top ? matching_rule::Rule : rule
+            mem !== nothing &&
+                answer_present(mem::Memory, answer_string.letter_categories,
+                               rule1, rule2, ctx, net) && return
+            rule_supported(matching_rule::Rule, ctx) || return report_or_clamp_fizzle(
+                ctx, rule, matching_rule::Rule, net)
+            all_supporting_groups = remq_duplicates(
+                Any[result.vertical_mapping_supporting_groups...,
+                    get_rule_supporting_groups(rule1, rule2, ctx, net)...])
+            return report_new_answer!(answer_string, rule1, rule2,
+                                      result.supporting_vertical_bridges,
+                                      all_supporting_groups, ref_objs1, ref_objs2,
+                                      result.slippage_log, ConceptMapping[], mem, ctx)
+        end
+        # No matching rule. The translated rule itself may still work — but only
+        # if it refers to something: the `ref-objs1` test rules out a bottom
+        # rule that translates to a top rule which works VACUOUSLY, saying
+        # nothing about the initial string (the Scheme's example is
+        # "xqd -> xqd; mrrjjj -> mrrjjjj", where "increase the length of the j
+        # group" becomes "increase the length of the letter j").
+        if currently_works(translated_rule, ctx) && !isempty(ref_objs1)
+            rule1 = rule_type === :top ? rule : translated_rule
+            rule2 = rule_type === :top ? translated_rule : rule
+            mem !== nothing &&
+                answer_present(mem::Memory, answer_string.letter_categories,
+                               rule1, rule2, ctx, net) && return
+            set_quality_values!(translated_rule, net)
+            # make-translated-string sets the translated rule's supporting
+            # bridges and theme pattern, so it has to happen before the answer
+            # is reported — or before the rule is clamped.
+            make_translated_string(translated_rule,
+                                   rule_type === :top ? ctx.target_string :
+                                                        ctx.initial_string,
+                                   ctx, net)
+            add_rule!(ctx, translated_rule)
+            ctx.trace === nothing || monitor_new_rules(translated_rule, ctx)
+            rule_supported(translated_rule, ctx) || return report_or_clamp_fizzle(
+                ctx, rule, translated_rule, net)
+            all_supporting_groups = remq_duplicates(
+                Any[result.vertical_mapping_supporting_groups...,
+                    get_rule_supporting_groups(rule1, rule2, ctx, net)...])
+            return report_new_answer!(answer_string, rule1, rule2,
+                                      result.supporting_vertical_bridges,
+                                      all_supporting_groups, ref_objs1, ref_objs2,
+                                      result.slippage_log, ConceptMapping[], mem, ctx)
+        end
+    end
+    # The unification section, reached both when the rule would not translate at
+    # all and when the translation did not work.
+    isempty(other_rules) && return
+    permission_to_clamp(ctx.trace::TemporalTrace, ctx) || return
+    strength = rule.strength
+    other_weights = [sub_from_100(abs(strength - (r::Rule).strength)) for r in other_rules]
+    other_rule = stochastic_pick(ctx.rng, other_rules, other_weights)::Rule
+    unifying_theme_pattern = unify_rules(rule, other_rule, net)
+    unifying_theme_pattern === nothing && return
+    clamp_rules!(Any[rule, other_rule],
+                 get_vertical_theme_pattern_to_clamp(unifying_theme_pattern, ctx.rng, net),
+                 Any[get_concept_pattern(rule), get_concept_pattern(other_rule)], ctx)
+    return
+end
+
+"""The two "not currently supported" arms, which are the same: ask the trace for
+permission, clamp the two rules with the dominant vertical theme pattern and the
+unmatched rule's concepts, and fizzle either way."""
+function report_or_clamp_fizzle(ctx::MetacatCtx, chosen_rule::Rule, other::Rule,
+                                net::Slipnet)
+    permission_to_clamp(ctx.trace::TemporalTrace, ctx) || return
+    # NB `get_dominant_theme_pattern` returns only the ENTRIES; the Scheme's
+    # `(cons theme-type ...)` is the caller's job here.
+    dominant = Any[:vertical_bridge,
+                   get_dominant_theme_pattern(ctx.themespace, :vertical_bridge)...]
+    clamp_rules!(Any[chosen_rule, other], dominant,
+                 Any[get_concept_pattern(other)], ctx)
+    return
+end
+
+register_codelet_type!(:answer_justifier, answer_justifier)

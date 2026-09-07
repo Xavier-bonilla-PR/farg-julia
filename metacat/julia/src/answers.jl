@@ -459,9 +459,9 @@ end
 # string says what the answer LOOKS like: apply the rule to the string, then
 # instantiate the resulting image back into real letters and groups.
 #
-# `process-snag` is deliberately not ported here. It needs `*trace*`,
-# `*memory*`, `make-snag-event` and `post-initial-codelets` — trace.ss,
-# memory.ss and run.ss — so it belongs with them.
+# `process-snag` is not here but further down the file, with answers.ss step
+# (C): it needs the trace, the memory and `post-initial-codelets`, so it could
+# not be written until those were in.
 
 """`(attach-length-to-appropriate-groups object-transforms)`.
 

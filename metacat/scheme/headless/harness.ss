@@ -86,12 +86,30 @@
         (*escape* 'limit)
         (original-step-mcat))))
 
+;; `%justify-mode%` is a GUI toggle in Metacat, and `init-mcat` builds the
+;; fourth string only when it is on, so a headless run has to set it. Each entry
+;; point sets it to what IT needs and leaves it there: the flag says what the
+;; workspace currently is, so restoring it afterwards would leave the finished
+;; run's workspace being described by the wrong mode -- `get-objects` and
+;; `get-bonds` would stop reporting the answer string the run actually used.
 (define run-problem
   (lambda (initial modified target seed limit)
+    (set! %justify-mode% #f)
     (set! *codelet-limit* limit)
     (set! *stop-reason* 'answer)
     (call/cc
       (lambda (k)
         (set! *escape* k)
         (init-mcat initial modified target #f seed)
+        (run-mcat)))))
+
+(define run-justify-problem
+  (lambda (initial modified target answer seed limit)
+    (set! %justify-mode% #t)
+    (set! *codelet-limit* limit)
+    (set! *stop-reason* 'answer)
+    (call/cc
+      (lambda (k)
+        (set! *escape* k)
+        (init-mcat initial modified target answer seed)
         (run-mcat)))))

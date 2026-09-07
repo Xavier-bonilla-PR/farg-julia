@@ -152,6 +152,27 @@
             (+ acc *codelet-count* *temperature*
                (if (eq? outcome 'answer) 1 0))))))))
 
+;; workload 7: whole runs in JUSTIFY MODE
+;;
+;; The same shape as full-runs, but with the fourth string: four strings to
+;; scout in, a bottom mapping to build, a bottom rule to find, and the
+;; answer-justifier trying to show the two halves agree. It costs more per
+;; codelet than an ordinary run, which is the point of measuring it separately.
+(define justify-run-workload
+  (lambda ()
+    (tell *memory* 'clear)
+    (let loop ((problems '((abc abd ijk ijl 21) (abc cba pqrs srqp 22)
+                           (abc abd ijk ijd 23)))
+               (acc 0))
+      (if (null? problems)
+        acc
+        (let* ((p (1st problems))
+               (outcome
+                 (run-justify-problem (1st p) (2nd p) (3rd p) (4th p) (5th p) 2000)))
+          (loop (rest problems)
+            (+ acc *codelet-count* *temperature*
+               (if (eq? outcome 'answer) 1 0))))))))
+
 (timeit "slipnet-50-cycles" 400 slipnet-cycle-workload)
 (timeit "workspace-init" 2000 workspace-init-workload)
 (workspace-init-workload)
@@ -159,3 +180,4 @@
 (timeit "bonds-and-groups" 2000 bonds-groups-workload)
 (timeit "themespace-50-cycles" 200 themespace-workload)
 (timeit "full-runs" 20 full-run-workload)
+(timeit "justify-runs" 20 justify-run-workload)

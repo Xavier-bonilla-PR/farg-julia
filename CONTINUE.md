@@ -6,34 +6,30 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** **the whole model runs.** `run-problem` — the
-same entry point the reference runner uses — initializes Metacat, posts its own
-codelets, runs until it finds an answer, gives up or hits a codelet budget, and
-records what it concluded in its episodic memory, and the Julia port matches the
-Scheme run for run: same answers, same codelet counts, same temperatures, same
-trace, same memory, on runs of 1,400 codelets with reminding live.
-`trace.ss`, `jootsing.ss`, `answers.ss` step (C) and the run.ss loop are
-COMPLETE, and `%self-watching-enabled%` is ON, which is the model's real
-configuration. The tree is clean and `origin` is in sync. **Thirty-two probes,
-39,615 trace lines byte-identical** — confirmed by a full re-run on this exact
+**State at time of writing: THE PORT IS COMPLETE.** Every non-graphics line of
+Metacat's Scheme is ported, including justify mode, and the Julia matches the
+Scheme run for run in both configurations: `run-problem` for an ordinary run,
+`run-justify-problem` for a justify one. Same answers, same codelet counts, same
+temperatures, same trace, same memory, on runs up to 20,000 codelets with
+reminding live. `%self-watching-enabled%` is ON, which is the model's real
+configuration. The tree is clean and `origin` is in sync. **Thirty-three probes,
+39,784 trace lines byte-identical** — confirmed by a full re-run on this exact
 tree.
 
-The `run` probe is the strongest test in the project, and the only one that
-drives nothing itself: it calls `run-problem` and compares what Metacat did.
-The `runloop` probe is the second strongest — it chooses a codelet, runs it,
-updates everything, and repeats, dumping the whole model state every N cycles.
-Between them they found the four bugs in section 5 that nothing else could
-reach: the re-stamped codelet, the leaked codelet-type clamp, the rebuilt group
-that costs a rule its support, and the rule whose strength was never updated.
+The `run` and `justifymode` probes are the strongest tests in the project, and
+the only ones that drive nothing themselves: they call `run-problem` /
+`run-justify-problem` and compare what Metacat did. The `runloop` probe is next
+— it chooses a codelet, runs it, updates everything, and repeats, dumping the
+whole model state every N cycles. Between them they found the six bugs in
+section 5 that nothing else could reach: the re-stamped codelet, the leaked
+codelet-type clamp, the rebuilt group that costs a rule its support, the rule
+whose strength was never updated, the bottom bridge that could never be found
+equivalent to itself, and the target string with only one partner.
 
-**Next up: JUSTIFY MODE**, and it is bigger than the line count suggests. The
-`answer-justifier` codelet is only ~160 lines, but it is the last thing in the
-model that needs justify mode, and justify mode is not a codelet — it is a
-FOURTH STRING. With `%justify-mode%` on, the workspace holds an answer string
-as well, so there are bottom bridges and bottom rules to build, `*all-strings*`
-gains a member, and the bottom themespace clusters come alive. The Scheme has
-**64 non-graphics `%justify-mode%` branches** across sixteen files; the port
-has ten. Section 6 step 8 has the plan.
+**Next up:** nothing is outstanding. What is left is discretionary — see
+section 6's closing note for the short list (an `answers.ss` commentary hook
+nothing calls, the `joots-from-justify-clamps` arm no probe has reached yet,
+and the graphics, which are deliberately out of scope).
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -41,7 +37,7 @@ version is not incidental — the s3 URL in section 1 pins it, and the probes
 compare bit-exact floating point.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all thirty-two probes match on
+section 2 (run the suite). Do not write code until all thirty-three probes match on
 the clean checkout.
 
 ---
@@ -92,10 +88,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
   patterns trace justify wsevents swevents monitors abstract commentary \
-  runloop run
+  runloop run justifymode
 ```
 
-Expected — thirty-two layers, **39,615 trace lines byte-identical**:
+Expected — thirty-three layers, **39,784 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -130,6 +126,7 @@ ok    abstract (119 lines identical)
 ok    commentary (72 lines identical)
 ok    runloop (246 lines identical)
 ok    run (89 lines identical)
+ok    justifymode (169 lines identical)
 all probes matched
 ```
 
@@ -167,7 +164,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — everything runs except JUSTIFY MODE: `answers.ss`, `run.ss` and the commentary are in; what is left is the fourth string and the `answer-justifier` codelet that needs it
+### Metacat — **complete**: every non-graphics line, in both configurations, verified run for run
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -203,6 +200,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | the commentary: what the model says about its answers | `commentary.jl` | `commentary` | 72 |
 | **the run loop, self-watching ON** | `run.jl`, `codelets_jootsing.jl`, `codelets_breaker.jl` | `runloop` | 246 |
 | **the whole model, driven by `run-problem`** | `run.jl` (`init-mcat`, `step-mcat`, `run-mcat`) | `run` | 89 |
+| **justify mode: the model with a fourth string** | `justify.jl` (`answer-justifier`, `clamp-rules`) and the 54 branches through the rest | `justifymode` | 169 |
 
 ---
 
@@ -492,6 +490,19 @@ by reading the code.
   bridge rests on, and so what keeps the temperature down. The port read it as
   "is this object still in the string", which is right until the first rebuild
   and then silently costs every dependent rule its support.
+- **`get-equivalent-bridge` needs BOTH strings, and the bottom bridge's second
+  string is the ANSWER string.** The port's `case` on bridge type had arms for
+  top and vertical and let bottom fall through to `nothing`, so a bottom bridge
+  could not be found equivalent even to ITSELF once it had left the built list
+  — which silently made every bottom rule unsupported, and the answer-justifier
+  clamped forever instead of reporting. Nothing outside justify mode can reach
+  it, which is exactly why it survived until justify mode ran.
+- **The target string has TWO partners in justify mode.** `get-other-string`
+  answers the initial string vertically and the ANSWER string horizontally; the
+  port answered the initial string either way. The thematic-bridge-scout is the
+  only caller, so the symptom was a scout quietly bridging the wrong pair —
+  same draw count, different structure. Any function that maps a string to "the
+  other one" has four cases in justify mode, not three.
 - **RULES are workspace structures, so `update-workspace-values` updates their
   strength too.** A rule's strength is its quality RELATIVE to the other rules
   of its type, so two rules of quality 90 and 99 have strengths 50 and 100 —
@@ -504,14 +515,12 @@ by reading the code.
 
 ---
 
-## 6. What's next, in order
+## 6. How it was built, in order — and what is left
 
-**~1,000 lines of Scheme remain**, across two files (`answers.ss` ~830 — the
-commentary; `justify.ss` ~160 — the `answer-justifier` codelet only).
-`trace.ss`, `jootsing.ss`, `breakers.ss`, `memory.ss` and `run.ss` are DONE.
-Every step below is done except those two; the steps are kept for the "not
-ported, deliberately" notes buried in them. **The live work is step 5's slice
-(D) and the codelet at the end of step 6.**
+**Every Scheme file is ported.** The steps below are all done; they are kept for
+the "not ported, deliberately" notes buried in them, and for the traps each
+layer cost. The closing note after step 8 has what remains, all of it
+discretionary.
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -855,8 +864,9 @@ ported, deliberately" notes buried in them. **The live work is step 5's slice
    exists to hand control back to the SWL repl.
    With this in, `metacat/bench/metacat_bench.{ss,jl}` gained its `full-runs`
    workload — see section 8.
-8. **JUSTIFY MODE** (`justify.ss` 20-180, plus the mode itself) — **the live
-   work, and the last of it.**
+8. ~~**JUSTIFY MODE**~~ (`justify.ss` 20-180, plus the mode itself) — **done**,
+   as the rest of `justify.jl` and 54 branches through the rest of the model,
+   probe `justifymode`.
 
    Justify mode is what Metacat does when you give it the answer as well as the
    problem and ask *why*. `%justify-mode%` is a flag, but what it turns on is a
@@ -870,59 +880,61 @@ ported, deliberately" notes buried in them. **The live work is step 5's slice
    arguing itself towards a justification.
 
    The Scheme has **64 non-graphics `%justify-mode%` branches** across sixteen
-   files; the port has ten. Counting by file, from
-   `grep -c 'justify-mode%'`: `workspace.ss` 22, `run.ss` 6, `groups.ss` 6,
-   `coderack.ss` 5, `bonds.ss` 4, `workspace-objects.ss` 4, `jootsing.ss` 3,
-   `bridges.ss`/`formulas.ss`/`rules.ss`/`themes.ss`/`trace.ss` 2 each, and one
-   apiece in `answers.ss`, `descriptions.ss`, `setup.ss` and
-   `workspace-strings.ss`. So this is not a 160-line codelet; it is a mode that
-   runs through the whole model, and every one of those branches is currently
-   unexercised.
+   files (`workspace.ss` 22, `run.ss` 6, `groups.ss` 6, `coderack.ss` 5,
+   `bonds.ss` 4, `workspace-objects.ss` 4, `jootsing.ss` 3, five files with 2,
+   four with 1), so this was never a 160-line codelet: it is a mode that runs
+   through the whole model. All of them are in.
 
-   **PARTLY STARTED** — the tree carries a WIP commit with roughly the first
-   third of it, and the suite is green with it in (justify mode is off
-   everywhere, so none of it is exercised yet). Already done:
-   - `answer_string` on `MetacatCtx`, plus `all_strings`, `non_answer_strings`,
-     `top_strings`, `bottom_strings`, `vertical_strings` and
-     `bridge_type_strings` respecting it;
-   - `JUSTIFY_MODE` and `SELF_WATCHING_ENABLED` moved from `themes.jl` to
-     `utilities.jl`, because `workspace.jl` now reads `JUSTIFY_MODE` and loads
-     first — a `Ref` defined in a later file resolves only by accident of which
-     probes include it;
-   - the bottom bridge type in `choose_bridge_type` (order `top vertical
-     bottom`, and the order decides the pick);
-   - the target string's horizontal unhappiness and salience, and the
-     three-way averages that go with them (`workspace.jl`);
-   - the group scouts' string weights, which no longer append a spurious
-     trailing zero now that `all_strings` is justify-aware.
+   The mode is a `MetacatCtx.answer_string`, and code with a context to hand
+   tests THAT rather than the flag — the mode IS the fourth string. The
+   `JUSTIFY_MODE` `Ref` remains, for the places the Scheme reads the global and
+   the port has no context (`workspace.jl`'s object values, `themes.jl`'s
+   possible theme types); `init-mcat` sets it from the answer symbol, so the
+   two cannot disagree. Both flags moved from `themes.jl` to `utilities.jl`
+   because `workspace.jl` now reads one and loads first.
 
-   What it still needs, in order:
-   - the rest of the 54 unported branches, read one file at a time. Known
-     remaining: `rules.ss` 400 (rule-scout picks top OR bottom for a verbatim
-     rule) and 489 (rule-builder posts `answer-justifier`); `answers.ss`'s
-     `currently-works?` for a BOTTOM rule, which is checked against the answer
-     string; `run.ss`'s `init-workspace` and `init-mcat` building the fourth
-     string; and `workspace-strings.ss` 490 (reallocating bottom-bridge
-     storage when the target string grows);
-   - `clamp-rules` (justify.ss 162-180), which builds the `justify-clamp` event
-     — that also makes `joots-from-justify-clamps` (`codelets_jootsing.jl`)
-     reachable, where it currently raises;
-   - the `answer-justifier` codelet itself;
-   - a harness entry point, since `run-problem` passes `#f` for the answer
-     string and nothing headless turns the mode on; and
-   - a `justifymode` probe pair driving a real justify-mode run.
+   Two things in the harness, not the model. `run-problem` and
+   `run-justify-problem` each SET `%justify-mode%` to what they need and leave
+   it: the flag says what the workspace currently is, so restoring it after a
+   run would leave the finished workspace being described by the wrong mode —
+   `get-objects` and `get-bonds` would stop reporting the answer string the run
+   actually used. And `suspend`'s stop reason distinguishes `give-up` from
+   `answer`, which matters here because a justify run that cannot justify does
+   give up.
 
-   Expect the differential test to earn its keep here more than anywhere else:
-   these branches have never run on either side of the port.
+   The `justifymode` probe drives eight runs: three that hit a codelet budget
+   (so the loop's bookkeeping with four strings is compared before any answer
+   can end a run), three that justify an answer — including a LITERAL answer,
+   where the bottom rule is verbatim and the halves do not unify — one that
+   re-runs a problem already in memory and so can never report (20,000
+   codelets of clamping), and one with a WRONG answer, which the model clamps
+   at over and over until the jootser notices the repetition and gives up.
+
+   **Not** reached by any probe: `joots-from-justify-clamps`, the arm where the
+   jootser settles for an unjustified answer. It needs three EQUIVALENT justify
+   clamps to be the most recent cluster in the trace, and twenty seeds across
+   five problems produced runs with three to seven clamps that always clustered
+   as something else. It is ported, and it is in the alarm table.
 
 ~~`breakers.ss` (47)~~ — **done**, as `codelets_breaker.jl`.
+
+**Nothing is outstanding.** What is left is discretionary:
+
+- `joots-from-justify-clamps`, above — ported, never yet exercised.
+- The `*comment-window*` prose individual codelets write as they run
+  (`how-strings-change`, the two `joots-from-*-clamps` messages). The
+  commentary proper is in `commentary.jl`; these are one-line asides, and
+  nothing reads them back.
+- The GRAPHICS, which are out of scope by design: `metacat/scheme/metacat/`
+  vendors them, `headless/load-core.ss` skips them, and the port has no GUI.
+  That is the boundary the whole project was drawn around.
 
 ### Known stubs and deliberate omissions
 
 Every one of these is a place the port answers a question it has not really
-been taught to answer. Four of their predecessors turned into silent bugs the
-moment the state they excluded became reachable, so treat this list as a set of
-alarms, not a backlog.
+been taught to answer. SIX of their predecessors turned into silent bugs the
+moment the state they excluded became reachable — the last two when justify
+mode first ran — so treat this list as a set of alarms, not a backlog.
 
 | where | what is missing | when it becomes wrong |
 |---|---|---|
@@ -932,11 +944,11 @@ alarms, not a backlog.
 | ~~the trace's four clamp/snag progress methods~~ | **done** with slice (C) | — |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | ~~`top-down-bond-scout:category` and `:direction`~~ | **done**, with the run loop, exactly when the alarm said they would be needed | — |
-| **justify mode** | `%justify-mode%` is off everywhere; there is no answer string, so no bottom bridges and no bottom rules. 54 of the Scheme's 64 branches are unported | it is now the ONLY thing left — see section 6 step 8 |
-| `joots_from_justify_clamps` | RAISES rather than stubbing: it needs `*answer-string*` and posts `answer-justifier` | only with justify mode on, which cannot produce a justify clamp today — the raise is the alarm |
+| ~~justify mode~~ | **done** — all 64 branches, probe `justifymode` | — |
+| `joots_from_justify_clamps` | ported, but NO probe reaches it: it needs three equivalent justify clamps to be the most recent cluster in the trace, and twenty seeds across five problems never produced that | the first time a run does cluster three — it is live code on an untested path, which is the shape every other entry in this table had before it bit |
 | the `*comment-window*` sends | the prose is all ported (`commentary.jl`); what is dropped is the DRAWING of it, and the running commentary individual codelets write about what they just did (`how-strings-change`, the two `joots-from-*-clamps` messages) | never — it is graphics |
 | the run.ss INTERACTIVE half | breakpoints, step mode, `go`, `rerun`, `runtil` | never headless — all of it hands control back to the SWL repl |
-| `metacat_bench.{ss,jl}` | still benchmarks layers, though `run-problem` now works on both sides | whenever someone wants a number for the model rather than its parts |
+| the GRAPHICS | out of scope by design: vendored, skipped by `load-core.ss`, no GUI in the port | never — it is the boundary the project was drawn around |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
 
@@ -1021,6 +1033,12 @@ bridges coderack themes context codelets_bonds codelets_descriptions
 codelets_groups codelets_bridges codelets_themes codelets_breaker rules
 answers trace justify memory commentary codelets_jootsing run
 ```
+
+`justify.jl` now holds the `answer-justifier` as well as the unification, so it
+loads after `answers.jl` (`report-new-answer`, `make-translated-string`) and
+`trace.jl` (`make-clamp-event`, the codelet patterns). It calls `answer_present`
+from `memory.jl`, which loads AFTER it — fine, because that is a call in a body,
+not a type in a signature.
 
 `trace.jl` now needs `answers.jl` BEFORE it, not just at call time: the answer
 and snag event structs have `SlippageLog` FIELDS. A probe that includes
@@ -1122,27 +1140,32 @@ harness has `give-up` record which it was, so `run-problem` can return
 Copycat is fully benchmarked (`copycat/results/benchmark.json`, table in
 `README.md`): **7.5x** over 1.4M codelets, range 3.3x–11.3x per problem.
 
-Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`), six workloads,
-all with matching checksums. Five are micro-benchmarks of layers. The sixth,
-`full-runs`, is **the model**: three problems run from `init-mcat` to an answer
-or a 2,000-codelet budget, twenty times over, checksummed on codelet count,
-final temperature and whether an answer was found — so a run that got faster by
-doing different work would not pass.
+Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`), seven workloads,
+all with matching checksums. Five are micro-benchmarks of layers. The last two
+are **the model**: three problems run from `init-mcat` to an answer or a
+2,000-codelet budget, twenty times over — `full-runs` ordinarily,
+`justify-runs` with the fourth string — checksummed on codelet count, final
+temperature and whether an answer was found, so a run that got faster by doing
+different work would not pass.
 
-Measured on this tree (Chez 9.5.8, Julia 1.10.9):
+Measured on this tree (Chez 9.5.8, Julia 1.10.9), on an otherwise idle machine:
 
 | workload | iterations | Chez (s) | Julia (s) | speedup | checksum |
 |---|---:|---:|---:|---:|---:|
-| slipnet-50-cycles | 400 | 0.481 | 0.017 | 28.1x | 4800 |
-| workspace-init | 2000 | 0.610 | 0.088 | 7.0x | 1720000 |
-| concept-mappings | 2000 | 0.998 | 0.553 | 1.8x | 14268000 |
-| bonds-and-groups | 2000 | 2.107 | 0.584 | 3.6x | 2096000 |
-| themespace-50-cycles | 200 | 1.652 | 0.091 | 18.2x | 9506200 |
-| **full-runs** | 20 | 7.172 | 2.253 | **3.2x** | 59320 |
+| slipnet-50-cycles | 400 | 0.486 | 0.018 | 27.1x | 4800 |
+| workspace-init | 2000 | 0.610 | 0.255 | 2.4x | 1720000 |
+| concept-mappings | 2000 | 1.044 | 0.374 | 2.8x | 14268000 |
+| bonds-and-groups | 2000 | 2.240 | 0.621 | 3.6x | 2096000 |
+| themespace-50-cycles | 200 | 1.673 | 0.093 | 18.0x | 9506200 |
+| **full-runs** | 20 | 7.591 | 2.202 | **3.4x** | 59320 |
+| **justify-runs** | 20 | 5.223 | 1.521 | **3.4x** | 46220 |
 
-**Quote the full-runs number, not the others.** The layer workloads exercise
-one thing in a tight loop and flatter whichever implementation happens to suit
-it; only `full-runs` has the model's real mixture of work.
+**Quote the full-runs and justify-runs numbers, not the others.** The layer
+workloads exercise one thing in a tight loop and flatter whichever
+implementation happens to suit it; only the two whole-run workloads have the
+model's real mixture of work. Measure on an idle machine: running the
+verification suite alongside the benchmark moved the layer numbers by a factor
+of two or more.
 
 When adding a workload, check the checksum is not trivially constant: the
 themespace one summed activations after 50 cycles, by which point everything

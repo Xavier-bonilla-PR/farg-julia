@@ -80,12 +80,60 @@ both give up. The commentary that distinguishes them is `*comment-window*`."""
 joots_from_rule_codelet_clamps(clamps, ctx) = give_up!(ctx)
 joots_from_snag_response_clamps(clamps, ctx) = give_up!(ctx)
 
-"""`(joots-from-justify-clamps clamps)` — NOT ported. It reads `*answer-string*`
-and posts `answer-justifier`, both of which belong to justify mode, whose
-codelet is the unported half of justify.ss. A justify clamp cannot arise with
-justify mode off, so this is unreachable rather than stubbed."""
+"""`(joots-from-justify-clamps clamps)` — the one arm that does not simply give
+up, because in justify mode there is always an answer; the question is whether
+the model can justify it.
+
+It re-translates the clamped top rule and asks how far the translation is from
+the bottom rule. No unjustified slippages at all means the two halves DO line
+up and the jootser was wrong to be here, so it posts an answer-justifier and
+fizzles. Otherwise it settles: with probability 1/n for n unjustified
+slippages, it reports the answer anyway, carrying those slippages with it — an
+answer the model accepts without being able to justify.
+
+NB the two `currently-works?` guards: a rule that no longer works cannot be
+settled for, and the codelet fizzles rather than reporting a stale answer."""
 function joots_from_justify_clamps(clamps, ctx)
-    error("joots-from-justify-clamps: justify mode is not ported")
+    net = ctx.net
+    mem = ctx.memory
+    answer_string = ctx.answer_string::WorkspaceString
+    clamp = clamps[1]::ClampEvent
+    top_rule = get_event_rule(clamp, :top)
+    bottom_rule = get_event_rule(clamp, :bottom)
+    (top_rule === nothing || bottom_rule === nothing) && return
+    mem !== nothing &&
+        answer_present(mem::Memory, answer_string.letter_categories,
+                       top_rule::Rule, bottom_rule::Rule, ctx, net) && return
+    (currently_works(top_rule::Rule, ctx) &&
+     currently_works(bottom_rule::Rule, ctx)) || return
+    result = translate(ctx.rng, top_rule::Rule, ctx.initial_string,
+                       ctx.target_string, net)
+    result === nothing && return
+    unjustified_slippages = get_unifying_slippages(result.translated_rule,
+                                                   bottom_rule::Rule, net)
+    if isempty(unjustified_slippages)
+        post!(ctx.coderack,
+              make_codelet(CODELET_TYPES[:answer_justifier], EXTREMELY_HIGH_URGENCY),
+              ctx.codelet_count, ctx.rng, ctx.temperature, ctx)
+        return
+    end
+    # stochastic-if* ALWAYS draws, and the test is phrased backwards: this
+    # FIZZLES with probability 1 - 1/n.
+    random_real(ctx.rng, 1.0) < sub_from_1(sdiv(1, length(unjustified_slippages))) &&
+        return
+    all_supporting_groups = remq_duplicates(
+        Any[result.vertical_mapping_supporting_groups...,
+            get_rule_supporting_groups(top_rule::Rule, bottom_rule::Rule, ctx, net)...])
+    bottom_rule_ref_objects = Any[o for o in
+                                  get_all_reference_objects(ctx.target_string,
+                                                            bottom_rule::Rule, net)
+                                  if !(o isa WorkspaceString)]
+    return report_new_answer!(answer_string, top_rule::Rule, bottom_rule::Rule,
+                              result.supporting_vertical_bridges,
+                              all_supporting_groups,
+                              result.from_string_ref_objects,
+                              bottom_rule_ref_objects,
+                              result.slippage_log, unjustified_slippages, mem, ctx)
 end
 
 """`jootser` — notice that the model is going round in circles, and jump out.
@@ -200,8 +248,8 @@ function progress_watcher(ctx::MetacatCtx, args::Vector{Any})
         # stochastic-if* ALWAYS draws
         if random_real(ctx.rng, 1.0) < pct(progress_achieved)
             post!(ctx.coderack,
-                  make_codelet(CODELET_TYPES[JUSTIFY_MODE[] ? :answer_justifier :
-                                                              :answer_finder],
+                  make_codelet(CODELET_TYPES[ctx.answer_string === nothing ?
+                                             :answer_finder : :answer_justifier],
                                progress_achieved),
                   ctx.codelet_count, ctx.rng, ctx.temperature, ctx)
         end
@@ -211,10 +259,11 @@ function progress_watcher(ctx::MetacatCtx, args::Vector{Any})
     max_top_rule_quality = maximum_or_zero([r.quality for r in get_rules(ctx, :top)])
     max_bottom_rule_quality = maximum_or_zero([r.quality for r in get_rules(ctx, :bottom)])
     poor_top = max_top_rule_quality < SATISFACTORY_RULE_QUALITY
-    poor_bottom = JUSTIFY_MODE[] && max_bottom_rule_quality < SATISFACTORY_RULE_QUALITY
+    poor_bottom = ctx.answer_string !== nothing &&
+                  max_bottom_rule_quality < SATISFACTORY_RULE_QUALITY
     (poor_top || poor_bottom) || return
     permission_to_clamp(tr::TemporalTrace, ctx) || return
-    clamp_probability = JUSTIFY_MODE[] ?
+    clamp_probability = ctx.answer_string !== nothing ?
         sub_from_1(pct(min(max_top_rule_quality, max_bottom_rule_quality))) :
         sub_from_1(pct(max_top_rule_quality))
     random_real(ctx.rng, 1.0) < clamp_probability || return

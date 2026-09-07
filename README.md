@@ -246,16 +246,19 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      ruleapply ruleabstract rulecodelets \
                                      ruletranslate transstring memory \
                                      patterns trace justify wsevents swevents \
-                                     monitors abstract commentary runloop run
+                                     monitors abstract commentary runloop run \
+                                     justifymode
 ```
 
-Thirty-two layers, 39,615 trace lines, byte-identical.
+Thirty-three layers, 39,784 trace lines, byte-identical.
 
-The last one is the whole model. `run` calls the same `run-problem` the
+The last two are the whole model. `run` calls the same `run-problem` the
 reference runner above calls and compares what Metacat *did*: six problems,
 three of them run to an answer, with the episodic memory carried across so that
-a later run is reminded of an earlier one. Same answers, same codelet counts,
-same temperatures, same trace, same memory.
+a later run is reminded of an earlier one. `justifymode` does the same for
+justify mode — the configuration where Metacat is given the answer as well as
+the problem and asked *why*. Same answers, same codelet counts, same
+temperatures, same trace, same memory.
 
 | layer | Julia | verified |
 |---|---|---|
@@ -291,14 +294,15 @@ same temperatures, same trace, same memory.
 | the commentary: what the model says about its answers | `commentary.jl` | 72 lines |
 | the run loop, cycle by cycle, self-watching on | `run.jl`, `codelets_jootsing.jl` | 246 lines |
 | **the whole model, driven by `run-problem`** | `run.jl` | 89 lines |
+| **justify mode: the model with a fourth string** | `justify.jl` and 54 branches through the rest | 169 lines |
 
 ### How much is done
 
-**The model runs.** Given a problem and a seed, the Julia port initializes
-itself, posts its own codelets, and runs until it finds an answer, gives up, or
-exhausts a codelet budget — and it does so in step with the Scheme, which is
-what the `run` probe checks. The thirty-one verified layers cover roughly
-15,000 of the ~16,000 lines of Metacat's non-graphics Scheme.
+**All of it.** Every non-graphics line of Metacat's Scheme is ported, in both
+of the model's configurations, and verified run for run against the original.
+Given a problem and a seed, the Julia port initializes itself, posts its own
+codelets, and runs until it finds an answer, gives up, or exhausts a codelet
+budget — in step with the Scheme the whole way.
 
 All three perceptual structures — bonds, groups and bridges — build, fight and
 break each other through the real coderack. The self-watching loop is closed in
@@ -329,11 +333,20 @@ which have no justification beyond dodging a snag it remembers hitting — and
 which of the two it prefers, and why. That prose is compared character for
 character with the Scheme's.
 
-What remains is **justify mode**: what Metacat does when given the answer as
-well as the problem and asked *why*. It is a flag, but what it turns on is a
-fourth string in the workspace, with the bottom bridges, bottom rules and
-bottom themes that come with it — 64 branches through the model, of which the
-port has ten — plus the `answer-justifier` codelet that needs them.
+And it can be asked *why*. **Justify mode** is what Metacat does when given the
+answer as well as the problem: a fourth string enters the workspace, so there is
+a second mapping to build and a second rule to find, and the `answer-justifier`
+tries to show that the two halves of the analogy say the same thing. When it
+cannot find the matching rule, it *clamps* the two rules it has together with
+the theme pattern that would unify them and waits for the workspace to bear that
+out — and if it keeps having to do that, the jootser notices the repetition and
+gives up. `%justify-mode%` is one flag, but it branches 64 times through
+sixteen files of the model; all of it is ported and exercised.
+
+What is not ported is the GRAPHICS. Metacat 1.0 is driven entirely from an SWL
+GUI, and the reference implementation here runs headless; the port has no GUI
+either. That boundary is the one the project was drawn around, and it is why
+"complete" means complete against the model, not against the application.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
@@ -389,27 +402,40 @@ rules of quality 90 and 99 have strengths 50 and 100. The port had left
 `strength` at build-time quality, which is the right ordering and therefore
 looks right, until the first codelet that has to choose between two rules.
 
+Turning on justify mode surfaced two more, both in code that had been green for
+months because nothing outside that mode could reach it. `get-equivalent-bridge`
+had arms for top and vertical bridges and let the bottom one fall through, so a
+bottom bridge could not be found equivalent even to *itself* — which silently
+made every bottom rule unsupported, and the answer-justifier clamped forever
+instead of reporting. And `get-other-string` answered the initial string for the
+target either way round, where in justify mode the target has *two* partners:
+the initial string vertically and the answer string horizontally. Both are the
+same shape as everything above — a branch that is correct until the state it
+excludes becomes reachable.
+
 ### How fast
 
-`metacat/bench/metacat_bench.{ss,jl}` runs six identical workloads on both
+`metacat/bench/metacat_bench.{ss,jl}` runs seven identical workloads on both
 sides with matching checksums. Five are micro-benchmarks of single layers; the
-sixth is the model — three problems run to an answer or a 2,000-codelet budget,
-twenty times over, checksummed on codelet count, final temperature and whether
-an answer was found, so a run that got faster by doing different work would not
-pass.
+last two are the model — three problems run to an answer or a 2,000-codelet
+budget, twenty times over, ordinarily and in justify mode, checksummed on
+codelet count, final temperature and whether an answer was found, so a run that
+got faster by doing different work would not pass.
 
 | workload | iterations | Chez 9.5.8 | Julia 1.10.9 | speedup |
 |---|---:|---:|---:|---:|
-| slipnet, 50 activation cycles | 400 | 0.481 s | 0.017 s | 28.1x |
-| workspace initialisation | 2000 | 0.610 s | 0.088 s | 7.0x |
-| concept mappings | 2000 | 0.998 s | 0.553 s | 1.8x |
-| bonds and groups | 2000 | 2.107 s | 0.584 s | 3.6x |
-| themespace, 50 activation cycles | 200 | 1.652 s | 0.091 s | 18.2x |
-| **whole runs of the model** | 20 | **7.172 s** | **2.253 s** | **3.2x** |
+| slipnet, 50 activation cycles | 400 | 0.486 s | 0.018 s | 27.1x |
+| workspace initialisation | 2000 | 0.610 s | 0.255 s | 2.4x |
+| concept mappings | 2000 | 1.044 s | 0.374 s | 2.8x |
+| bonds and groups | 2000 | 2.240 s | 0.621 s | 3.6x |
+| themespace, 50 activation cycles | 200 | 1.673 s | 0.093 s | 18.0x |
+| **whole runs of the model** | 20 | **7.591 s** | **2.202 s** | **3.4x** |
+| **whole runs, justify mode** | 20 | **5.223 s** | **1.521 s** | **3.4x** |
 
 The layer numbers are there to locate cost, not to be quoted: each exercises
 one thing in a tight loop and flatters whichever implementation happens to suit
-it. **3.2x** is the number for Metacat.
+it. **3.4x** is the number for Metacat, and it is the same in both of the
+model's configurations.
 
 ## Licence
 

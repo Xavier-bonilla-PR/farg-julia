@@ -39,6 +39,15 @@ nothing better to try. The escape alone cannot tell them apart, so the harness
 has `give-up` record which it was, and `run-problem` returns `answer`,
 `give-up` or `limit`.
 
+`run-problem` and `run-justify-problem` are the two entry points, for the
+model's two configurations. Justify mode — where Metacat is given the answer as
+well as the problem and asked *why* — is a GUI toggle in Metacat 1.0, and
+`init-mcat` builds the fourth string only when it is on, so each entry point
+SETS `%justify-mode%` to what it needs and leaves it there. Restoring the flag
+after a run would leave the finished workspace being described by the wrong
+mode: `get-objects` and `get-bonds` consult it, and would stop reporting the
+answer string the run actually used.
+
 Two graphics calls reach past the `tell` guard, because they are ARGUMENTS to
 a `tell` rather than sends themselves, and the harness fills their slots in.
 `group-builder` calls `(group-graphics 'erase ...)` unguarded in each of its

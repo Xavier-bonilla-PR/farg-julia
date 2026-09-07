@@ -1699,12 +1699,14 @@ function update_structure_strength!(r::Rule, ctx)
 end
 
 """`(currently-works?)` — apply the rule to its own string and see whether what
-comes out is the string it is supposed to explain. A BOTTOM rule is checked
-against the answer string, which only exists in justify mode; that mode is not
-ported, and nothing proposes a bottom rule without it."""
+comes out is the string it is supposed to explain: a TOP rule against the
+modified string, a BOTTOM rule against the answer string. Nothing proposes a
+bottom rule outside justify mode, so the answer string is there whenever this
+asks for it."""
 function currently_works(r::Rule, ctx)
     string1 = r.rule_type === :top ? ctx.initial_string : ctx.target_string
-    string2 = ctx.modified_string
+    string2 = r.rule_type === :top ? ctx.modified_string :
+                                     ctx.answer_string::WorkspaceString
     result = apply_rule(r, string1, ctx.net, ignore_snag)
     return result !== nothing &&
            generate_image_letters(string1) == string2.letter_categories
@@ -1740,9 +1742,14 @@ coin is drawn on EVERY run, whether or not it comes up."""
 function rule_scout(ctx::MetacatCtx, args::Vector{Any})
     net = ctx.net
     if stochastic_if(ctx.rng, VERBATIM_RULE_PROBABILITY)
-        # `%justify-mode%` is off, so the rule type is always `top`.
-        rule_type = :top
-        letter_categories = ctx.modified_string.letter_categories
+        # In justify mode a verbatim rule can be about either half of the
+        # analogy, so the type is picked at random and the DRAW happens; with no
+        # answer string there is nothing to pick between and no draw.
+        rule_type = ctx.answer_string === nothing ? :top :
+                    random_pick(ctx.rng, Symbol[:top, :bottom])::Symbol
+        letter_categories = rule_type === :top ?
+            ctx.modified_string.letter_categories :
+            (ctx.answer_string::WorkspaceString).letter_categories
         clauses = RuleClause[verbatim_clause(copy(letter_categories))]
         proposed = make_rule(rule_type, clauses, ctx.initial_string, net,
                              ctx.codelet_count)
@@ -1800,10 +1807,9 @@ end
 already there, in which case the existing one takes over whatever support the
 proposal had that it lacked.
 
-Building a rule is what sets the model looking for an answer, so this posts an
-`answer-finder`. That codelet is `answers.ss` and is not ported yet: the type
-is registered without a procedure, so it can be posted and counted but not
-run."""
+Building a rule is what sets the model looking for an answer, so this posts one
+of the two codelets that produce one: an `answer-finder` normally, an
+`answer-justifier` in justify mode."""
 function rule_builder(ctx::MetacatCtx, args::Vector{Any})
     proposed = args[1]::Rule
     activate_rule_descriptors_from_workspace(proposed)
@@ -1815,17 +1821,26 @@ function rule_builder(ctx::MetacatCtx, args::Vector{Any})
     proposed.proposal_level = BUILT
     add_rule!(ctx, proposed)
     ctx.trace === nothing || monitor_new_rules(proposed, ctx)
+    # A new rule is worth acting on at once: in justify mode by trying to
+    # justify it, otherwise by trying to turn it into an answer.
     post!(ctx.coderack,
-          make_codelet(CODELET_TYPES[:answer_finder], EXTREMELY_HIGH_URGENCY, Any[]),
+          make_codelet(CODELET_TYPES[ctx.answer_string === nothing ? :answer_finder :
+                                     :answer_justifier],
+                       EXTREMELY_HIGH_URGENCY, Any[]),
           ctx.codelet_count, ctx.rng, ctx.temperature)
     return
 end
 
-# `answer-finder` is `answers.ss`, which is not ported. The type is registered
-# so that `rule-builder` can post one before answers.jl has loaded. The real
-# procedure is attached there; this placeholder is replaced, not shadowed.
+# `answer-finder` lives in `answers.jl` and `answer-justifier` in `justify.jl`,
+# both of which load AFTER this file, so `rule-builder` would otherwise post a
+# codelet type that does not exist yet. Registering placeholders here gives the
+# type an identity to be posted and counted under; the real procedures replace
+# them, they do not shadow them. A probe that posts one without loading the
+# file that defines it gets a clear error rather than a silent no-op.
 register_codelet_type!(:answer_finder,
                        (ctx, args) -> error("answer-finder: answers.jl not loaded"))
+register_codelet_type!(:answer_justifier,
+                       (ctx, args) -> error("answer-justifier: justify.jl not loaded"))
 
 register_codelet_type!(:rule_scout, rule_scout)
 register_codelet_type!(:rule_evaluator, rule_evaluator)

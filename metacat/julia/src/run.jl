@@ -122,16 +122,25 @@ the context it runs in.
 The two `set-activation` calls are `set-`, not `update-`, and the Scheme says
 why: `update-activation` is monitored, and a run has not begun yet, so an
 update here would put concept-activation events in the trace before the first
-codelet. Justify mode's answer string is not built — see the stub table."""
+codelet.
+
+`answer_sym` is justify mode: pass one and the workspace gains a fourth string,
+which is what `%justify-mode%` amounts to. The flag is set from it rather than
+the other way round, so the two cannot disagree."""
 function init_mcat(net::Slipnet, initial_sym, modified_sym, target_sym, seed::Int;
-                   memory = nothing, trace = nothing)
+                   answer_sym = nothing, memory = nothing, trace = nothing)
+    JUSTIFY_MODE[] = answer_sym !== nothing
     rng = PyRandom(seed)
     foreach(reset!, net.nodes)
     strings = [make_workspace_string(net, :initial, initial_sym),
                make_workspace_string(net, :modified, modified_sym),
                make_workspace_string(net, :target, target_sym)]
+    answer_string = answer_sym === nothing ? nothing :
+                    make_workspace_string(net, :answer, answer_sym)
+    answer_string === nothing || push!(strings, answer_string::WorkspaceString)
     ctx = MetacatCtx(net, rng, Coderack(), make_themespace(net),
-                     strings[1], strings[2], strings[3], 100, 0)
+                     strings[1], strings[2], strings[3], 100, 0;
+                     answer = answer_string)
     initialize!(ctx.coderack)
     ctx.temperature_clamped = false
     ctx.trace = trace
@@ -193,12 +202,13 @@ function run_mcat!(ctx; codelet_limit::Int = 100000)
     end
 end
 
-"""`(run-problem initial modified target seed limit)` from the headless
-harness — one problem, start to finish."""
+"""`(run-problem ...)` and `(run-justify-problem ...)` from the headless harness
+— one problem, start to finish. `answer_sym` chooses between them: pass one and
+the run is a justify run."""
 function run_problem(net::Slipnet, initial_sym, modified_sym, target_sym, seed::Int,
-                     codelet_limit::Int = 100000; memory = make_memory(),
-                     trace = make_temporal_trace())
+                     codelet_limit::Int = 100000; answer_sym = nothing,
+                     memory = make_memory(), trace = make_temporal_trace())
     ctx = init_mcat(net, initial_sym, modified_sym, target_sym, seed;
-                    memory = memory, trace = trace)
+                    answer_sym = answer_sym, memory = memory, trace = trace)
     return (run_mcat!(ctx; codelet_limit = codelet_limit), ctx)
 end
