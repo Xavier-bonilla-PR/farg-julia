@@ -224,12 +224,12 @@ function dump_rack(tag)
 end
 
 dump_rack("posted")
-clamp_codelet_pattern!(kp1, ctx.coderack)
+clamp_codelet_pattern!(kp1, ctx.coderack, ctx.codelet_count)
 dump_codelet_types("clamped", watched_types)
 dump_rack("clamped")
 post_one(:bond_evaluator, VERY_LOW_URGENCY)
 dump_rack("posted-while-clamped")
-unclamp_codelet_pattern!(kp1, ctx.coderack)
+unclamp_codelet_pattern!(kp1, ctx.coderack, ctx.codelet_count)
 dump_codelet_types("unclamped", watched_types)
 dump_rack("unclamped")
 

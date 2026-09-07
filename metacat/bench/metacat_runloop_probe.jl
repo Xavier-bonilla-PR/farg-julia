@@ -24,6 +24,7 @@ include("../julia/src/answers.jl")
 include("../julia/src/trace.jl")
 include("../julia/src/justify.jl")
 include("../julia/src/memory.jl")
+include("../julia/src/codelets_jootsing.jl")
 include("../julia/src/run.jl")
 
 net = build_slipnet()
@@ -88,12 +89,12 @@ function probe(i, m, t, seed, n, temp, every)
     for nd in net.initially_clamped_nodes
         clamp_activation!(nd, MAX_ACTIVATION, ctx)
     end
-    # Self-watching OFF: it zeroes the post probability of the jootser,
-    # progress-watcher and thematic-bridge-scout types. The draw still happens,
-    # so the RNG stream is unaffected, but they never post. jootsing.ss is the
-    # last unported codelet source.
-    SELF_WATCHING_ENABLED[] = false
+    # Self-watching ON -- the real default from setup.ss.
     ctx.temperature_clamped = false
+    # (tell *coderack* 'initialize). The rack is brand new, but the CODELET
+    # TYPES are global and outlive it, so a clamp left standing by the previous
+    # problem would carry over.
+    initialize!(ctx.coderack)
     update_workspace_values!(ctx)
     ctx.rng = PyRandom(seed)
     post_initial_codelets!(ctx)

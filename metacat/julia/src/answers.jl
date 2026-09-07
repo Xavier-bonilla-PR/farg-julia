@@ -917,3 +917,10 @@ function answer_finder(ctx::MetacatCtx, args::Vector{Any})
 end
 
 register_codelet_type!(:answer_finder, answer_finder)
+
+"""`(give-up)` — stop, having decided there is nothing better to try. The
+comment window is graphics; what remains is the update and the suspend."""
+function give_up!(ctx)
+    update_everything!(ctx)
+    suspend(:give_up)
+end

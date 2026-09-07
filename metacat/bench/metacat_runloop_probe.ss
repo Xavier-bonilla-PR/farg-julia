@@ -112,12 +112,11 @@
     (add-string-position-descriptions-to-letters *target-string*)
     (for* each node in *initially-clamped-slipnodes* do
       (tell node 'clamp %max-activation%))
-    ;; Self-watching OFF. It zeroes the post probability of the jootser,
-    ;; progress-watcher and thematic-bridge-scout types -- the draw still
-    ;; happens, so the RNG stream is unaffected, but they never post. jootsing.ss
-    ;; is the last unported codelet source, so this is what lets the loop run
-    ;; end to end; turning the flag back on is the next step.
-    (set! %self-watching-enabled% #f)
+    ;; Self-watching ON -- the real default from setup.ss. With jootsing.ss
+    ;; ported, every codelet type the run loop posts now exists, so the loop
+    ;; runs in the model's actual configuration: the jootser and
+    ;; progress-watcher post and run, themes get created and boosted, and the
+    ;; thematic-bridge-scout joins in.
     (set! *temperature* temp)
     (set! *temperature-clamped?* #f)
     (set! *codelet-count* 0)

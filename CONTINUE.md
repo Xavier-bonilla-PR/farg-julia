@@ -6,30 +6,28 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** `trace.ss` is COMPLETE, `answers.ss` step (C) is
-COMPLETE, and **the run loop runs**: `update-everything` and everything it
-calls, driven as a genuine loop for 1500 cycles, matching the Scheme cycle for
-cycle. The tree is clean and `origin` is in sync. **Thirty probes, 39,454 trace
-lines byte-identical** — confirmed by a full re-run on this exact tree.
+**State at time of writing:** `trace.ss`, `jootsing.ss` and `answers.ss` step
+(C) are COMPLETE, and **the run loop runs in the model's real configuration**:
+`%self-watching-enabled%` is ON, so the jootser, the progress-watcher, the
+breaker and the thematic-bridge-scout all post and run, themes get created and
+boosted, and clamps actually fire — 1500 cycles of it, matching the Scheme
+cycle for cycle. The tree is clean and `origin` is in sync. **Thirty probes,
+39,454 trace lines byte-identical** — confirmed by a full re-run on this exact
+tree.
 
 The `runloop` probe is the strongest test in the project: it chooses a codelet,
 runs it, updates everything, and repeats, dumping the whole model state
 (temperature, coderack by type, workspace by structure, slipnet activations,
-themespace, trace) every N cycles. Nothing is hand-driven.
+themespace, trace) every N cycles. Nothing is hand-driven. With self-watching
+on it now exercises the self-watching loop end to end, which is what the last
+divergence in section 5 ("a codelet that changes bins is RE-STAMPED") was
+hiding behind.
 
-**ONE THING STANDS BETWEEN THIS AND A DEFAULT-CONFIGURATION RUN:
-`jootsing.ss`.** The `runloop` probe runs with `%self-watching-enabled%` OFF,
-because the jootser and progress-watcher codelet types are the only ones the
-run loop posts that are still unported. With the flag off their post
-probability is 0 — the draw still happens, so the RNG stream is unaffected —
-and they never post. Port `jootsing.ss` (344 lines, fully unblocked) and the
-flag can go back on, which is the real default.
-
-**Next up:** `jootsing.ss`. After that: the `answer-justifier` codelet that is
-the rest of `justify.ss`, `answers.ss` step (D) (the commentary, ~830), and
-the run.ss driver (`run-until-answer` and the stepping machinery) — at which
-point `metacat/bench/metacat_bench.{ss,jl}` finally measures the model rather
-than its layers.
+**Next up:** the `answer-justifier` codelet that is the rest of `justify.ss`
+(~160), `answers.ss` step (D) (the commentary, ~830), and the run.ss driver
+(`run-until-answer` and the stepping machinery) — at which point
+`metacat/bench/metacat_bench.{ss,jl}` finally measures the model rather than
+its layers.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -162,7 +160,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~2,000 lines of non-graphics Scheme left**: `trace.ss`, `rules.ss`, `themes.ss` and `memory.ss` complete; `answers.ss` step (C) half done and (D) untouched; `justify.ss` all but its codelet; `jootsing.ss` and `run.ss` outstanding
+### Metacat — **~1,400 lines of non-graphics Scheme left**: `trace.ss`, `jootsing.ss`, `rules.ss`, `themes.ss` and `memory.ss` complete; `answers.ss` step (C) done and (D) untouched; `justify.ss` all but its codelet; the `run.ss` driver outstanding
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -190,6 +188,12 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | episodic memory: answer/snag descriptions, distance | `memory.jl` | `memory` | 505 |
 | trace patterns and the clamping they drive | `trace.jl` | `patterns` | 334 |
 | the temporal trace and its generic event | `trace.jl` | `trace` | 597 |
+| rule unification and the slippages it yields | `justify.jl` | `justify` | 289 |
+| the workspace concrete events (group, cm, ...) | `trace.jl` | `wsevents` | 1828 |
+| the self-watching events (answer, clamp, snag) | `trace.jl` | `swevents` | 453 |
+| the trace monitors and their importance tests | `trace.jl` | `monitors` | 808 |
+| memory's two trace-reading abstractors | `memory.jl` | `abstract` | 119 |
+| **the run loop, self-watching ON** | `run.jl`, `codelets_jootsing.jl`, `codelets_breaker.jl` | `runloop` | 246 |
 
 ---
 
@@ -453,19 +457,36 @@ by reading the code.
   split into the fewest lines that keep it under 60 characters, and the widest
   of those quotients then sets the width for *every* phrase in the rule. Wrap
   at a constant 60 and the output differs on any rule with more than one clause.
+- **A codelet that changes bins is RE-STAMPED.** `set-urgency` moves a codelet
+  by calling the destination bin's `add-codelet`, and `add-codelet` ends with
+  `(tell codelet 'set-time-stamp)` — so the codelet's time stamp becomes the
+  current `*codelet-count*`. Its removal weight is `(- *codelet-count*
+  time-stamp)`, which is then zero, so clamping a codelet pattern does not
+  merely raise some urgencies: it makes every codelet it MOVED temporarily
+  immune to being culled, and that changes which codelets the next
+  `delete-codelets` throws away. The port carried the old stamp across the move
+  — tidier, and wrong within one cycle of the first clamp. This was the last
+  divergence in the `runloop` probe, and it is the shape to remember: **equal
+  draw counts, equal draw values, equal workspace, different coderack.** When
+  the generator agrees and the *composition* does not, the difference is in a
+  non-drawing bookkeeping field, not in a decision.
+- **`(tell *coderack* 'initialize)` unclamps every codelet TYPE.** Codelet
+  types are global and outlive any one coderack, so a clamp left standing at
+  the end of one run carries into the next. A probe that runs several problems
+  in sequence and builds a fresh `Coderack()` for each is not enough: it has to
+  call `initialize!` too, or problem *n+1* starts with problem *n*'s urgencies.
 
 ---
 
 ## 6. What's next, in order
 
-**~3,000 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
-the commentary, plus the `answer-finder` body that `trace.ss` blocks;
-`trace.ss` DONE;
-`jootsing.ss` 344, `justify.ss` ~160 left — the `answer-justifier` codelet
-only, `run.ss` 346, `breakers.ss` 47). `memory.ss` is done apart from its two
-trace-reading abstractors. Steps 0-4 below are done, and step 5 is half done; they are kept
-for the "not ported, deliberately" notes buried in them. **The live work is
-step 6, slice (C).**
+**~1,400 lines of Scheme remain**, across three files (`answers.ss` ~830 left
+— the commentary; `justify.ss` ~160 left — the `answer-justifier` codelet only;
+`run.ss` ~350 left — the driver, `update-everything` and `post-initial-codelets`
+being in already). `trace.ss`, `jootsing.ss`, `breakers.ss` and `memory.ss` are
+DONE. Steps 0-6 below are done; they are kept for the "not ported,
+deliberately" notes buried in them. **The live work is step 7 and what is left
+of steps 5 and 6.**
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -622,12 +643,9 @@ step 6, slice (C).**
      Metacat writes about its own answers, and the part of the program the
      thesis is really about. Leaf-ish, and testable the same way the rule
      transcription was: build the structures by hand and compare the prose.
-6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the rest of
-   the self-watching layers, **the live work**. Slice (C) is now IN, so
-   `answer-finder`, `report-new-answer`, `process-snag`, memory's two
-   abstractors, all of `jootsing.ss` and the rest of `justify.ss` are no longer
-   blocked — only slice (D) is still ahead of them, and it is small.
-   `memory.ss` is already in.
+6. **`trace.ss` (1,672), `jootsing.ss` (344), `justify.ss` (352)** — the
+   self-watching layers. `trace.ss` and `jootsing.ss` are **done**; only the
+   `answer-justifier` codelet is left, in `justify.ss`.
 
    **`justify.ss` is half done**, as `justify.jl`, probe `justify`: the
    rule-clause traversal and the two procs that ride it, `unify-rules`,
@@ -655,15 +673,20 @@ step 6, slice (C).**
    string-position entry, which short-circuits `prob?` WITHOUT drawing, so the
    RNG stream depends on which dimensions a pattern names.
 
-   **`jootsing.ss` is entirely blocked on slice (C)** and was not started.
-   Both its codelets (`jootser`, `progress-watcher`) and
-   `get-clamp-jootsing-probability` read clamp and snag EVENTS —
-   `get-clamp-type`, `get-progress-achieved`, `get-snag-theme-pattern`,
-   `get-snag-objects` — and build new ones with `make-clamp-event`;
+   **`jootsing.ss` is done**, as `codelets_jootsing.jl`, covered by the
+   `runloop` probe rather than one of its own — its two codelets only ever say
+   anything after hundreds of cycles of real history, so a hand-built probe
+   would have to fake the trace it is supposed to be reading.
    `get-most-recent-event-set` is generic over event type but has only clamp
-   and snag callers. `%satisfactory-rule-quality%` and `%settling-period%`
-   go with them (`%max-clamp-period%` and `%grace-period%` are already in
-   `trace.jl`). Do slice (C) first; jootsing then follows almost mechanically.
+   and snag callers; `%satisfactory-rule-quality%` and `%settling-period%` came
+   with it (`%max-clamp-period%` and `%grace-period%` were already in
+   `trace.jl`). Two things to know. The jootser's snag arm is phrased
+   BACKWARDS — it fizzles with probability `1 - p`, so the draw reads as the
+   opposite of the test around it. And `joots-from-justify-clamps` is
+   deliberately a raise, not a stub: it reads `*answer-string*` and posts
+   `answer-justifier`, both of which belong to justify mode, and a justify
+   clamp cannot arise with justify mode off. `breakers.ss` went in alongside
+   it, as `codelets_breaker.jl`.
 
    `trace.ss` splits cleanly and is being taken in slices:
    - **(A)** ~~patterns and clamping~~ (1412-1672, ~260 lines) — **done**, as
@@ -777,11 +800,17 @@ step 6, slice (C).**
    2 instead of 1. The probe now stays inside the slice: it builds BONDS,
    the only structure with no monitor, and leaves slipnode activations alone.
    Once (C) and (D) are in, that restriction lifts.
-7. **The run loop** (`run.ss`, 346) — then end-to-end comparison becomes
-   possible, and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful.
-   Until then the benchmark measures layers, not the model.
+7. **The run loop** (`run.ss`, 346) — **half done**. `update-everything`,
+   `update-temperature` and `post-initial-codelets` are in, as `run.jl`, and
+   the `runloop` probe drives them as a genuine loop with self-watching ON.
+   What is left is the DRIVER around them: `run-until-answer`, the stepping
+   machinery, and the `suspend`/resume plumbing that `report-new-answer` ends a
+   run through (the port throws a `RunFinished` where the headless harness uses
+   an escape continuation). With that in, end-to-end comparison becomes
+   possible and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful. Until
+   then the benchmark measures layers, not the model.
 
-`breakers.ss` (47) can go in any time.
+~~`breakers.ss` (47)~~ — **done**, as `codelets_breaker.jl`.
 
 ### Known stubs and deliberate omissions
 
@@ -799,6 +828,9 @@ alarms, not a backlog.
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
 | ~~`top-down-bond-scout:category` and `:direction`~~ | **done**, with the run loop, exactly when the alarm said they would be needed | — |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | the `answer-justifier` codelet, the unported half of `justify.ss` |
+| `joots_from_justify_clamps` | RAISES rather than stubbing: it needs `*answer-string*` and posts `answer-justifier` | only with justify mode on, which cannot produce a justify clamp today — the raise is the alarm |
+| the `*comment-window*` prose | every codelet that writes English about what it just did drops it (`how-strings-change`, the two `joots-from-*-clamps` messages, `answer-quality-phrase`'s callers) | `answers.ss` step (D), which is the commentary layer proper |
+| `run-until-answer` and stepping | the run.ss driver; the loop body it drives is in | end-to-end `metacat_bench` — the probes drive the loop themselves today |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
 
@@ -880,8 +912,8 @@ call time, so a body may call forward. The order that works:
 ```
 schemenum utilities slipnet workspace concept_mappings images bonds groups
 bridges coderack themes context codelets_bonds codelets_descriptions
-codelets_groups codelets_bridges codelets_themes rules answers trace justify
-memory
+codelets_groups codelets_bridges codelets_themes codelets_breaker rules
+answers trace justify memory codelets_jootsing run
 ```
 
 `trace.jl` now needs `answers.jl` BEFORE it, not just at call time: the answer
@@ -896,6 +928,12 @@ memory's distance metric calls `compare_rule_clause_lists`, which lives in
 `rules.jl` needs `bridges.jl` (it dispatches on `Bridge`), `coderack.jl` and
 `context.jl` (it registers codelet types at load time and dispatches on
 `MetacatCtx`), so every probe that includes it must include those too.
+
+`codelets_jootsing.jl` loads AFTER `trace.jl` and `answers.jl`: its bodies read
+clamp and snag events and call `give_up!`, and it registers `:jootser` and
+`:progress_watcher` at load time. `run.jl` is last — `update_everything!` calls
+into every layer. `codelets_breaker.jl` has no dependencies beyond the
+coderack and can go anywhere after `context.jl`.
 
 ## 7. Repo map
 

@@ -128,7 +128,8 @@ order groups.ss does, which is the order they come back out in reverse."""
 function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
                     group_bond_facet::Union{Nothing,Node}, direction::Union{Nothing,Node},
                     left_object::WSObject, right_object::WSObject,
-                    objs::Vector{WSObject}, bonds::Vector{Any})
+                    objs::Vector{WSObject}, bonds::Vector{Any},
+                    codelet_count::Int = 0)
     ordered_objects = direction === net[:plato_left] ? reverse(objs) : objs
     initial_letter_category = get_descriptor_for(ordered_objects[1],
                                                  net[:plato_letter_category])
@@ -160,7 +161,8 @@ function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
               middle_idx === nothing ? nothing : objs[middle_idx],
               Description[], nothing, "",
               0, Description[], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-              nothing, false, nothing, nothing, Any[], Any[], nothing, nothing, 0, 0, 0)
+              nothing, false, nothing, nothing, Any[], Any[], nothing, nothing,
+              codelet_count, 0, 0)
 
     new_description!(g, net[:plato_object_category], net[:plato_group])
     new_description!(g, net[:plato_group_category], group_category)

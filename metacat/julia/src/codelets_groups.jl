@@ -110,7 +110,7 @@ bond, collecting bonds that say the same thing. A bond that says the opposite
 thing in the opposite direction says the SAME thing read the other way round,
 so it is collected as its flipped version."""
 function scan_bonds(max_num_to_scan::Int, direction_to_scan::Node, initial_bond::Bond,
-                    net::Slipnet)
+                    net::Slipnet, codelet_count::Int = 0)
     bond_facet = initial_bond.bond_facet
     bond_category = initial_bond.bond_category
     opposite_bond_cat = get_related_node(bond_category, net[:plato_opposite],
@@ -129,7 +129,7 @@ function scan_bonds(max_num_to_scan::Int, direction_to_scan::Node, initial_bond:
             push!(result, b)
         elseif b.bond_facet === bond_facet && b.bond_category === opposite_bond_cat &&
                b.direction === opposite_direction
-            push!(result, make_flipped_version(b, net))
+            push!(result, make_flipped_version(b, net, codelet_count))
         else
             break
         end
@@ -143,7 +143,8 @@ end
 bonds into a run that all say the same thing, flipping the ones that say the
 opposite. Any bond that cannot be made to agree kills the whole run."""
 function polarize_bonds(bonds, bond_facet::Node, bond_category::Node,
-                        direction::Union{Nothing,Node}, net::Slipnet)
+                        direction::Union{Nothing,Node}, net::Slipnet,
+                        codelet_count::Int = 0)
     result = Any[]
     for x in bonds
         b = x::Bond
@@ -155,7 +156,7 @@ function polarize_bonds(bonds, bond_facet::Node, bond_category::Node,
                b.direction !== nothing &&
                get_related_node(b.direction::Node, net[:plato_opposite],
                                 net[:plato_identity]) === direction
-            push!(result, make_flipped_version(b, net))
+            push!(result, make_flipped_version(b, net, codelet_count))
         else
             return Any[]
         end
@@ -186,7 +187,7 @@ function propose_group!(ctx::MetacatCtx, objs::Vector{WSObject}, bonds::Vector{A
     group_bond_facet = isempty(bonds) ? net[:plato_letter_category] :
                        (bonds[1]::Bond).bond_facet
     g = make_group(net, s, group_category, group_bond_facet, direction,
-                   left_object, right_object, objs, bonds)
+                   left_object, right_object, objs, bonds, ctx.codelet_count)
     # stochastic-if* ALWAYS draws, even when the probability is 0 or 1
     coin = random_real(ctx.rng, 1.0)
     if coin < length_description_probability(g, net)
@@ -247,7 +248,8 @@ function top_down_group_scout_category(ctx::MetacatCtx, args::Vector{Any})
     setup === nothing && return
     (object, direction_to_scan, number_to_scan, initial_bond) = setup
     if initial_bond !== nothing && (initial_bond::Bond).bond_category === bond_category
-        bonds = scan_bonds(number_to_scan, direction_to_scan, initial_bond::Bond, net)
+        bonds = scan_bonds(number_to_scan, direction_to_scan, initial_bond::Bond,
+                           net, ctx.codelet_count)
         isempty(bonds) && return
         objs = WSObject[(bonds[1]::Bond).left_object]
         for b in bonds
@@ -269,7 +271,8 @@ function top_down_group_scout_category(ctx::MetacatCtx, args::Vector{Any})
     objs = WSObject[object]
     bonds = Any[]
     singleton_group = make_group(net, s, group_category, net[:plato_letter_category],
-                                 singleton_direction, object, object, objs, bonds)
+                                 singleton_direction, object, object, objs, bonds,
+                                 ctx.codelet_count)
     coin = random_real(ctx.rng, 1.0)
     coin < sub_from_1(single_letter_group_probability(ctx.rng, singleton_group, net)) && return
     propose_group!(ctx, objs, bonds, group_category, singleton_direction)
@@ -293,7 +296,8 @@ function top_down_group_scout_direction(ctx::MetacatCtx, args::Vector{Any})
     bond_category = (initial_bond::Bond).bond_category
     group_category = get_related_node(bond_category, net[:plato_group_category],
                                       net[:plato_identity])::Node
-    bonds = scan_bonds(number_to_scan, direction_to_scan, initial_bond::Bond, net)
+    bonds = scan_bonds(number_to_scan, direction_to_scan, initial_bond::Bond,
+                       net, ctx.codelet_count)
     isempty(bonds) && return
     objs = WSObject[(bonds[1]::Bond).left_object]
     for b in bonds
@@ -319,7 +323,8 @@ function group_scout_whole_string(ctx::MetacatCtx, args::Vector{Any})
     (isempty(right_bonds) || !rightmost_in_string(bonded_objects[end])) && return
     chosen_bond = random_pick(ctx.rng, right_bonds)::Bond
     polarized_bonds = polarize_bonds(right_bonds, chosen_bond.bond_facet,
-                                     chosen_bond.bond_category, chosen_bond.direction, net)
+                                     chosen_bond.bond_category, chosen_bond.direction,
+                                     net, ctx.codelet_count)
     isempty(polarized_bonds) && return
     group_category = get_related_node(chosen_bond.bond_category,
                                       net[:plato_group_category],
@@ -456,7 +461,7 @@ function consolidate_group(ctx::MetacatCtx, g::Group, constituent_objects, const
         end
         new_group = make_group(net, s, group_category, net[:plato_letter_category],
                                direction, letters[1], letters[end], letters,
-                               Any[b for b in letter_bonds])
+                               Any[b for b in letter_bonds], ctx.codelet_count)
         description_type_present(g, net[:plato_length]) &&
             attach_length_description!(new_group, net)
         return new_group
@@ -485,7 +490,8 @@ function consolidate_group(ctx::MetacatCtx, g::Group, constituent_objects, const
         end
         new_group = make_group(net, s, group_category, net[:plato_length], direction,
                                new_constituents[1], new_constituents[end],
-                               new_constituents, Any[b for b in group_bonds])
+                               new_constituents, Any[b for b in group_bonds],
+                               ctx.codelet_count)
         attach_length_description!(new_group, net)
         return new_group
     else

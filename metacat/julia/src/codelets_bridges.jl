@@ -28,9 +28,10 @@ own flipped version.
 NB the flipped group keeps the ORIGINAL group's id, so that bridges to it land
 in the same slot of the proposed-bridge table as bridges to the unflipped
 version."""
-function make_flipped_version(g::Group, net::Slipnet)
+function make_flipped_version(g::Group, net::Slipnet, codelet_count::Int = 0)
     g.group_category === net[:plato_samegrp] && return g
-    flipped_bonds = Any[make_flipped_version(b::Bond, net) for b in g.constituent_bonds]
+    flipped_bonds = Any[make_flipped_version(b::Bond, net, codelet_count)
+                        for b in g.constituent_bonds]
     flipped = make_group(net, g.string,
                          get_related_node(g.group_category, net[:plato_opposite],
                                           net[:plato_identity])::Node,
@@ -38,7 +39,7 @@ function make_flipped_version(g::Group, net::Slipnet)
                          get_related_node(g.direction::Node, net[:plato_opposite],
                                           net[:plato_identity]),
                          g.left_object, g.right_object, g.constituent_objects,
-                         flipped_bonds)
+                         flipped_bonds, codelet_count)
     flipped.id_num = g.id_num
     description_type_present(g, net[:plato_length]) &&
         attach_length_description!(flipped, net)
@@ -302,8 +303,8 @@ ought to replace."""
 function propose_bridge!(ctx::MetacatCtx, orientation::Symbol, object1::WSObject,
                          flip1::Bool, object2::WSObject, flip2::Bool)
     net = ctx.net
-    obj1 = flip1 ? make_flipped_version(object1::Group, net) : object1
-    obj2 = flip2 ? make_flipped_version(object2::Group, net) : object2
+    obj1 = flip1 ? make_flipped_version(object1::Group, net, ctx.codelet_count) : object1
+    obj2 = flip2 ? make_flipped_version(object2::Group, net, ctx.codelet_count) : object2
     cms = all_possible_bridge_cms(orientation,
                                   obj1, string_spanning_group(obj1) ? obj1.descriptions :
                                         get_relevant_descriptions(obj1),

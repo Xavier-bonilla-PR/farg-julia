@@ -187,18 +187,19 @@ function against_background(urgency, codelet_patterns...)
     return Any[:codelets, specified..., complement...]
 end
 
-"""`(clamp-codelet-pattern codelet-pattern)`."""
-function clamp_codelet_pattern!(codelet_pattern, cr::Coderack)
+"""`(clamp-codelet-pattern codelet-pattern)`. The codelet count is threaded in
+because moving a codelet between bins re-stamps it — see `set_urgency!`."""
+function clamp_codelet_pattern!(codelet_pattern, cr::Coderack, codelet_count::Int)
     for entry in entries(codelet_pattern)
-        clamp_codelet_type!(entry[1], entry[2], cr)
+        clamp_codelet_type!(entry[1], entry[2], cr, codelet_count)
     end
     return codelet_pattern
 end
 
 """`(unclamp-codelet-pattern codelet-pattern)`."""
-function unclamp_codelet_pattern!(codelet_pattern, cr::Coderack)
+function unclamp_codelet_pattern!(codelet_pattern, cr::Coderack, codelet_count::Int)
     for entry in entries(codelet_pattern)
-        unclamp_codelet_type!(entry[1], cr)
+        unclamp_codelet_type!(entry[1], cr, codelet_count)
     end
     return codelet_pattern
 end
@@ -1026,7 +1027,7 @@ function activate!(e::ClampEvent, tr::TemporalTrace, ctx)
         clamp_concept_pattern!(pattern, ctx)
     end
     for pattern in e.clamped_codelet_patterns
-        clamp_codelet_pattern!(pattern, ctx.coderack)
+        clamp_codelet_pattern!(pattern, ctx.coderack, ctx.codelet_count)
     end
     return e
 end
@@ -1042,7 +1043,7 @@ function deactivate!(e::ClampEvent, ctx)
         unclamp_concept_pattern!(pattern)
     end
     for pattern in e.clamped_codelet_patterns
-        unclamp_codelet_pattern!(pattern, ctx.coderack)
+        unclamp_codelet_pattern!(pattern, ctx.coderack, ctx.codelet_count)
     end
     return e
 end

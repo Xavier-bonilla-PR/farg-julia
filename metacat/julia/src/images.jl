@@ -467,7 +467,8 @@ The bond category comes from whichever relation the group is built on: a
 LetterCtgy group reads its letter relation, anything else its length relation,
 and an `identity` relation means a sameness group. A sameness group has no
 direction."""
-function instantiate_as_group!(im::Image, s::WorkspaceString, net::Slipnet)
+function instantiate_as_group!(im::Image, s::WorkspaceString, net::Slipnet,
+                               codelet_count::Int = 0)
     subs = im.direction === net[:plato_left] ? reverse(im.sub_images) : im.sub_images
     ordered_objects = WSObject[get_instantiated_object(x)::WSObject for x in subs]
     left_object = ordered_objects[1]
@@ -480,7 +481,8 @@ function instantiate_as_group!(im::Image, s::WorkspaceString, net::Slipnet)
                                       net[:plato_identity])::Node
     group_direction = group_category === net[:plato_samegrp] ? nothing : im.direction
     group = make_group(net, s, group_category, im.bond_facet, group_direction,
-                       left_object, right_object, ordered_objects, Any[])
+                       left_object, right_object, ordered_objects, Any[],
+                       codelet_count)
     im.instantiated_object = group
     add_group!(s, group)
     for o in ordered_objects

@@ -111,11 +111,12 @@ end
 """`(make-flipped-version)` — the same bond read the other way round: ends
 swapped and the bond category replaced by its opposite. A sameness bond has no
 opposite, so this is only ever called on successor/predecessor bonds."""
-make_flipped_version(b::Bond, net::Slipnet) =
+make_flipped_version(b::Bond, net::Slipnet, codelet_count::Int = 0) =
     make_bond(net, b.to_object, b.from_object,
               get_related_node(b.bond_category, net[:plato_opposite],
                                net[:plato_identity])::Node,
-              b.bond_facet, b.to_object_descriptor, b.from_object_descriptor)
+              b.bond_facet, b.to_object_descriptor, b.from_object_descriptor,
+              codelet_count)
 
 """`(add-bond bond)` — registers the bond in the string's from/to table. A
 sameness bond goes in under both orderings, since it reads the same either

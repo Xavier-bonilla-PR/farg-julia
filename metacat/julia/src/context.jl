@@ -485,3 +485,27 @@ function delete_all_proposed_bridges!(ctx::MetacatCtx)
     JUSTIFY_MODE[] && empty!(ctx.proposed_bottom_bridges)
     return ctx
 end
+
+"""`%expiration-period%` and `%num-youngest-structures%` (workspace.ss)."""
+const EXPIRATION_PERIOD = 500
+const NUM_YOUNGEST_STRUCTURES = 3
+
+structure_age(s, ctx::MetacatCtx) = ctx.codelet_count - s.time_stamp
+
+"""`(get-youngest-structures-average-age)` — how long ago the three most recent
+structures were built. NB Chez's `sort` is stable, so structures of equal age
+keep their `get-structures` order."""
+function get_youngest_structures_average_age(ctx::MetacatCtx)
+    structures = get_structures(ctx)
+    isempty(structures) && return 0
+    sorted = sort(structures, by = s -> structure_age(s, ctx), alg = MergeSort)
+    youngest = sorted[1:min(length(sorted), NUM_YOUNGEST_STRUCTURES)]
+    return sdiv(sum(structure_age(s, ctx) for s in youngest), length(youngest))
+end
+
+"""`(get-activity)` — how much has been happening lately, 0..100. Nothing built
+for a whole expiration period reads as zero activity, which is what the
+progress-watcher waits for before concluding the model is stuck."""
+get_activity(ctx::MetacatCtx) =
+    sub_from_100(mul_100(min(1.0, sdiv(get_youngest_structures_average_age(ctx),
+                                       EXPIRATION_PERIOD))))

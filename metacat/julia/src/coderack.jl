@@ -154,6 +154,13 @@ function initialize!(cr::Coderack)
     cr.codelet_list = Codelet[]
     cr.current_num = 0
     cr.deferred_codelets = Codelet[]
+    # The Scheme also unclamps every codelet type here. That matters because
+    # `CODELET_TYPES` is global and outlives any one Coderack, so a clamp left
+    # standing at the end of one run would silently carry into the next.
+    for ct in values(CODELET_TYPES)
+        ct.urgency_clamped = false
+        ct.clamped_relative_urgency = 0
+    end
     return cr
 end
 
@@ -315,33 +322,45 @@ registered a procedure for yet."""
 all_codelet_types() =
     [get!(CODELET_TYPES, n, CodeletType(n)) for n in ALL_CODELET_TYPE_NAMES]
 
-"""`(set-urgency new-value)` on a codelet — may move it to a different bin."""
-function set_urgency!(cr::Coderack, c::Codelet, new_value::Real)
+"""`(set-urgency new-value)` on a codelet — may move it to a different bin.
+
+NB the re-stamping. The Scheme moves the codelet by calling the destination
+bin's `add-codelet`, and `add-codelet` unconditionally does `(tell codelet
+'set-time-stamp)`. So a codelet that changes bins is treated as freshly
+posted, and its removal weight — which is `(- *codelet-count* time-stamp)` —
+drops to zero. Clamping a codelet pattern therefore does not merely raise
+some urgencies: it also makes every codelet it moved temporarily immune to
+being culled, which changes WHICH codelets the next `delete-codelets` throws
+away. Preserving the old time stamp here looks tidier and diverges from the
+reference within a cycle of the first clamp."""
+function set_urgency!(cr::Coderack, c::Codelet, new_value::Real, codelet_count::Int)
     new_bin = coderack_bin_for(new_value)
     if new_bin != c.coderack_bin
         remove_codelet!(cr.bins[c.coderack_bin + 1], c)
         c.coderack_bin = new_bin
-        add_codelet!(cr.bins[new_bin + 1], c, c.time_stamp)
+        add_codelet!(cr.bins[new_bin + 1], c, codelet_count)
     end
     c.relative_urgency = new_value
     return c
 end
 
 """`(reset-urgency)` — back to the urgency the codelet was posted with."""
-reset_urgency!(cr::Coderack, c::Codelet) = set_urgency!(cr, c, c.original_urgency)
+reset_urgency!(cr::Coderack, c::Codelet, codelet_count::Int) =
+    set_urgency!(cr, c, c.original_urgency, codelet_count)
 
 """`(set-urgencies codelet-type new-value)`."""
-function set_urgencies!(cr::Coderack, ct::CodeletType, new_value::Real)
+function set_urgencies!(cr::Coderack, ct::CodeletType, new_value::Real,
+                        codelet_count::Int)
     for c in cr.codelet_list
-        c.codelet_type === ct && set_urgency!(cr, c, new_value)
+        c.codelet_type === ct && set_urgency!(cr, c, new_value, codelet_count)
     end
     return cr
 end
 
 """`(reset-urgencies codelet-type)`."""
-function reset_urgencies!(cr::Coderack, ct::CodeletType)
+function reset_urgencies!(cr::Coderack, ct::CodeletType, codelet_count::Int)
     for c in cr.codelet_list
-        c.codelet_type === ct && reset_urgency!(cr, c)
+        c.codelet_type === ct && reset_urgency!(cr, c, codelet_count)
     end
     return cr
 end
@@ -349,21 +368,22 @@ end
 """`(clamp urgency)` on a codelet type. NB: the Scheme only acts when the
 clamp actually CHANGES something, so re-clamping to the same urgency does not
 disturb the rack."""
-function clamp_codelet_type!(ct::CodeletType, urgency::Real, cr::Coderack)
+function clamp_codelet_type!(ct::CodeletType, urgency::Real, cr::Coderack,
+                            codelet_count::Int)
     if !ct.urgency_clamped || urgency != ct.clamped_relative_urgency
         ct.urgency_clamped = true
         ct.clamped_relative_urgency = urgency
-        set_urgencies!(cr, ct, urgency)
+        set_urgencies!(cr, ct, urgency, codelet_count)
     end
     return ct
 end
 
 """`(unclamp)`. NB: also only acts when there is a clamp to remove."""
-function unclamp_codelet_type!(ct::CodeletType, cr::Coderack)
+function unclamp_codelet_type!(ct::CodeletType, cr::Coderack, codelet_count::Int)
     if ct.urgency_clamped
         ct.urgency_clamped = false
         ct.clamped_relative_urgency = 0
-        reset_urgencies!(cr, ct)
+        reset_urgencies!(cr, ct, codelet_count)
     end
     return ct
 end
