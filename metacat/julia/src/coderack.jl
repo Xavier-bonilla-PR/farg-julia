@@ -367,3 +367,177 @@ function unclamp_codelet_type!(ct::CodeletType, cr::Coderack)
     end
     return ct
 end
+
+# --- deciding what to post each cycle (coderack.ss 465-575) -----------------
+#
+# Once per cycle the model refills the rack from the bottom up, and every
+# active slipnode gets a chance to post its top-down codelets. Two questions
+# per type: how LIKELY it is to post at all, and how MANY it posts if it does.
+# Both read the workspace, which is what makes the rack track what the model is
+# currently bad at — lots of unhappy objects means lots of scouts.
+
+"""`*thematic-codelet-types*` and `*self-watching-codelet-types*`."""
+const THEMATIC_CODELET_TYPE_NAMES = [:thematic_bridge_scout]
+const SELF_WATCHING_CODELET_TYPE_NAMES =
+    [:thematic_bridge_scout, :progress_watcher, :jootser]
+
+"""`(post-codelet-probability codelet-type)`.
+
+A clamped type posts at its clamped urgency, whatever the workspace says —
+that is what clamping a codelet pattern MEANS. Otherwise the probability is
+whichever workspace measure the type responds to."""
+function post_codelet_probability(ct::CodeletType, ctx)
+    # answer-justifier belongs to justify mode and answer-finder to normal mode;
+    # each is dead in the other. Self-watching types are dead when self-watching
+    # is off.
+    justify = JUSTIFY_MODE[]
+    (justify && ct.name === :answer_finder) && return 0
+    (!justify && ct.name === :answer_justifier) && return 0
+    (!SELF_WATCHING_ENABLED[] &&
+     any(n -> n === ct.name, SELF_WATCHING_CODELET_TYPE_NAMES)) && return 0
+    ct.urgency_clamped && return pct(ct.clamped_relative_urgency)
+    n = ct.name
+    if n === :bottom_up_bond_scout || n === :top_down_bond_scout_category ||
+       n === :top_down_bond_scout_direction || n === :top_down_group_scout_category ||
+       n === :top_down_group_scout_direction || n === :group_scout_whole_string
+        return pct(get_average_intra_string_unhappiness(ctx))
+    elseif n === :bottom_up_bridge_scout || n === :important_object_bridge_scout
+        return pct(sub_from_100(get_min_mapping_strength(ctx)))
+    elseif n === :bottom_up_description_scout || n === :top_down_description_scout
+        return pct(get_average_unhappiness(ctx))
+    elseif n === :rule_scout
+        return isempty(get_possible_rule_types(ctx)) ? 0.5 : 1
+    elseif n === :answer_finder
+        return supported_rule_exists(ctx, :top) ?
+               pct(sub_from_100(ctx.temperature)) : 0
+    elseif n === :answer_justifier
+        return (supported_rule_exists(ctx, :top) ||
+                supported_rule_exists(ctx, :bottom)) ?
+               pct(sub_from_100(ctx.temperature)) : 0
+    elseif n === :breaker
+        return pct(ctx.temperature)
+    elseif n === :progress_watcher
+        return has_thematic_pressure(ctx.themespace) ? 1 : 0.25
+    elseif n === :jootser
+        tr = ctx.trace
+        within = tr !== nothing && ((tr::TemporalTrace).within_snag_period ||
+                                    (tr::TemporalTrace).within_clamp_period)
+        return within ? 0.4 : 0.1
+    elseif n === :thematic_bridge_scout
+        types = get_active_bridge_theme_types(ctx.themespace)
+        return isempty(types) ? 0 :
+               pct(get_max_positive_theme_activation(ctx.themespace, types))
+    end
+    # NB the Scheme's `case` has no else: an unlisted type returns Chez's
+    # unspecified value, which `stochastic-if*` would then compare against a
+    # random draw. Every type the model posts bottom-up or top-down is listed.
+    return 0
+end
+
+"""`(num-of-codelets-to-post codelet-type)`. The rough-num calls DRAW."""
+function num_of_codelets_to_post(ct::CodeletType, ctx)
+    justify = JUSTIFY_MODE[]
+    (justify && ct.name === :answer_finder) && return 0
+    (!justify && ct.name === :answer_justifier) && return 0
+    n = ct.name
+    if n === :bottom_up_bond_scout || n === :top_down_bond_scout_category ||
+       n === :top_down_bond_scout_direction
+        r = rough_num_of_unrelated_objects(ctx)
+        return r === :few ? 2 : r === :some ? 4 : 6
+    elseif n === :top_down_group_scout_category ||
+           n === :top_down_group_scout_direction || n === :group_scout_whole_string
+        isempty(workspace_bonds(ctx)) && return 0
+        r = rough_num_of_ungrouped_objects(ctx)
+        return r === :few ? 1 : r === :some ? 2 : 3
+    elseif n === :bottom_up_bridge_scout || n === :important_object_bridge_scout
+        r = rough_num_of_unmapped_objects(ctx)
+        return r === :few ? 2 : r === :some ? 5 : 6
+    elseif n === :bottom_up_description_scout || n === :top_down_description_scout
+        return 2
+    elseif n === :rule_scout
+        return max(1, 2 * length(get_possible_rule_types(ctx)))
+    elseif n === :answer_finder || n === :answer_justifier || n === :breaker
+        return 1
+    elseif n === :thematic_bridge_scout
+        return sround(10 * pct(get_max_inter_string_unhappiness(ctx)))
+    elseif n === :progress_watcher
+        return 2
+    elseif n === :jootser
+        return justify ? 1 : 2
+    end
+    return 0
+end
+
+"""`(thematic-codelet-urgency codelet-type)` — how loudly the themes are
+calling. NB the Scheme's `case` covers only `thematic-bridge-scout`."""
+thematic_codelet_urgency(ct::CodeletType, ctx) =
+    get_max_positive_theme_activation(ctx.themespace,
+                                      get_active_bridge_theme_types(ctx.themespace))
+
+"""`(add-bottom-up-codelets)` — one pass over the bottom-up types. Codelets are
+DEFERRED, not posted: they all go on together at the end of the cycle, so the
+rack sees one coherent refill rather than a trickle."""
+function add_bottom_up_codelets!(ctx)
+    for name in BOTTOM_UP_CODELET_TYPE_NAMES
+        # NB `get!`, not `get`: the Scheme iterates every type in the list and
+        # draws for each, so skipping a type whose procedure is not attached
+        # yet would silently drop a draw and desynchronise the whole run.
+        ct = get!(CODELET_TYPES, name, CodeletType(name))
+        # stochastic-if* ALWAYS draws, unlike prob?
+        random_real(ctx.rng, 1.0) < post_codelet_probability(ct, ctx) || continue
+        urgency = bottom_up_urgency(ct, ctx.temperature)
+        for _ in 1:num_of_codelets_to_post(ct, ctx)
+            add_deferred_codelet!(ctx.coderack, make_codelet(ct, urgency))
+        end
+    end
+    return ctx
+end
+
+"""`(add-top-down-codelets)` — every active slipnode posts the codelet types
+attached to it, then the thematic types get their turn."""
+function add_top_down_codelets!(ctx)
+    for node in ctx.net.top_down_nodes
+        attempt_to_post_top_down_codelets!(node, ctx)
+    end
+    for name in THEMATIC_CODELET_TYPE_NAMES
+        ct = get!(CODELET_TYPES, name, CodeletType(name))
+        random_real(ctx.rng, 1.0) < post_codelet_probability(ct, ctx) || continue
+        urgency = thematic_codelet_urgency(ct, ctx)
+        for _ in 1:num_of_codelets_to_post(ct, ctx)
+            add_deferred_codelet!(ctx.coderack, make_codelet(ct, urgency))
+        end
+    end
+    return ctx
+end
+
+"""`(attempt-to-post-top-down-codelets)` on a slipnode — an active concept
+pushes the model to look for what it is about. The urgency is the concept's
+depth scaled by how awake it is, and the scope is the whole workspace."""
+function attempt_to_post_top_down_codelets!(node::Node, ctx)
+    above_threshold(node) || return node
+    urgency = pct(node.conceptual_depth) * node.activation
+    for name in node.top_down_codelet_types
+        ct = get!(CODELET_TYPES, name, CodeletType(name))
+        random_real(ctx.rng, 1.0) < post_codelet_probability(ct, ctx) || continue
+        for _ in 1:num_of_codelets_to_post(ct, ctx)
+            add_deferred_codelet!(ctx.coderack,
+                                  make_codelet(ct, urgency, Any[node, nothing]))
+        end
+    end
+    return node
+end
+
+"""`(delete-all-codelets)` — wipe the rack, deleting any proposed structure a
+codelet was carrying. `process-snag` does this: after a snag the model starts
+over, and half-finished proposals would be about the world as it was."""
+function delete_all_codelets!(cr::Coderack, ctx = nothing)
+    for c in cr.codelet_list
+        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1], ctx)
+    end
+    for b in cr.bins
+        clear_codelets!(b)
+    end
+    cr.codelet_list = Codelet[]
+    cr.current_num = 0
+    return cr
+end

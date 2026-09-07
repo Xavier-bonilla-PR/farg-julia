@@ -308,19 +308,22 @@ function build_slipnet()
     letters = [N(Symbol("plato_", c)) for c in "abcdefghijklmnopqrstuvwxyz"]
     numbers = [N(s) for s in (:plato_one, :plato_two, :plato_three, :plato_four, :plato_five)]
 
-    # top-down codelet types
+    # Top-down codelet types, named as the CODELET_TYPES registry keys them
+    # (underscores, no colon). They used to be spelled the Scheme's way, which
+    # nothing read until the run loop asked an active slipnode to post them —
+    # and then the lookup silently missed and no codelet was posted.
     for n in (L("left"), L("right"))
-        n.top_down_codelet_types = [Symbol("top-down-bond-scout:direction"),
-                                    Symbol("top-down-group-scout:direction")]
+        n.top_down_codelet_types = [:top_down_bond_scout_direction,
+                                    :top_down_group_scout_direction]
     end
     for n in (L("predecessor"), L("successor"), L("sameness"))
-        n.top_down_codelet_types = [Symbol("top-down-bond-scout:category")]
+        n.top_down_codelet_types = [:top_down_bond_scout_category]
     end
     for n in (L("predgrp"), L("succgrp"), L("samegrp"))
-        n.top_down_codelet_types = [Symbol("top-down-group-scout:category")]
+        n.top_down_codelet_types = [:top_down_group_scout_category]
     end
     for n in (L("string-position-category"), L("alphabetic-position-category"), L("length"))
-        n.top_down_codelet_types = [Symbol("top-down-description-scout")]
+        n.top_down_codelet_types = [:top_down_description_scout]
     end
 
     # intrinsic link lengths for the nodes that label links

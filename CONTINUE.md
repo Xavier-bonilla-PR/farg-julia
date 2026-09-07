@@ -6,25 +6,30 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** `trace.ss` is COMPLETE (all four slices), and so
-is the first half of `answers.ss` step (C) — the two memory abstractors. The
-tree is clean and `origin` is in sync. **Twenty-nine probes, 39,208 trace lines
-byte-identical** — confirmed by a full re-run on this exact tree, not carried
-over from an earlier one.
+**State at time of writing:** `trace.ss` is COMPLETE, `answers.ss` step (C) is
+COMPLETE, and **the run loop runs**: `update-everything` and everything it
+calls, driven as a genuine loop for 1500 cycles, matching the Scheme cycle for
+cycle. The tree is clean and `origin` is in sync. **Thirty probes, 39,454 trace
+lines byte-identical** — confirmed by a full re-run on this exact tree.
 
-With the monitors live, the `monitors` probe runs a real coderack on both sides
-and diffs the WHOLE EVENT LIST end to end — the first test here that compares
-traces rather than individual pieces.
+The `runloop` probe is the strongest test in the project: it chooses a codelet,
+runs it, updates everything, and repeats, dumping the whole model state
+(temperature, coderack by type, workspace by structure, slipnet activations,
+themespace, trace) every N cycles. Nothing is hand-driven.
 
-**Next up:** the rest of `answers.ss` step (C) — the `answer-finder` codelet
-body, `report-new-answer` and `process-snag`. `metacat/julia/src/rules.jl` still
-registers `:answer_finder` with a procedure that raises; replacing that is the
-signal it is done. It drags in four pieces of `run.ss` (`update-everything`,
-`post-initial-codelets`, `update-temperature`, the two `add-*-codelets`), which
-is fine — that is movement toward the end-to-end run. After that:
-`jootsing.ss` (344, fully unblocked), the `answer-justifier` codelet that is the
-rest of `justify.ss`, `answers.ss` step (D) (the commentary, ~830), then the
-rest of `run.ss`. The plan is in section 6, step 6.
+**ONE THING STANDS BETWEEN THIS AND A DEFAULT-CONFIGURATION RUN:
+`jootsing.ss`.** The `runloop` probe runs with `%self-watching-enabled%` OFF,
+because the jootser and progress-watcher codelet types are the only ones the
+run loop posts that are still unported. With the flag off their post
+probability is 0 — the draw still happens, so the RNG stream is unaffected —
+and they never post. Port `jootsing.ss` (344 lines, fully unblocked) and the
+flag can go back on, which is the real default.
+
+**Next up:** `jootsing.ss`. After that: the `answer-justifier` codelet that is
+the rest of `justify.ss`, `answers.ss` step (D) (the commentary, ~830), and
+the run.ss driver (`run-until-answer` and the stepping machinery) — at which
+point `metacat/bench/metacat_bench.{ss,jl}` finally measures the model rather
+than its layers.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -32,7 +37,7 @@ version is not incidental — the s3 URL in section 1 pins it, and the probes
 compare bit-exact floating point.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all twenty-nine probes match on
+section 2 (run the suite). Do not write code until all thirty probes match on
 the clean checkout.
 
 ---
@@ -82,10 +87,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns trace justify wsevents swevents monitors abstract
+  patterns trace justify wsevents swevents monitors abstract runloop
 ```
 
-Expected — twenty-nine layers, **39,208 trace lines byte-identical**:
+Expected — thirty layers, **39,454 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -117,6 +122,7 @@ ok    wsevents (1828 lines identical)
 ok    swevents (453 lines identical)
 ok    monitors (808 lines identical)
 ok    abstract (119 lines identical)
+ok    runloop (246 lines identical)
 all probes matched
 ```
 
@@ -786,12 +792,12 @@ alarms, not a backlog.
 
 | where | what is missing | when it becomes wrong |
 |---|---|---|
-| `:answer_finder` (`rules.jl`) | registered with a procedure that raises | `answers.ss` step C, no longer blocked — slice (C) is in |
-| `abstract_answer_description` / `abstract_snag_description` | not ported — they read an ANSWER EVENT | UNBLOCKED: `AnswerEvent` now exists |
-| `process_snag` | not ported — needs `post-initial-codelets` | UNBLOCKED for `make-snag-event`; still needs `run.ss` |
+| ~~`:answer_finder`~~ | **done** — the real procedure is attached in `answers.jl` | — |
+| ~~`abstract_answer_description` / `abstract_snag_description`~~ | **done** | — |
+| ~~`process_snag`~~ | **done**, with `post-initial-codelets` and `update-everything` | — |
 | ~~the trace's four clamp/snag progress methods~~ | **done** with slice (C) | — |
 | translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
-| `top-down-bond-scout:category` and `:direction` (`bonds.ss` 217, 269) | NOT PORTED, though `slipnet.jl` already names them as top-down codelet types for the pred/succ/sameness and left/right nodes | as soon as an active slipnode posts its top-down codelets — i.e. the run loop. `codelets_bonds.jl` registers only the three bottom-up bond codelets |
+| ~~`top-down-bond-scout:category` and `:direction`~~ | **done**, with the run loop, exactly when the alarm said they would be needed | — |
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | the `answer-justifier` codelet, the unported half of `justify.ss` |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |

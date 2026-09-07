@@ -334,6 +334,92 @@ function get_incompatible_bonds(b::Bond)
     return result
 end
 
+# --- the two top-down bond scouts (bonds.ss 217-320) ------------------------
+#
+# Posted by an ACTIVE SLIPNODE rather than by the bottom-up refill: `successor`
+# waking up makes the model go looking for successor bonds. The scope is the
+# whole workspace when a slipnode posted it, so the scout first has to pick a
+# string — weighted by how relevant the concept is there AND how unhappy that
+# string is, averaged. A string that already reads well is left alone even if
+# the concept fits it.
+#
+# These are what CONTINUE.md's stub table warned would become wrong "as soon as
+# an active slipnode posts its top-down codelets — i.e. the run loop". They are
+# ported with the run loop, on cue.
+
+"""The string a top-down scout works in: the given one when the scope IS a
+string, otherwise a stochastic pick over the three (four in justify mode)
+weighted by relevance-and-unhappiness."""
+function choose_top_down_string(ctx::MetacatCtx, scope, relevance)
+    scope isa WorkspaceString && return scope
+    strings = all_strings(ctx)
+    weights = [sdiv(relevance(s) + s.average_intra_string_unhappiness, 2)
+               for s in strings]
+    return stochastic_pick(ctx.rng, strings, weights)
+end
+
+"""`top-down-bond-scout:category` — look for a bond of THIS category."""
+function top_down_bond_scout_category(ctx::MetacatCtx, args::Vector{Any})
+    TEMPERATURE[] = ctx.temperature
+    bond_category = args[1]::Node
+    scope = length(args) >= 2 ? args[2] : nothing
+    s = choose_top_down_string(ctx, scope,
+                               st -> get_bond_category_relevance(st, bond_category))
+    object1 = choose_object(ctx.rng, s::WorkspaceString, :intra_string_salience)
+    object1 === nothing && return
+    object2 = choose_neighbor(ctx.rng, object1::WSObject)
+    object2 === nothing && return
+    bond_facet = choose_bond_facet(ctx.rng, object1::WSObject, object2::WSObject, ctx.net)
+    bond_facet === nothing && return
+    d1 = get_descriptor_for(object1::WSObject, bond_facet::Node)
+    d2 = get_descriptor_for(object2::WSObject, bond_facet::Node)
+    (d1 === nothing || d2 === nothing) && return
+    incompatible_bond_candidates(object1::WSObject, object2::WSObject, bond_facet::Node,
+                                 bond_category, ctx.net) && return
+    # The bond may run either way round; the scout takes whichever direction
+    # gives the category it was posted for.
+    if get_bond_category_between(d1::Node, d2::Node, ctx.net) === bond_category
+        propose_bond!(ctx, object1::WSObject, object2::WSObject, bond_category,
+                      bond_facet::Node, d1::Node, d2::Node)
+    elseif get_bond_category_between(d2::Node, d1::Node, ctx.net) === bond_category
+        propose_bond!(ctx, object2::WSObject, object1::WSObject, bond_category,
+                      bond_facet::Node, d2::Node, d1::Node)
+    end
+    return
+end
+
+"""`top-down-bond-scout:direction` — look for a bond running THIS way. Sameness
+bonds are excluded: they have no direction to be looking for."""
+function top_down_bond_scout_direction(ctx::MetacatCtx, args::Vector{Any})
+    TEMPERATURE[] = ctx.temperature
+    direction = args[1]::Node
+    scope = length(args) >= 2 ? args[2] : nothing
+    s = choose_top_down_string(ctx, scope,
+                               st -> get_direction_relevance(st, direction))
+    from_object = choose_object(ctx.rng, s::WorkspaceString, :intra_string_salience)
+    from_object === nothing && return
+    to_object = direction === ctx.net[:plato_left] ?
+                choose_left_neighbor(ctx.rng, from_object::WSObject) :
+                choose_right_neighbor(ctx.rng, from_object::WSObject)
+    to_object === nothing && return
+    bond_facet = choose_bond_facet(ctx.rng, from_object::WSObject, to_object::WSObject,
+                                   ctx.net)
+    bond_facet === nothing && return
+    from_descriptor = get_descriptor_for(from_object::WSObject, bond_facet::Node)
+    to_descriptor = get_descriptor_for(to_object::WSObject, bond_facet::Node)
+    (from_descriptor === nothing || to_descriptor === nothing) && return
+    bond_category = get_bond_category_between(from_descriptor::Node, to_descriptor::Node,
+                                              ctx.net)
+    (bond_category === nothing || bond_category === ctx.net[:plato_sameness]) && return
+    incompatible_bond_candidates(from_object::WSObject, to_object::WSObject,
+                                 bond_facet::Node, bond_category::Node, ctx.net) && return
+    propose_bond!(ctx, from_object::WSObject, to_object::WSObject, bond_category::Node,
+                  bond_facet::Node, from_descriptor::Node, to_descriptor::Node)
+    return
+end
+
 register_codelet_type!(:bottom_up_bond_scout, bottom_up_bond_scout)
 register_codelet_type!(:bond_evaluator, bond_evaluator)
 register_codelet_type!(:bond_builder, bond_builder)
+register_codelet_type!(:top_down_bond_scout_category, top_down_bond_scout_category)
+register_codelet_type!(:top_down_bond_scout_direction, top_down_bond_scout_direction)

@@ -50,6 +50,11 @@ mutable struct MetacatCtx
     """`*temperature-clamped?*` — set while a snag holds the temperature up,
     and cleared by the trace's `undo-snag-condition`."""
     temperature_clamped::Bool
+    """`*memory*` — the episodic memory, when one is attached. As with the
+    trace, the Scheme keeps it as a global that always exists; here the layers
+    that write to it check first, so a probe that does not care about memory
+    need not build one."""
+    memory::Any
     """`*trace*` — the temporal trace, when one is attached. The Scheme keeps it
     as a global that always exists, so its MONITORS are always live; here the
     monitors fire exactly when a trace is present. That is behaviourally the
@@ -72,7 +77,7 @@ MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                0, 0, 0, 0, 0, 0, 0, 0,
-               Any[], Any[], false, false, Any[], false, nothing)
+               Any[], Any[], false, false, Any[], false, nothing, nothing)
 
 """`(get-all-vertical-CMs)` — every concept mapping of every built vertical
 bridge, which is what the whole vertical mapping amounts to."""
@@ -385,5 +390,98 @@ clamp_rule!(ctx::MetacatCtx, rule) = (pushfirst!(ctx.clamped_rules, rule); ctx)
 function unclamp_rule!(ctx::MetacatCtx, rule)
     i = findfirst(x -> x === rule, ctx.clamped_rules)
     i === nothing || deleteat!(ctx.clamped_rules, i)
+    return ctx
+end
+
+# --- what the coderack asks the workspace before posting --------------------
+
+get_average_intra_string_unhappiness(ctx::MetacatCtx) =
+    ctx.average_intra_string_unhappiness
+get_average_unhappiness(ctx::MetacatCtx) = ctx.average_unhappiness
+
+"""`(get-max-inter-string-unhappiness)` — the worst of the mappings. The bottom
+one only counts in justify mode, where an answer string exists to map onto."""
+get_max_inter_string_unhappiness(ctx::MetacatCtx) =
+    max(ctx.average_top_inter_string_unhappiness,
+        ctx.average_vertical_inter_string_unhappiness)
+
+"""`(ungrouped? object)` — not itself the whole string, and not inside a group."""
+ungrouped(o::WSObject) = !spans_whole_string(o) && o.enclosing_group === nothing
+
+"""`(unrelated? object)` — ungrouped and short of bonds. An object at either end
+of a string has only one side to bond on, so ANY bond relates it; one in the
+middle needs two."""
+function unrelated(o::WSObject)
+    ungrouped(o) || return false
+    n = length(incident_bonds(o))
+    return (leftmost_in_string(o) || rightmost_in_string(o)) ? n == 0 : n < 2
+end
+
+"""`(unmapped? object)` — which mapping an object needs depends on which string
+it is in. Outside justify mode the target string needs only a vertical bridge."""
+function unmapped(o::WSObject)
+    t = o.string.string_type
+    t === :initial && return !(o.vertical_bridge !== nothing &&
+                               o.horizontal_bridge !== nothing)
+    t === :modified && return o.horizontal_bridge === nothing
+    t === :target && return o.vertical_bridge === nothing
+    return o.horizontal_bridge === nothing            # :answer
+end
+
+"""`(rough-num-of-objects n)` — few / some / many, with FUZZED boundaries, so
+the same count can land either side of a threshold on different cycles.
+
+NB this DRAWS: `(~ 2)` and then, only if that did not settle it, `(~ 4)`."""
+function rough_num_of_objects(rng::PyRandom, n::Int)
+    n < fuzz(rng, 2) && return :few
+    n < fuzz(rng, 4) && return :some
+    return :many
+end
+
+rough_num_of_unrelated_objects(ctx::MetacatCtx) =
+    rough_num_of_objects(ctx.rng, count(unrelated, workspace_objects(ctx)))
+rough_num_of_ungrouped_objects(ctx::MetacatCtx) =
+    rough_num_of_objects(ctx.rng, count(ungrouped, workspace_objects(ctx)))
+rough_num_of_unmapped_objects(ctx::MetacatCtx) =
+    rough_num_of_objects(ctx.rng, count(unmapped, workspace_objects(ctx)))
+
+"""`(get-supported-rules rule-type)` / `(supported-rule-exists? rule-type)`."""
+get_supported_rules(ctx::MetacatCtx, rule_type::Symbol) =
+    Any[r for r in get_rules(ctx, rule_type) if rule_supported(r, ctx)]
+supported_rule_exists(ctx::MetacatCtx, rule_type::Symbol) =
+    any(r -> rule_supported(r, ctx), get_rules(ctx, rule_type))
+
+rule_possible(ctx::MetacatCtx, rule_type::Symbol) =
+    rule_type === :top ? ctx.top_rule_possible : ctx.bottom_rule_possible
+
+"""`(spread-activation-to-themespace)` — every built bridge boosts the themes it
+supports. This is the first of the three feedback loops between the workspace
+and the themespace, and it runs once per cycle."""
+function spread_activation_to_themespace!(ctx::MetacatCtx)
+    for bt in (:top, :bottom, :vertical)
+        for b in get_bridges(ctx, bt)
+            boost_themes!(b, ctx.themespace, ctx.net)
+        end
+    end
+    return ctx
+end
+
+"""`(delete-all-proposed-bonds)` / `(delete-all-proposed-groups)` on a string,
+and `(delete-all-proposed-bridges)` on the workspace. NB the Scheme clears the
+BOTTOM bridge table only in justify mode, where bottom bridges exist at all."""
+function delete_all_proposed_bonds!(s::WorkspaceString)
+    empty!(s.proposed_bonds)
+    return s
+end
+
+function delete_all_proposed_groups!(s::WorkspaceString)
+    empty!(s.proposed_groups)
+    return s
+end
+
+function delete_all_proposed_bridges!(ctx::MetacatCtx)
+    empty!(ctx.proposed_vertical_bridges)
+    empty!(ctx.proposed_top_bridges)
+    JUSTIFY_MODE[] && empty!(ctx.proposed_bottom_bridges)
     return ctx
 end

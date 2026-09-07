@@ -789,3 +789,131 @@ function get_unjustified_theme_pattern(unjustified_slippages, net::Slipnet)
                   if !any(y -> y == x, combined[(i + 1):end])]
     return Any[:vertical_bridge, deduped...]
 end
+
+# --- answers.ss (C): finding an answer and reporting it ---------------------
+
+"""`(suspend)` — the Scheme hands control back to the repl, and the headless
+harness redirects that to an escape continuation, so `(suspend)` never returns.
+An exception is the Julia equivalent: the run loop catches it."""
+struct RunFinished <: Exception
+    reason::Symbol            # :answer | :give_up
+end
+
+suspend(reason::Symbol = :answer) = throw(RunFinished(reason))
+
+"""`(report-new-answer ...)` — record the answer and END THE RUN.
+
+The comment window is graphics, so the prose Metacat writes about the answer is
+not here (it is `answer_quality_phrase` and the commentary of step (D)); what
+IS here is the answer event, the memory entry abstracted from it, and the
+suspend that stops the run."""
+function report_new_answer!(answer_string, top_rule::Rule, bottom_rule::Rule,
+                            supporting_vertical_bridges, supporting_groups,
+                            top_rule_ref_objects, bottom_rule_ref_objects,
+                            slippage_log::SlippageLog, unjustified_slippages,
+                            mem, ctx)
+    update_everything!(ctx)
+    tr = ctx.trace
+    if tr !== nothing && (tr::TemporalTrace).within_clamp_period
+        undo_last_clamp!(tr::TemporalTrace, ctx)
+    end
+    answer_event = make_answer_event(ctx.initial_string, ctx.modified_string,
+                                     ctx.target_string, answer_string, top_rule,
+                                     bottom_rule, supporting_vertical_bridges,
+                                     supporting_groups, top_rule_ref_objects,
+                                     bottom_rule_ref_objects, slippage_log,
+                                     unjustified_slippages, ctx)
+    tr === nothing || add_event!(tr::TemporalTrace, answer_event, ctx)
+    # Build an abstract characterization of the answer and store it in memory.
+    mem === nothing || abstract_answer_description!(answer_event, mem::Memory, ctx)
+    suspend(:answer)
+end
+
+"""`(process-snag rule translated-rule ...)` — returns the failure ACTION that
+`apply-rule` calls when the translated rule cannot be applied.
+
+A snag is not a failure to be swallowed: the model records it, remembers it if
+it is new, throws away every proposal it was in the middle of, pins the
+temperature at 100 so nothing looks settled, holds the snagged objects in view,
+wipes the rack and starts over. That is the impasse the self-watching layers
+exist to notice."""
+function process_snag(rule::Rule, translated_rule::Rule, supporting_vertical_bridges,
+                      slippage_log::SlippageLog, rule_ref_objects, mem, ctx)
+    return function (failure_result)
+        snag_event = make_snag_event(failure_result, rule, translated_rule,
+                                     supporting_vertical_bridges, slippage_log,
+                                     rule_ref_objects, ctx)
+        tr = ctx.trace
+        tr === nothing || add_event!(tr::TemporalTrace, snag_event, ctx)
+        if mem !== nothing && !snag_present(mem::Memory, rule, ctx, ctx.net)
+            abstract_snag_description!(snag_event, mem::Memory, ctx)
+        end
+        for s in all_strings(ctx)
+            delete_all_proposed_bonds!(s)
+            delete_all_proposed_groups!(s)
+        end
+        delete_all_proposed_bridges!(ctx)
+        ctx.temperature = 100
+        ctx.temperature_clamped = true
+        tr === nothing || activate!(snag_event, tr::TemporalTrace, ctx)
+        # Deleting all codelets automatically erases every proposed bond, group
+        # and bridge they were carrying.
+        delete_all_codelets!(ctx.coderack, ctx)
+        post_initial_codelets!(ctx)
+        update_everything!(ctx)
+        return :done
+    end
+end
+
+"""`answer-finder` — the codelet that tries to turn a rule into an answer.
+
+Two stochastic gates first: the mappings have to be strong (cubed, so a weak
+one kills it), and the chosen rule has to be well supported. Then the rule is
+translated into the target string's terms, applied — which is where a snag can
+happen — and, if the answer is new, reported."""
+function answer_finder(ctx::MetacatCtx, args::Vector{Any})
+    TEMPERATURE[] = ctx.temperature
+    net = ctx.net
+    mem = ctx.memory
+    top_strength = get_mapping_strength(ctx, :top)
+    vertical_strength = get_mapping_strength(ctx, :vertical)
+    # stochastic-if* on (1- x) ALWAYS draws: fizzle with probability 1-x.
+    random_real(ctx.rng, 1.0) <
+        sub_from_1(cube(pct(top_strength) * pct(vertical_strength))) && return
+    supported_rules = get_supported_rules(ctx, :top)
+    isempty(supported_rules) && return
+    rule_weights = temp_adjusted_values([r.strength for r in supported_rules])
+    rule = stochastic_pick(ctx.rng, supported_rules, rule_weights)::Rule
+    degree_of_support = get_degree_of_support(rule, ctx)
+    random_real(ctx.rng, 1.0) < sub_from_1(pct(degree_of_support)) && return
+    currently_works(rule, ctx) || return
+    result = translate(ctx.rng, rule, ctx.initial_string, ctx.target_string, net)
+    result === nothing && return
+    translated_rule = result.translated_rule
+    snag_action = process_snag(rule, translated_rule,
+                               result.supporting_vertical_bridges,
+                               result.slippage_log, result.from_string_ref_objects,
+                               mem, ctx)
+    applied = apply_rule(translated_rule, ctx.target_string, net, snag_action)
+    applied === nothing && return
+    if mem !== nothing &&
+       answer_present(mem::Memory, generate_image_letters(ctx.target_string),
+                      rule, translated_rule, ctx, net)
+        return
+    end
+    set_quality_values!(translated_rule, net)
+    # make-translated-string sets the translated rule's supporting bridges and
+    # theme pattern, so it has to happen before the answer is reported.
+    translated_string = make_translated_string(translated_rule, ctx.target_string,
+                                               ctx, net)
+    all_supporting_groups = remq_duplicates(
+        Any[result.vertical_mapping_supporting_groups...,
+            get_rule_supporting_groups(rule, translated_rule, ctx, net)...])
+    report_new_answer!(translated_string, rule, translated_rule,
+                       result.supporting_vertical_bridges, all_supporting_groups,
+                       result.from_string_ref_objects, result.to_string_ref_objects,
+                       result.slippage_log, ConceptMapping[], mem, ctx)
+    return
+end
+
+register_codelet_type!(:answer_finder, answer_finder)
