@@ -308,3 +308,77 @@ end
 support_probe("abc", "abd", "ijk", 81)
 support_probe("abc", "cba", "pqrs", 82)
 support_probe("abc", "abd", "mrrjjj", 83)
+
+#--------------------------------------------------------------- exactness ---
+#
+# The two places where the themespace's arithmetic depends on Scheme's
+# EXACTNESS and not just on its numbers. Both were open divergences in the
+# port; this section is what stops them reopening, and it is why `num`
+# distinguishes an exact value from an inexact one that happens to be whole.
+# See `sexp` and `smax`/`smin` in `schemenum.jl`.
+
+println("SECTION\texactness")
+
+# `num` runs the value through `snorm`, so it renders an exact 1 and an exact
+# 1//1 alike -- which is the whole point of the `max` case, and would hide it.
+# `rep` names the REPRESENTATION instead. Scheme has no unnormalised 1/1, so
+# "int" here is a claim the port has to earn.
+rep(x) = !is_exact(x) ? "flo" : x isa Integer ? "int" : "rat"
+
+for x in Real[0, 0.0, 1, -1, 1//2, -1//2, 9//10, 1//100, -3//4, -1//1000]
+    y = bridge_theme_compatibility_sigmoid(x)
+    println("SIG\t", num(x), "\t", rep(x), "\t", num(y), "\t", rep(y))
+end
+
+for l in Any[Real[], Real[0], Real[9//10, 1], Real[1, 9//10], Real[1//2, 1//4],
+             Real[0, 0, 9//10], Real[1, 1, 1], Real[100, 3//4, 0],
+             Real[3, 2.0], Real[2.0, 3], Real[1//2, 0.25]]
+    hi = smaximum(l)
+    lo = sminimum(l)
+    println("EXTREME\t", isempty(l) ? "-" : slist(map(num, l)), "\t",
+            num(hi), "\t", rep(hi), "\t", num(lo), "\t", rep(lo))
+end
+
+# And through the model: a description and a bridge with the themespace EMPTY,
+# which is the state the sigmoid's exact zero comes from.
+foreach(reset!, net.nodes)
+initialize!(ts)
+let strings = [make_workspace_string(net, :initial, "abc"),
+               make_workspace_string(net, :modified, "abd"),
+               make_workspace_string(net, :target, "ijk")]
+    add_string_position_descriptions_to_letters!(net, strings[1])
+    add_string_position_descriptions_to_letters!(net, strings[3])
+    update_workspace_values!(strings)
+    d = strings[1].letters[1].descriptions[1]
+    update_strength!(d, ts)
+    println("NOTHEMES\tdescr\t", descr_print_name(d), "\t",
+            num(get_thematic_compatibility(d, ts)), "\t",
+            rep(get_thematic_compatibility(d, ts)), "\t", d.strength)
+    # TWO active themes on the SAME dimension, one at 100 and one at 90, so the
+    # description's support values are the exact INTEGER 1 and the exact RATIO
+    # 9//10. Scheme's `max` returns the integer; Julia's promotes to 1//1 --
+    # the same number, a different thing, and the only shape in which that
+    # difference is observable.
+    thematic_pressure_on!(ts)
+    let dim = d.description_type, rels = get_relations(ts, :vertical_bridge, dim)
+        set_theme_activation!(ts, :vertical_bridge, dim, rels[1], 100)
+        set_theme_activation!(ts, :vertical_bridge, dim, rels[2], 90)
+        update_strength!(d, ts)
+        println("MIXED\t", descr_print_name(d), "\t",
+                slist(map(num, get_theme_support_values(d, ts))), "\t",
+                num(get_thematic_compatibility(d, ts)), "\t",
+                rep(get_thematic_compatibility(d, ts)), "\t", d.strength)
+    end
+    initialize!(ts)
+
+    o1 = strings[1].letters[1]
+    o2 = strings[3].letters[1]
+    cms = all_possible_bridge_cms(:vertical, o1, o1.descriptions, o2,
+                                  o2.descriptions, net)
+    b = make_bridge(:vertical, o1, o2, cms, net)
+    update_structure_strength!(b, net, Bridge[], ts)
+    println("NOTHEMES\tbridge\t", num(get_average_theme_support(b, ts, net)), "\t",
+            rep(get_average_theme_support(b, ts, net)), "\t",
+            num(get_thematic_compatibility(b, ts, net)), "\t",
+            rep(get_thematic_compatibility(b, ts, net)), "\t", b.strength)
+end

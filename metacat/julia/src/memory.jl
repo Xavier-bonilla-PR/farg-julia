@@ -374,8 +374,10 @@ function compare_answer!(a::AnswerDescription, new_answer::AnswerDescription,
                          mem, net::Slipnet)
     distance = calculate_answer_distance(a, new_answer, mem, net)
     # `(100- (100* ...))`: `(100* x)` is `(round (* 100 x))`.
-    new_activation = sub_from_100(sround(100 * min(1, sdiv(distance,
-                                                           DISTANCE_THRESHOLD))))
+    # `smin`, not `min`: `sdiv` yields a rational for a distance under the
+    # threshold, and Julia's `min` would promote a winning integer 1 to `1//1`.
+    new_activation = sub_from_100(sround(100 * smin(1, sdiv(distance,
+                                                            DISTANCE_THRESHOLD))))
     update_activation!(a, new_activation)
     return new_activation
 end

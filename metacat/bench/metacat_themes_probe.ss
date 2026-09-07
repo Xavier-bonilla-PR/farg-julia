@@ -333,3 +333,96 @@
 (support-probe 'abc 'abd 'ijk 81)
 (support-probe 'abc 'cba 'pqrs 82)
 (support-probe 'abc 'abd 'mrrjjj 83)
+
+;;--------------------------------------------------------------- exactness ---
+;;
+;; The two places where the themespace's arithmetic depends on Scheme's
+;; EXACTNESS and not just on its numbers. Both were open divergences in the
+;; port; this section is what stops them reopening, and it is why `num`
+;; distinguishes an exact value from an inexact one that happens to be whole.
+;;
+;;   `exp` of an exact zero. R6RS lets `exp` return an exact result where one
+;;   is exactly representable, and Chez does: `(exp 0)` is the exact `1`, so
+;;   the compatibility sigmoid of an exact 0 is the exact `0`, not `0.0`. A
+;;   bridge with NO active themes has exactly that argument, which is most
+;;   bridges early in a run -- and the whole strength computation downstream
+;;   then stays on the exact side of the tower.
+;;
+;;   `max` and `min` return the winning ARGUMENT, so its representation
+;;   survives: `(max 9/10 1)` is the exact INTEGER 1. A port whose `max`
+;;   promotes to a common type gets a denominator-1 rational instead, which is
+;;   the same number and a different thing.
+
+(printf "SECTION\texactness~%")
+
+;; `num` runs the value through the tower's normaliser, so it renders an exact
+;; 1 and an exact 1/1 alike -- which is the whole point of the `max` case, and
+;; would hide it. `rep` names the REPRESENTATION instead: an exact integer, an
+;; exact ratio, or an inexact number. Scheme has no unnormalised 1/1, so "int"
+;; here is a claim the port has to earn.
+(define rep
+  (lambda (x)
+    (cond ((not (exact? x)) "flo") ((integer? x) "int") (else "rat"))))
+
+(for-each
+  (lambda (x)
+    (let ((y (bridge-theme-compatibility-sigmoid x)))
+      (printf "SIG\t~a\t~a\t~a\t~a~%" (num x) (rep x) (num y) (rep y))))
+  (list 0 0.0 1 -1 1/2 -1/2 9/10 1/100 -3/4 -1/1000))
+
+(for-each
+  (lambda (l)
+    (let ((hi (maximum l)) (lo (minimum l)))
+      (printf "EXTREME\t~a\t~a\t~a\t~a\t~a~%"
+        (if (null? l) "-" (map num l))
+        (num hi) (rep hi) (num lo) (rep lo))))
+  (list '() '(0) '(9/10 1) '(1 9/10) '(1/2 1/4) '(0 0 9/10) '(1 1 1)
+        '(100 3/4 0) '(3 2.0) '(2.0 3) '(1/2 0.25)))
+
+;; And through the model: a description and a bridge with the themespace
+;; EMPTY, which is the state the sigmoid's exact zero comes from.
+(for* each node in *slipnet-nodes* do (tell node 'reset))
+(tell *themespace* 'initialize)
+(init-workspace 'abc 'abd 'ijk #f)
+(add-string-position-descriptions-to-letters *initial-string*)
+(add-string-position-descriptions-to-letters *target-string*)
+(update-workspace-values)
+(let ((d (1st (tell (tell *initial-string* 'get-letter 0) 'get-descriptions))))
+  (tell d 'update-strength)
+  (printf "NOTHEMES\tdescr\t~a\t~a\t~a\t~a~%"
+    (tell d 'print-name)
+    (num (tell d 'get-thematic-compatibility))
+    (rep (tell d 'get-thematic-compatibility))
+    (tell d 'get-strength)))
+;; TWO active themes on the SAME dimension, one at 100 and one at 90, so the
+;; description's support values are the exact INTEGER 1 and the exact RATIO
+;; 9/10. Scheme's `max` returns the integer; a port whose `max` promotes to a
+;; common type returns 1/1 instead -- the same number, a different thing, and
+;; the only shape in which that difference is observable.
+(tell *themespace* 'thematic-pressure-on)
+(let* ((d (1st (tell (tell *initial-string* 'get-letter 0) 'get-descriptions)))
+       (dim (tell d 'get-description-type))
+       (rels (tell *themespace* 'get-relations 'vertical-bridge dim)))
+  (tell *themespace* 'set-theme-activation 'vertical-bridge dim (1st rels) 100)
+  (tell *themespace* 'set-theme-activation 'vertical-bridge dim (2nd rels) 90)
+  (tell d 'update-strength)
+  (printf "MIXED\t~a\t~a\t~a\t~a\t~a~%"
+    (tell d 'print-name)
+    (map num (tell d 'get-theme-support-values))
+    (num (tell d 'get-thematic-compatibility))
+    (rep (tell d 'get-thematic-compatibility))
+    (tell d 'get-strength)))
+(tell *themespace* 'initialize)
+
+(let* ((o1 (tell *initial-string* 'get-letter 0))
+       (o2 (tell *target-string* 'get-letter 0))
+       (cms (all-possible-bridge-CMs 'vertical
+              o1 (tell o1 'get-descriptions) o2 (tell o2 'get-descriptions)))
+       (b (make-vertical-bridge o1 o2 cms)))
+  (tell b 'update-strength)
+  (printf "NOTHEMES\tbridge\t~a\t~a\t~a\t~a\t~a~%"
+    (num (tell b 'get-average-theme-support))
+    (rep (tell b 'get-average-theme-support))
+    (num (tell b 'get-thematic-compatibility))
+    (rep (tell b 'get-thematic-compatibility))
+    (tell b 'get-strength)))

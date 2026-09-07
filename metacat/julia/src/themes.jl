@@ -694,7 +694,12 @@ end
 """Sharpens a bridge's raw theme-compatibility rating: a squashing function
 from -1..+1 onto -1..+1."""
 const THEME_SIGMOID_BETA = 4
-bridge_theme_compatibility_sigmoid(x) = 2 / (1 + exp(-2 * THEME_SIGMOID_BETA * x)) - 1
+"""NB `sexp` and `sdiv`, not `exp` and `/`. With no active themes the argument
+is an EXACT zero, and Chez's `(exp 0)` is the exact `1`, so the whole sigmoid
+comes out as the exact `0` rather than `0.0` — and every strength computed from
+it stays on the exact side of the tower."""
+bridge_theme_compatibility_sigmoid(x) =
+    sdiv(2, 1 + sexp(-2 * THEME_SIGMOID_BETA * x)) - 1
 
 # --- what the rest of the model asks the themespace -------------------------
 
@@ -717,8 +722,10 @@ get_theme_support_values(d::Description, ts::Themespace) =
 """A description is pulled toward whichever active theme most wants its
 dimension; it is never pulled against one, so this is always >= 0."""
 function get_thematic_compatibility(d::Description, ts::Themespace)
-    values = get_theme_support_values(d, ts)
-    return isempty(values) ? 0 : maximum(values)
+    # `smaximum`, not `maximum`: the values mix `pct(...)` rationals with
+    # integer `0`s, and Julia's `maximum` would promote a winning integer to a
+    # denominator-1 rational. See `schemenum.jl`.
+    return smaximum(get_theme_support_values(d, ts))
 end
 
 incompatible_with_theme(b::Bridge, theme::BridgeTheme, ts::Themespace, net::Slipnet) =

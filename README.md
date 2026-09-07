@@ -250,7 +250,7 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      justifymode
 ```
 
-Thirty-three layers, 39,784 trace lines, byte-identical.
+Thirty-three layers, 39,809 trace lines, byte-identical.
 
 The last two are the whole model. `run` calls the same `run-problem` the
 reference runner above calls and compares what Metacat *did*: six problems,
@@ -272,7 +272,7 @@ temperatures, same trace, same memory.
 | bridges (horizontal and vertical) | `bridges.jl` | 304 lines |
 | coderack: bins, posting, overflow, selection | `coderack.jl` | 366 lines |
 | bond codelets, run through the real coderack | `codelets_bonds.jl`, `context.jl` | 263 lines |
-| themespace: clusters, activation dynamics, theme support | `themes.jl` | 2,049 lines |
+| themespace: clusters, activation dynamics, theme support | `themes.jl` | 2,074 lines |
 | description codelets | `codelets_descriptions.jl` | 321 lines |
 | group codelets: scouts, evaluator, builder, consolidation | `codelets_groups.jl` | 4,854 lines |
 | bridge codelets, incl. group flipping and mapping strength | `codelets_bridges.jl` | 5,396 lines |
@@ -412,6 +412,15 @@ target either way round, where in justify mode the target has *two* partners:
 the initial string vertically and the answer string horizontally. Both are the
 same shape as everything above — a branch that is correct until the state it
 excludes becomes reachable.
+
+Two divergences of a different kind were also closed: places where the port got
+the right *number* but the wrong *exactness*. Chez's `(exp 0)` is the exact `1`,
+so the theme-compatibility sigmoid of a bridge with no active themes is the
+exact `0` and not `0.0`; and Chez's `max` returns the winning *argument*, so
+`(max 9/10 1)` is the exact integer `1` where Julia's promotes to `1//1`. Both
+now have a probe section that prints the representation of each value, not just
+its value — because the renderer that makes the traces comparable normalises
+exactly the difference at issue, and would have hidden it.
 
 ### How fast
 

@@ -50,6 +50,19 @@ function ssqrt(x::Rational)
 end
 ssqrt(x::AbstractFloat) = sqrt(x)
 
+"""Scheme's `exp`. R6RS lets `exp` return an exact result where one is exactly
+representable, and Chez takes that permission in exactly one case:
+
+    (exp 0)   => 1     exact
+    (exp 0.0) => 1.0   inexact
+    (exp 1)   => 2.718281828459045
+
+Julia's `exp(0)` is `1.0`, so an exact zero would go inexact and stay inexact
+through everything downstream. That matters because `exp` is only used inside
+the theme-compatibility sigmoid, whose argument is an exact 0 whenever a bridge
+has no active themes — which is most of the time early in a run."""
+sexp(x) = (is_exact(x) && iszero(x)) ? 1 : exp(float(x))
+
 """Scheme's `expt`: exact base raised to an exact *integer* power stays exact;
 any other combination goes inexact."""
 function sexpt(b::SExact, e::Integer)
@@ -73,6 +86,36 @@ sceiling(x) = Integer(ceil(x))
 
 """`(exact->inexact x)`."""
 sinexact(x) = float(x)
+
+"""Scheme's `max` and `min`, and `utilities.ss`'s `maximum` / `minimum` over a
+list.
+
+Julia's `max` PROMOTES its arguments to a common type and returns a value of
+that type; Scheme returns the winning ARGUMENT, so the winner's representation
+survives:
+
+    Chez:   (max 9/10 1)          => 1        an exact INTEGER
+    Julia:  max(9//10, 1)         => 1//1     a Rational
+
+The two are numerically equal, so no arithmetic downstream can tell them apart
+— but a call site that DISPATCHES on `::Integer` can, and `snorm` at render
+time only hides it where a probe happens to run one. Since the tower already
+normalises every exact rational with denominator 1 back to an integer,
+`snorm` on Julia's answer IS Scheme's answer: the only way the two differ is an
+integer beating a rational, and normalising the promoted result restores it.
+
+Exactness contagion needs no special handling: R6RS makes the result inexact if
+ANY argument is inexact (`(max 3 2.0)` is `3.0`), which is precisely what
+Julia's promotion already does.
+
+Use these wherever an operand can be an exact RATIONAL. Where every operand is
+an integer — spans, lengths, ages, activations, most of the model — plain
+`max`/`min` is already right and is left alone."""
+smax(xs...) = snorm(max(xs...))
+smin(xs...) = snorm(min(xs...))
+"""`(maximum l)` / `(minimum l)` from utilities.ss: 0 for an empty list."""
+smaximum(l) = isempty(l) ? 0 : snorm(maximum(l))
+sminimum(l) = isempty(l) ? 0 : snorm(minimum(l))
 
 # --- the arithmetic sugar from utilities.ss ---------------------------------
 

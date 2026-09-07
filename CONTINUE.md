@@ -13,7 +13,7 @@ Scheme run for run in both configurations: `run-problem` for an ordinary run,
 temperatures, same trace, same memory, on runs up to 20,000 codelets with
 reminding live. `%self-watching-enabled%` is ON, which is the model's real
 configuration. The tree is clean and `origin` is in sync. **Thirty-three probes,
-39,784 trace lines byte-identical** — confirmed by a full re-run on this exact
+39,809 trace lines byte-identical** — confirmed by a full re-run on this exact
 tree.
 
 The `run` and `justifymode` probes are the strongest tests in the project, and
@@ -91,7 +91,7 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   runloop run justifymode
 ```
 
-Expected — thirty-three layers, **39,784 trace lines byte-identical**:
+Expected — thirty-three layers, **39,809 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -103,7 +103,7 @@ ok    groups (230 lines identical)
 ok    bridges (304 lines identical)
 ok    coderack (366 lines identical)
 ok    bondcodelets (263 lines identical)
-ok    themes (2049 lines identical)
+ok    themes (2074 lines identical)
 ok    descriptioncodelets (321 lines identical)
 ok    groupcodelets (4854 lines identical)
 ok    bridgecodelets (5396 lines identical)
@@ -177,7 +177,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | bridges (horizontal + vertical) | `bridges.jl` | `bridges` | 304 |
 | coderack | `coderack.jl` | `coderack` | 366 |
 | bond codelet pipeline via the coderack | `codelets_bonds.jl`, `context.jl` | `bondcodelets` | 263 |
-| themespace: clusters, dynamics, theme support | `themes.jl` | `themes` | 2049 |
+| themespace: clusters, dynamics, theme support | `themes.jl` | `themes` | 2074 |
 | description codelets | `codelets_descriptions.jl` | `descriptioncodelets` | 321 |
 | group codelets, incl. consolidation | `codelets_groups.jl` | `groupcodelets` | 4854 |
 | bridge codelets, workspace mapping strength | `codelets_bridges.jl`, `context.jl` | `bridgecodelets` | 5396 |
@@ -958,65 +958,63 @@ re-reading this table first.
 
 ---
 
-### Known exactness divergences from Chez (open, not fixed)
+### Exactness divergences from Chez — FIXED, and now guarded
 
-Two places where the Julia does not reproduce Chez's numeric tower. Both were
+Two places where the Julia did not reproduce Chez's numeric tower. Both were
 found by porting `themes.ss` a second time from `b296069` and diffing the two
-ports; both were then measured against the current tree. **Neither changes a
-computed number today** — that was checked, not assumed — so nothing is broken
-and the probes are honestly green. They are filed because the first
-one is a trip-wire for the next probe someone writes, and section 5's rule
-about exact arithmetic is what makes them worth knowing before they bite.
+ports, and both are now fixed in `schemenum.jl` and covered by the `themes`
+probe's `exactness` section.
 
-**1. `exp` of an exact zero.** R6RS lets `exp` return an exact result where it
-is exactly representable, and Chez does:
+**1. `exp` of an exact zero.** R6RS lets `exp` return an exact result where one
+is exactly representable, and Chez takes that permission in exactly one case:
 
 ```
-Chez:   (exp 0) => 1     exact? #t        so the sigmoid of an exact 0 is exact 0
-Julia:  exp(0)  => 1.0   inexact          so it is 0.0
+Chez:   (exp 0)   => 1     exact       so the sigmoid of an exact 0 is exact 0
+        (exp 0.0) => 1.0   inexact
+Julia:  exp(0)    => 1.0   inexact     so it was 0.0
 ```
 
-`bridge_theme_compatibility_sigmoid` (`themes.jl:704`) is
-`2 / (1 + exp(...)) - 1`, so with **no active themes** — average theme support
-an exact 0 — Chez gives an exact `0` and the port gives `0.0`.
+`bridge_theme_compatibility_sigmoid` is `2 / (1 + exp(...)) - 1`, and its
+argument is an exact 0 whenever a bridge has **no active themes** — which is
+most bridges early in a run. `sexp` in the tower now returns the exact `1` for
+an exact zero, and the sigmoid uses `sdiv`, so the whole strength computation
+downstream stays on the exact side.
 
-- *Does it change a strength?* No. Sweeping every integer and half-integer
-  `intrinsic` from 0..100 through `update_strength!` with weight `0` versus
-  `0.0` gives identical results: the exact and float paths agree at every
-  rounding boundary in range.
-- *When does it surface?* The moment any probe emits a bridge's thematic
-  compatibility through the themes probe's own `num` helper. That helper
-  renders an inexact value as `F<numerator>/<denominator>`, so the two sides
-  print `0` and `F0/1`. Any probe covering a bridge with no active themes will
-  diff on it.
-- *Fix, if wanted:* an exactness-preserving `exp` in the numeric tower,
-  `sexp(x) = (is_exact(x) && iszero(x)) ? 1 : exp(float(x))`, and
-  `sdiv(2, 1 + sexp(...)) - 1` for the sigmoid.
-
-**2. `max` promotes across exactness in Julia, not in Scheme.**
+**2. `max` and `min` promote in Julia, and return the winning ARGUMENT in
+Scheme.**
 
 ```
-Chez:   (apply max '(9/10 1)) => 1      an exact INTEGER
-Julia:  maximum(Real[9//10, 1]) => 1//1  a Rational
+Chez:   (max 9/10 1)  => 1      an exact INTEGER
+Julia:  max(9//10, 1) => 1//1   a Rational
 ```
 
-`get_thematic_compatibility(d::Description, ts)` (`themes.jl:728`) folds with
-`maximum` over `get_theme_support_values`, which mixes `pct(...)` rationals
-with integer `0`s. A description whose dimension carries one theme at 100 and
-another at partial activation therefore gets `1//1` where Metacat has `1`.
-Reproduced on real data: `values = Real[9//10, 1]`, compatibility `1//1`.
+`smax` / `smin` / `smaximum` / `sminimum` in the tower apply `snorm` to Julia's
+answer, which IS Scheme's answer: the tower already normalises every exact
+rational with denominator 1 back to an integer, so the only way the two can
+differ is an integer beating a rational. Exactness contagion needs nothing
+extra — R6RS makes the result inexact if any argument is inexact, which is what
+Julia's promotion already does. Call sites where an operand can be an exact
+RATIONAL now use them (`get_thematic_compatibility` on a description, and
+`compare_answer!`'s reminding strength); the many `max`/`min` calls whose
+operands are all integers are already right and are left alone.
 
-- *Does it matter?* Less than it looks. Exact-rational arithmetic gives the
-  same answer either way, and the probe renderer runs `snorm`, which turns
-  `1//1` back into `1` — so it is invisible to the current traces. The only
-  way it could bite is a call site that DISPATCHES on `::Integer` (for example
-  `sexpt(b::SExact, e::Integer)`, whose fallback takes the float path), if a
-  compatibility value ever reaches one.
-- *Fix, if wanted:* a `maximum` that returns the winning ELEMENT rather than
-  folding with `max`, so the representation survives.
+**How they are guarded.** `num` in the `themes` probe renders through `snorm`,
+so it prints an exact `1` and an exact `1/1` alike — which would hide the whole
+`max` case. The `exactness` section therefore prints a `rep` tag beside each
+value naming the REPRESENTATION (`int`, `rat`, `flo`), and covers:
 
-Note that `maximum(positive_activation, ...)` at `themes.jl:146` and `:344` is
-NOT affected — those are all integers.
+- the sigmoid over exact and inexact arguments, including the exact zero;
+- `maximum`/`minimum` over lists that mix integers, ratios and floats;
+- a description and a bridge with the themespace EMPTY, which is where the
+  sigmoid's exact zero actually comes from in the model;
+- `MIXED`, a description with two active themes on one dimension — one at 100
+  and one at 90, so its support values are the exact integer `1` and the exact
+  ratio `9/10`, and the integer has to win *as an integer*.
+
+Each was checked by reverting the fix and confirming the probe goes red. The
+one change not covered is `compare_answer!`'s `smin`: its result is rounded to
+an integer immediately, so the representation never escapes. It is corrected
+for the tower's sake, not because anything can see it.
 
 ---
 
