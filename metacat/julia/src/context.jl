@@ -50,6 +50,14 @@ mutable struct MetacatCtx
     """`*temperature-clamped?*` — set while a snag holds the temperature up,
     and cleared by the trace's `undo-snag-condition`."""
     temperature_clamped::Bool
+    """`*trace*` — the temporal trace, when one is attached. The Scheme keeps it
+    as a global that always exists, so its MONITORS are always live; here the
+    monitors fire exactly when a trace is present. That is behaviourally the
+    same, because the events monitors raise (concept-activation,
+    concept-mapping, group, rule) change nothing but the event list — only
+    clamp and snag events set the trace's period flags, and no monitor raises
+    those. Untyped because trace.jl loads after this file."""
+    trace::Any
 end
 
 """A context with empty bridge storage and zeroed workspace averages, which is
@@ -64,7 +72,7 @@ MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                0, 0, 0, 0, 0, 0, 0, 0,
-               Any[], Any[], false, false, Any[], false)
+               Any[], Any[], false, false, Any[], false, nothing)
 
 """`(get-all-vertical-CMs)` — every concept mapping of every built vertical
 bridge, which is what the whole vertical mapping amounts to."""

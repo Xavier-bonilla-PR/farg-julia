@@ -201,7 +201,7 @@ end
 and its constituents, activates its descriptors, and invalidates any "middle"
 descriptions the new grouping has made false. The trace and graphics parts of
 the Scheme are not ported."""
-function build_group!(g::Group, net::Slipnet, ctx = nothing)
+function build_group!(g::Group, net::Slipnet, ctx = nothing, flipped::Bool = false)
     g.id_num = g.string.next_id_num
     g.string.next_id_num += 1
     pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
@@ -220,6 +220,10 @@ function build_group!(g::Group, net::Slipnet, ctx = nothing)
     g.proposal_level = BUILT
     spans_whole_string(g) ||
         delete_invalid_string_position_middle_descriptions!(g.string, net, ctx)
+    # Guarded on the TRACE, not just the context: trace.jl loads after this
+    # file, and a probe that never loads it must not resolve the name at all.
+    (ctx === nothing || ctx.trace === nothing) ||
+        monitor_new_groups(g, flipped, ctx)
     return g
 end
 

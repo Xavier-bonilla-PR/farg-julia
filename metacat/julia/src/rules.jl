@@ -1803,6 +1803,7 @@ function rule_builder(ctx::MetacatCtx, args::Vector{Any})
     end
     proposed.proposal_level = BUILT
     add_rule!(ctx, proposed)
+    ctx.trace === nothing || monitor_new_rules(proposed, ctx)
     post!(ctx.coderack,
           make_codelet(CODELET_TYPES[:answer_finder], EXTREMELY_HIGH_URGENCY, Any[]),
           ctx.codelet_count, ctx.rng, ctx.temperature)

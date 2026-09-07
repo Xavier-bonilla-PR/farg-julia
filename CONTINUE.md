@@ -74,7 +74,7 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns trace justify wsevents swevents
+  patterns trace justify wsevents swevents monitors
 ```
 
 Expected — twenty-seven layers, **38281 trace lines byte-identical**:
@@ -107,6 +107,7 @@ ok    trace (597 lines identical)
 ok    justify (289 lines identical)
 ok    wsevents (1828 lines identical)
 ok    swevents (453 lines identical)
+ok    monitors (808 lines identical)
 all probes matched
 ```
 
@@ -444,7 +445,7 @@ by reading the code.
 
 **~3,000 lines of Scheme remain**, across six files (`answers.ss` ~830 left —
 the commentary, plus the `answer-finder` body that `trace.ss` blocks;
-`trace.ss` ~100 left — slices (A), (B) and (C) are in, only (D) remains;
+`trace.ss` DONE;
 `jootsing.ss` 344, `justify.ss` ~160 left — the `answer-justifier` codelet
 only, `run.ss` 346, `breakers.ss` 47). `memory.ss` is done apart from its two
 trace-reading abstractors. Steps 0-4 below are done, and step 5 is half done; they are kept
@@ -675,14 +676,50 @@ step 6, slice (C).**
      the RNG streams stay in step — which is what lets these probes run a real
      coderack, lifting the bonds-only restriction the `trace` probe worked
      under.
-   - **(D) the monitors** (1310-1412) that watch the workspace and raise
-     events, and the importance thresholds that decide which are worth
-     recording. **This is the live work.** It is small — four `monitor-*`
-     procedures and four importance functions — and it is what makes events
-     raise themselves instead of being constructed by hand. Once it is in, the
-     `wsevents`/`swevents` restriction lifts entirely and a probe can compare
-     whole traces. `concept-mapping-importance` calls the themespace's
-     `supported-by-active-theme?`, which IS ported, so nothing blocks it.
+   - **(D)** ~~the monitors~~ (1310-1412) — **done**, probe `monitors`, and
+     with it `trace.ss` is COMPLETE. Four hooks in the code that builds
+     structure and moves slipnode activations, each asking how important what
+     just happened was and appending an event only if it clears the threshold
+     for its kind. That filter is why the trace stays small enough to reason
+     over: Metacat builds thousands of structures per run and remembers dozens.
+     The four thresholds differ in spirit — a group must be REMARKABLE (100), a
+     concept waking must be deep and move far (85), a rule must be decent (67),
+     a slippage need only be a slippage (65).
+     **`monitors` is the first probe that compares a WHOLE TRACE**: both sides
+     now raise the same events from the same code paths, so it runs a real
+     coderack and diffs the event list end to end — numbers, types, names,
+     times, temperatures, strengths, in order. That checks not just that each
+     event is built right but that the same things were judged worth recording,
+     in the same order, at the same moments. The bonds-only restriction the
+     `trace` probe worked under is gone.
+     Three things the wiring turned up:
+     - `set-activation` and `update-activation` are IDENTICAL in the Scheme
+       except that the latter monitors. The port had aliased them
+       (`const update_activation! = set_activation!`), which was right while no
+       monitors existed and wrong the moment they did. They are separate now;
+       `clamp` and `flush-activation-buffer` monitor too, `set-activation` does
+       not.
+     - `activate-label` flushes the label node IMMEDIATELY, with the Scheme
+       comment "so that the activation of the label node will show up in the
+       trace before the concept-mapping that caused it". That flush is
+       monitored, so it is an ORDERING constraint on the trace, not just on
+       activation. The `monitors` probe shows it holding: the concept-activation
+       events land before the concept-mapping event that caused them.
+     - `concept-mapping-importance` only clears 65 for a slippage on a SPANNING
+       bridge — the same slippage scores 75-81 spanning and 57 not. Across
+       seven stochastic runs the highest non-spanning score reached was 57, so
+       the monitor's event path was never exercised. The probe therefore has a
+       deterministic second phase that builds whole-string groups on both sides
+       by hand and lets `build-bridge` raise the event through the real
+       monitor.
+     The monitors fire exactly when a TRACE IS ATTACHED to the context
+     (`ctx.trace`), where the Scheme's fire always because `*trace*` is a global
+     that always exists. That is behaviourally the same: the events monitors
+     raise change nothing but the event list, since only clamp and snag events
+     set the trace's period flags and no monitor raises those. It is also what
+     keeps the twenty-odd probes that never load `trace.jl` working — the call
+     sites short-circuit on `ctx.trace === nothing` so the name is never
+     resolved.
 
    **The monitors are already live in the Scheme, and that shapes how (B) and
    (C) can be probed.** Building a group (`groups.ss` 951) or a bridge

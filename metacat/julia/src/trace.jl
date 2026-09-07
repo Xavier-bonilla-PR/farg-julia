@@ -145,9 +145,9 @@ end
 # --- concept patterns -------------------------------------------------------
 
 """`(clamp-concept-pattern concept-pattern)` — pin each node at its activation."""
-function clamp_concept_pattern!(concept_pattern)
+function clamp_concept_pattern!(concept_pattern, ctx = nothing)
     for entry in entries(concept_pattern)
-        clamp_activation!(entry[1], entry[2])
+        clamp_activation!(entry[1], entry[2], ctx)
     end
     return concept_pattern
 end
@@ -1023,7 +1023,7 @@ function activate!(e::ClampEvent, tr::TemporalTrace, ctx)
         clamp_theme_pattern!(ctx.themespace, pattern)
     end
     for pattern in e.clamped_concept_patterns
-        clamp_concept_pattern!(pattern)
+        clamp_concept_pattern!(pattern, ctx)
     end
     for pattern in e.clamped_codelet_patterns
         clamp_codelet_pattern!(pattern, ctx.coderack)
@@ -1250,3 +1250,120 @@ end
 
 """`(maximum l)` — 0 for the empty list, as utilities.ss has it."""
 maximum_or_zero(l) = isempty(l) ? 0 : maximum(l)
+
+# ============================================================================
+# trace.ss slice (D): the MONITORS (trace.ss 1310-1412).
+#
+# This is what makes events raise themselves. Four hooks sit in the code that
+# builds structure and moves slipnode activations; each asks how IMPORTANT the
+# thing that just happened was, and appends an event only if it clears the
+# threshold for its kind. That filter is the whole reason the trace stays small
+# enough to reason over: Metacat builds thousands of structures per run and
+# remembers a few dozen moments.
+#
+# The four thresholds differ in spirit. A group has to be REMARKABLE (100 —
+# only a flip, a string-spanning group, or a singleton that has noticed its own
+# length gets in). A concept waking up has to be a deep concept moving a long
+# way (85). A rule needs to be decent (67). A slippage needs only to be a
+# slippage worth the name (65), because slippages are what the whole program is
+# about.
+
+"""`%concept-mapping-importance-threshold%` and friends."""
+const CONCEPT_MAPPING_IMPORTANCE_THRESHOLD = 65
+const CONCEPT_ACTIVATION_IMPORTANCE_THRESHOLD = 85
+const GROUP_IMPORTANCE_THRESHOLD = 100
+const RULE_IMPORTANCE_THRESHOLD = 67
+
+"""`(100* x)`."""
+mul_100(x) = sround(100 * x)
+
+# --- how important was that? ------------------------------------------------
+
+"""`(concept-activation-importance slipnode prev new)` — how far the concept
+moved, weighted by how deep a concept it is. A shallow concept flashing to full
+activation is not news; `opposite` doing so is."""
+concept_activation_importance(slipnode::Node, previous_activation::Int,
+                              new_activation::Int) =
+    mul_100(pct(abs(new_activation - previous_activation)) *
+            pct(slipnode.conceptual_depth))
+
+"""`(group-importance group flipped?)` — a flip, a string-spanning group, or a
+singleton that has noticed its own length is always worth recording; anything
+else has to be strong enough, and the threshold is 100, so in practice nothing
+else gets in."""
+function group_importance(g::Group, flipped::Bool, net::Slipnet)
+    (flipped || spans_whole_string(g) ||
+     (singleton_group(g) && description_type_present(g, net[:plato_length]))) && return 100
+    return g.strength
+end
+
+"""`(rule-importance rule)` — a perfectly uniform rule is always worth
+recording; otherwise it has to be good relative to the others."""
+rule_importance(r::Rule, ctx) =
+    r.uniformity == 100 ? 100 : get_relative_quality(r, ctx)
+
+"""`(concept-mapping-importance cm bridge)`.
+
+Only slippages count — an identity mapping is not news. A slippage an active
+theme already supports counts for everything, because that is the model finding
+what it was looking for. Otherwise it is scored by depth: the mapping's own
+dimension weighs most, then whether the bridge spans the whole string, the two
+descriptors, and the label. Bond-category slippages score 0: they are a
+by-product of bonding, not a decision about correspondence."""
+function concept_mapping_importance(cm::ConceptMapping, bridge::Bridge, ctx)
+    is_slippage(cm) || return 0
+    supported_by_active_theme(ctx.themespace, cm, bridge) && return 100
+    net = ctx.net
+    cm_type(cm) === net[:plato_bond_category] && return 0
+    return sround(weighted_average(
+        [cm_type(cm).conceptual_depth,
+         bridge.spanning_bridge ? 100 : 0,
+         sdiv(cm.descriptor1.conceptual_depth + cm.descriptor2.conceptual_depth, 2),
+         cm.label === nothing ? 50 : (cm.label::Node).conceptual_depth],
+        [4, 2, 2, 3]))
+end
+
+# --- the hooks --------------------------------------------------------------
+#
+# Each returns the event it raised, or `nothing`. They no-op when no trace is
+# attached; see the `trace` field on MetacatCtx for why that is faithful.
+
+function monitor_slipnode_activation_change(slipnode::Node, previous_activation::Int,
+                                            new_activation::Int, ctx)
+    ctx.trace === nothing && return nothing
+    importance = concept_activation_importance(slipnode, previous_activation,
+                                               new_activation)
+    importance >= CONCEPT_ACTIVATION_IMPORTANCE_THRESHOLD || return nothing
+    event = make_concept_activation_event(slipnode, ctx)
+    add_event!(ctx.trace::TemporalTrace, event, ctx)
+    return event
+end
+
+function monitor_new_concept_mappings(concept_mappings, bridge::Bridge, ctx)
+    ctx.trace === nothing && return nothing
+    for cm in concept_mappings
+        importance = concept_mapping_importance(cm, bridge, ctx)
+        importance >= CONCEPT_MAPPING_IMPORTANCE_THRESHOLD || continue
+        add_event!(ctx.trace::TemporalTrace,
+                   make_concept_mapping_event(cm, bridge, ctx), ctx)
+    end
+    return nothing
+end
+
+function monitor_new_groups(group::Group, flipped::Bool, ctx)
+    ctx.trace === nothing && return nothing
+    importance = group_importance(group, flipped, ctx.net)
+    importance >= GROUP_IMPORTANCE_THRESHOLD || return nothing
+    event = make_group_event(group, flipped, ctx)
+    add_event!(ctx.trace::TemporalTrace, event, ctx)
+    return event
+end
+
+function monitor_new_rules(rule::Rule, ctx)
+    ctx.trace === nothing && return nothing
+    importance = rule_importance(rule, ctx)
+    importance >= RULE_IMPORTANCE_THRESHOLD || return nothing
+    event = make_rule_event(rule, ctx)
+    add_event!(ctx.trace::TemporalTrace, event, ctx)
+    return event
+end

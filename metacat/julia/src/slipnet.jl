@@ -107,7 +107,14 @@ end
 freeze!(n::Node) = (n.frozen = true; n.changed_frozen = true; n)
 unfreeze!(n::Node) = (n.frozen = false; n.changed_frozen = true; n)
 
-function clamp_activation!(n::Node, v::Int)
+"""`(clamp new-value)` — pin a node at an activation and freeze it there.
+
+NB all three of the setters that MONITOR (`clamp`, `update-activation`,
+`flush-activation-buffer`) report the change to the trace; `set-activation`
+deliberately does not, which is the only thing that distinguishes it from
+`update-activation`."""
+function clamp_activation!(n::Node, v::Int, ctx = nothing)
+    maybe_monitor_activation(n, n.activation, v, ctx)
     n.activation = v
     n.activation_buffer = 0
     n.frozen = true
@@ -123,7 +130,25 @@ function set_activation!(n::Node, v::Int)
     return n
 end
 
-const update_activation! = set_activation!
+"""`(update-activation new-value)` — `set-activation` plus the monitor. These
+were one function while the monitors did not exist; trace.ss slice (D) is what
+separates them."""
+function update_activation!(n::Node, v::Int, ctx = nothing)
+    if !n.frozen
+        maybe_monitor_activation(n, n.activation, v, ctx)
+        n.activation = v
+        n.activation_buffer = 0
+    end
+    return n
+end
+
+"""The monitor hook. With no context, or a context carrying no trace, there is
+nothing to record; the real monitor lives in trace.jl, which loads later."""
+maybe_monitor_activation(::Node, ::Int, ::Int, ::Nothing) = nothing
+function maybe_monitor_activation(n::Node, previous::Int, new::Int, ctx)
+    ctx.trace === nothing && return nothing
+    return monitor_slipnode_activation_change(n, previous, new, ctx)
+end
 
 function increment_activation_buffer!(n::Node, delta)
     n.frozen || (n.activation_buffer += delta)
@@ -135,8 +160,10 @@ function decrement_activation_buffer!(n::Node, delta)
     return n
 end
 
-function flush_activation_buffer!(n::Node)
-    n.activation = min(MAX_ACTIVATION, n.activation + n.activation_buffer)
+function flush_activation_buffer!(n::Node, ctx = nothing)
+    new_value = min(MAX_ACTIVATION, n.activation + n.activation_buffer)
+    maybe_monitor_activation(n, n.activation, new_value, ctx)
+    n.activation = new_value
     n.activation_buffer = 0
     return n
 end
@@ -524,7 +551,8 @@ description_possible(n::Node, o, net::Slipnet) =
 
 """`(update-slipnet-activations)`. Active themes get first say: each one tries
 to keep its own dimension and relation alive before the network decays."""
-function update_slipnet_activations!(net::Slipnet, rng::PyRandom, ts = nothing)
+function update_slipnet_activations!(net::Slipnet, rng::PyRandom, ts = nothing,
+                                    ctx = nothing)
     if ts !== nothing
         for theme in get_all_active_themes(ts)
             spread_activation_to_slipnet!(theme, rng)
@@ -537,14 +565,14 @@ function update_slipnet_activations!(net::Slipnet, rng::PyRandom, ts = nothing)
         fully_active(n) && spread_activation!(n)
     end
     for n in net.nodes
-        flush_activation_buffer!(n)
+        flush_activation_buffer!(n, ctx)
     end
     for n in net.nodes
         if partially_active(n)
             # stochastic-if* ALWAYS draws, unlike prob? which short-circuits.
             coin = random_real(rng, 1.0)
             if coin < cube(pct(n.activation))
-                update_activation!(n, MAX_ACTIVATION)
+                update_activation!(n, MAX_ACTIVATION, ctx)
             end
         end
     end

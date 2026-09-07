@@ -140,13 +140,17 @@ function activate_descriptions!(cm::ConceptMapping)
     return cm
 end
 
-function activate_label!(cm::ConceptMapping)
+function activate_label!(cm::ConceptMapping, ctx = nothing)
     if cm.label !== nothing
         label = cm.label::Node
         activate_from_workspace!(label)
         # flushed immediately so the label's activation shows up in the trace
         # before the concept mapping that caused it
-        flush_activation_buffer!(label)
+        # NB the Scheme flushes IMMEDIATELY, with the comment: "so that the
+        # activation of the label node will show up in the trace before the
+        # concept-mapping that caused it". The flush is monitored, so this is
+        # an ordering constraint on the trace, not just on the activation.
+        flush_activation_buffer!(label, ctx)
     end
     return cm
 end

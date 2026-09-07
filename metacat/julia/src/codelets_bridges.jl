@@ -266,9 +266,10 @@ function build_bridge!(b::Bridge, ctx::MetacatCtx)
         end
     end
     for cm in b.concept_mappings
-        activate_label!(cm)
+        activate_label!(cm, ctx)
     end
     b.proposal_level = BUILT
+    ctx.trace === nothing || monitor_new_concept_mappings(b.all_concept_mappings, b, ctx)
     return b
 end
 
@@ -480,12 +481,16 @@ function bridge_builder(ctx::MetacatCtx, args::Vector{Any})
     if bridge_between(b.orientation, object1, object2)
         # the bridge is already there; donate any concept mappings it lacks
         for cm in b.concept_mappings
-            activate_label!(cm)
+            activate_label!(cm, ctx)
         end
         existing = get_bridge(object1, b.orientation)::Bridge
         to_add = ConceptMapping[cm for cm in b.concept_mappings
                                 if !any(x -> cms_equal(x, cm), existing.all_concept_mappings)]
-        isempty(to_add) || add_concept_mappings!(existing, to_add)
+        if !isempty(to_add)
+            add_concept_mappings!(existing, to_add)
+            ctx.trace === nothing ||
+                monitor_new_concept_mappings(to_add, existing, ctx)
+        end
         return
     end
     all(cm_relevant, b.concept_mappings) || return
@@ -542,7 +547,7 @@ function flip_group!(ctx::MetacatCtx, original::Group, flipped::Group)
     for bond in flipped.constituent_bonds
         build_bond!(bond::Bond, net)
     end
-    build_group!(flipped, net, ctx)
+    build_group!(flipped, net, ctx, true)
     return ctx
 end
 
