@@ -6,28 +6,31 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing:** `trace.ss`, `jootsing.ss` and `answers.ss` step
-(C) are COMPLETE, and **the run loop runs in the model's real configuration**:
-`%self-watching-enabled%` is ON, so the jootser, the progress-watcher, the
-breaker and the thematic-bridge-scout all post and run, themes get created and
-boosted, and clamps actually fire — 1500 cycles of it, matching the Scheme
-cycle for cycle. The tree is clean and `origin` is in sync. **Thirty probes,
-39,454 trace lines byte-identical** — confirmed by a full re-run on this exact
+**State at time of writing:** **the whole model runs.** `run-problem` — the
+same entry point the reference runner uses — initializes Metacat, posts its own
+codelets, runs until it finds an answer, gives up or hits a codelet budget, and
+records what it concluded in its episodic memory, and the Julia port matches the
+Scheme run for run: same answers, same codelet counts, same temperatures, same
+trace, same memory, on runs of 1,400 codelets with reminding live.
+`trace.ss`, `jootsing.ss`, `answers.ss` step (C) and the run.ss loop are
+COMPLETE, and `%self-watching-enabled%` is ON, which is the model's real
+configuration. The tree is clean and `origin` is in sync. **Thirty-one probes,
+39,543 trace lines byte-identical** — confirmed by a full re-run on this exact
 tree.
 
-The `runloop` probe is the strongest test in the project: it chooses a codelet,
-runs it, updates everything, and repeats, dumping the whole model state
-(temperature, coderack by type, workspace by structure, slipnet activations,
-themespace, trace) every N cycles. Nothing is hand-driven. With self-watching
-on it now exercises the self-watching loop end to end, which is what the last
-divergence in section 5 ("a codelet that changes bins is RE-STAMPED") was
-hiding behind.
+The `run` probe is the strongest test in the project, and the only one that
+drives nothing itself: it calls `run-problem` and compares what Metacat did.
+The `runloop` probe is the second strongest — it chooses a codelet, runs it,
+updates everything, and repeats, dumping the whole model state every N cycles.
+Between them they found the four bugs in section 5 that nothing else could
+reach: the re-stamped codelet, the leaked codelet-type clamp, the rebuilt group
+that costs a rule its support, and the rule whose strength was never updated.
 
-**Next up:** the `answer-justifier` codelet that is the rest of `justify.ss`
-(~160), `answers.ss` step (D) (the commentary, ~830), and the run.ss driver
-(`run-until-answer` and the stepping machinery) — at which point
-`metacat/bench/metacat_bench.{ss,jl}` finally measures the model rather than
-its layers.
+**Next up:** `answers.ss` step (D) (the commentary, ~830) and the
+`answer-justifier` codelet that is the rest of `justify.ss` (~160). After that
+the port is feature-complete against the non-graphics model, and
+`metacat/bench/metacat_bench.{ss,jl}` can be rewritten to measure the model
+rather than its layers.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -35,7 +38,7 @@ version is not incidental — the s3 URL in section 1 pins it, and the probes
 compare bit-exact floating point.
 
 **First thing to do in a new session:** section 1 (install the toolchain), then
-section 2 (run the suite). Do not write code until all thirty probes match on
+section 2 (run the suite). Do not write code until all thirty-one probes match on
 the clean checkout.
 
 ---
@@ -85,10 +88,10 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   util slipnet workspace cm bonds groups bridges coderack bondcodelets themes \
   descriptioncodelets groupcodelets bridgecodelets themecodelets images rules \
   ruleapply ruleabstract rulecodelets ruletranslate transstring memory \
-  patterns trace justify wsevents swevents monitors abstract runloop
+  patterns trace justify wsevents swevents monitors abstract runloop run
 ```
 
-Expected — thirty layers, **39,454 trace lines byte-identical**:
+Expected — thirty-one layers, **39,543 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -121,6 +124,7 @@ ok    swevents (453 lines identical)
 ok    monitors (808 lines identical)
 ok    abstract (119 lines identical)
 ok    runloop (246 lines identical)
+ok    run (89 lines identical)
 all probes matched
 ```
 
@@ -135,8 +139,6 @@ The reference implementation also runs standalone:
 
 ```bash
 scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42
-# a stray "Type (go) or click on the Workspace to continue..." comes first;
-# the two lines that matter are:
 # OUTCOME  answer  CODELETS  618  TEMP  4
 # ANSWER   abc -> cba, pqrs -> ?   srqp   98   4
 ```
@@ -160,7 +162,7 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **~1,400 lines of non-graphics Scheme left**: `trace.ss`, `jootsing.ss`, `rules.ss`, `themes.ss` and `memory.ss` complete; `answers.ss` step (C) done and (D) untouched; `justify.ss` all but its codelet; the `run.ss` driver outstanding
+### Metacat — **~1,000 lines of non-graphics Scheme left**, all of it `answers.ss` step (D) (the commentary) and the `answer-justifier` codelet: everything else, `run.ss` included, is in
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -194,6 +196,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | the trace monitors and their importance tests | `trace.jl` | `monitors` | 808 |
 | memory's two trace-reading abstractors | `memory.jl` | `abstract` | 119 |
 | **the run loop, self-watching ON** | `run.jl`, `codelets_jootsing.jl`, `codelets_breaker.jl` | `runloop` | 246 |
+| **the whole model, driven by `run-problem`** | `run.jl` (`init-mcat`, `step-mcat`, `run-mcat`) | `run` | 89 |
 
 ---
 
@@ -475,18 +478,34 @@ by reading the code.
   the end of one run carries into the next. A probe that runs several problems
   in sequence and builds a fresh `Coderack()` for each is not enough: it has to
   call `initialize!` too, or problem *n+1* starts with problem *n*'s urgencies.
+- **`get-equivalent-object` is not an identity test.** A group that has been
+  REBUILT — by consolidation, or by a group-builder replacing a coincident one
+  — is a different object occupying the same slot, and the string finds it
+  through its group vector and accepts it if category, direction and length all
+  agree. That is what keeps a rule SUPPORTED across a rebuild of a group its
+  bridge rests on, and so what keeps the temperature down. The port read it as
+  "is this object still in the string", which is right until the first rebuild
+  and then silently costs every dependent rule its support.
+- **RULES are workspace structures, so `update-workspace-values` updates their
+  strength too.** A rule's strength is its quality RELATIVE to the other rules
+  of its type, so two rules of quality 90 and 99 have strengths 50 and 100 —
+  and the answer-finder weights its choice of rule by strength. Leaving
+  `strength` at whatever it was when the rule was built reads as plausible
+  (90 and 99 are, after all, the right ORDER) right up to the first codelet
+  that has to choose between two rules, which in the `run` probe was codelet
+  1173 of the sixth problem. Iterate `get_structures`, not a hand-written list
+  of the structure kinds you were thinking about.
 
 ---
 
 ## 6. What's next, in order
 
-**~1,400 lines of Scheme remain**, across three files (`answers.ss` ~830 left
-— the commentary; `justify.ss` ~160 left — the `answer-justifier` codelet only;
-`run.ss` ~350 left — the driver, `update-everything` and `post-initial-codelets`
-being in already). `trace.ss`, `jootsing.ss`, `breakers.ss` and `memory.ss` are
-DONE. Steps 0-6 below are done; they are kept for the "not ported,
-deliberately" notes buried in them. **The live work is step 7 and what is left
-of steps 5 and 6.**
+**~1,000 lines of Scheme remain**, across two files (`answers.ss` ~830 — the
+commentary; `justify.ss` ~160 — the `answer-justifier` codelet only).
+`trace.ss`, `jootsing.ss`, `breakers.ss`, `memory.ss` and `run.ss` are DONE.
+Every step below is done except those two; the steps are kept for the "not
+ported, deliberately" notes buried in them. **The live work is step 5's slice
+(D) and the codelet at the end of step 6.**
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -800,15 +819,22 @@ of steps 5 and 6.**
    2 instead of 1. The probe now stays inside the slice: it builds BONDS,
    the only structure with no monitor, and leaves slipnode activations alone.
    Once (C) and (D) are in, that restriction lifts.
-7. **The run loop** (`run.ss`, 346) — **half done**. `update-everything`,
-   `update-temperature` and `post-initial-codelets` are in, as `run.jl`, and
-   the `runloop` probe drives them as a genuine loop with self-watching ON.
-   What is left is the DRIVER around them: `run-until-answer`, the stepping
-   machinery, and the `suspend`/resume plumbing that `report-new-answer` ends a
-   run through (the port throws a `RunFinished` where the headless harness uses
-   an escape continuation). With that in, end-to-end comparison becomes
-   possible and `metacat/bench/metacat_bench.{ss,jl}` becomes meaningful. Until
-   then the benchmark measures layers, not the model.
+7. ~~**The run loop**~~ (`run.ss`, 346) — **done**, as `run.jl`, probe `run`.
+   `init-mcat`, `step-mcat`, `run-mcat`, `clamp-initial-slipnodes`,
+   `update-everything`, `update-temperature` and `post-initial-codelets`, plus
+   a `run_problem` mirroring the headless harness's. Three things in the driver
+   are easy to get wrong from reading the probes, which drive the loop by hand:
+   `update-everything` runs once every FIFTEEN codelets, not once per codelet;
+   `step-mcat` increments the count AFTER running the codelet, so the first
+   codelet of a run executes with `*codelet-count*` still 0; and `init-mcat`
+   sets every descriptor of every object to full activation with
+   `set-activation`, not `update-activation`, so that no concept-activation
+   event lands in the trace before the run starts.
+   **Not** ported: the interactive half — breakpoints, step mode, `go`,
+   `rerun`, `runtil` and the graphics refreshes the loop interleaves. All of it
+   exists to hand control back to the SWL repl.
+   With this in, `metacat/bench/metacat_bench.{ss,jl}` can finally be rewritten
+   to measure the model rather than its layers; it has not been yet.
 
 ~~`breakers.ss` (47)~~ — **done**, as `codelets_breaker.jl`.
 
@@ -830,7 +856,8 @@ alarms, not a backlog.
 | justify mode | `%justify-mode%` is off everywhere; bottom rules and the answer string are never built | the `answer-justifier` codelet, the unported half of `justify.ss` |
 | `joots_from_justify_clamps` | RAISES rather than stubbing: it needs `*answer-string*` and posts `answer-justifier` | only with justify mode on, which cannot produce a justify clamp today — the raise is the alarm |
 | the `*comment-window*` prose | every codelet that writes English about what it just did drops it (`how-strings-change`, the two `joots-from-*-clamps` messages, `answer-quality-phrase`'s callers) | `answers.ss` step (D), which is the commentary layer proper |
-| `run-until-answer` and stepping | the run.ss driver; the loop body it drives is in | end-to-end `metacat_bench` — the probes drive the loop themselves today |
+| the run.ss INTERACTIVE half | breakpoints, step mode, `go`, `rerun`, `runtil` | never headless — all of it hands control back to the SWL repl |
+| `metacat_bench.{ss,jl}` | still benchmarks layers, though `run-problem` now works on both sides | whenever someone wants a number for the model rather than its parts |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
 | `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
 
@@ -986,6 +1013,23 @@ The harness also stubs `group-graphics`. `group-builder` calls
 branches (`groups.ss` 727 and 765), unlike every other graphics call in that
 file, which sits behind `%workspace-graphics%`. Headless, `group-graphics.ss`
 is never loaded, so those two calls raise the moment a group consolidates.
+
+And it fills in an answer description's icon procedure. `memory.ss`'s
+`update-activation` and `unhighlight` call `(get-normal-icon-pexp value)`
+unguarded; that slot holds a graphics closure only `set-graphics-info` ever
+fills in, and it is an ARGUMENT to `tell`, so the harness's "route a send to a
+non-procedure to a no-op" guard cannot save it. It only bites on the SECOND
+problem of a session — `init-mcat` calls `clear-activations`, which updates the
+activation of every answer already in memory — which is exactly the state the
+`run` probe is for. The harness wraps `make-answer-description` and puts a
+no-op in the slot.
+
+`suspend` and the stop reason are the harness's too. `suspend` prints "Type
+(go) or click on the Workspace to continue..." — an instruction to a user of a
+GUI that is not there — so the harness goes straight to the escape; and since
+both `report-new-answer` and `give-up` end a run through the same `break`, the
+harness has `give-up` record which it was, so `run-problem` can return
+`give-up` rather than `answer`.
 
 ---
 

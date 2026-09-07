@@ -2,6 +2,10 @@
 ;; prints a canonical result block.
 ;;
 ;;   scheme --script metacat/bench/run_metacat_scm.ss <initial> <modified> <target> <seed> [limit]
+;;
+;; The outcome is `answer` when a codelet reported one, `give-up` when a jootser
+;; decided there was nothing better to try, and `limit` when the codelet budget
+;; ran out.
 
 (define *metacat-source-dir* "metacat/scheme/metacat/")
 (load "metacat/scheme/headless/prelude.ss")

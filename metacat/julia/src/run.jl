@@ -12,8 +12,10 @@
 # built this cycle counts. The temperature is recomputed before the rack is
 # refilled, because how many codelets to post depends on it.
 #
-# The run LOOP itself (`run-until-answer`, the suspend/resume machinery and the
-# GUI's stepping) is not here — it belongs with the rest of run.ss.
+# The run LOOP is here too, at the bottom: `init-mcat`, `step-mcat` and
+# `run-mcat`. What is NOT ported is the interactive half — breakpoints, step
+# mode, `go`/`rerun`, and the graphics refreshes the loop interleaves — all of
+# which exist to hand control back to the SWL repl.
 
 """`(update-temperature)` — 70% how unhappy the workspace is, 30% whether a
 supported rule exists at all. A snag CLAMPS the temperature at 100, and while
@@ -79,4 +81,124 @@ function update_everything!(ctx)
     post_deferred_codelets!(ctx.coderack, ctx.codelet_count, ctx.rng,
                             ctx.temperature, ctx)
     return ctx
+end
+
+
+# --- the run loop (run.ss 20-231) -------------------------------------------
+#
+# Two things here are easy to get wrong by reading the probes rather than the
+# model, because the probes drive the loop by hand.
+#
+# `update-everything` runs once every %update-cycle-length% CODELETS, not once
+# per codelet. The model's "cycle" is fifteen codelets long.
+#
+# And `step-mcat` runs the codelet FIRST and increments the count afterwards,
+# so the very first codelet of a run executes with `*codelet-count*` still 0.
+# Every time stamp and every age in the model is measured against that count.
+
+"""`%update-cycle-length%` — how many codelets run between updates."""
+const UPDATE_CYCLE_LENGTH = 15
+
+"""`%initial-slipnode-clamp-cycles%` — how many UPDATE CYCLES (so times fifteen
+codelets) the initially-clamped slipnodes stay clamped."""
+const INITIAL_SLIPNODE_CLAMP_CYCLES = 50
+
+# %garbage-collect-cycles% is graphics-only and is not ported.
+
+"""`(clamp-initial-slipnodes)` — pin the nodes every run starts believing in,
+and record when to let them go."""
+function clamp_initial_slipnodes!(ctx)
+    for n in ctx.net.initially_clamped_nodes
+        clamp_activation!(n, MAX_ACTIVATION, ctx)
+    end
+    ctx.initial_slipnode_unclamp_time =
+        ctx.codelet_count + INITIAL_SLIPNODE_CLAMP_CYCLES * UPDATE_CYCLE_LENGTH
+    return ctx
+end
+
+"""`(init-mcat initial modified target answer seed)` — set up a run and return
+the context it runs in.
+
+The two `set-activation` calls are `set-`, not `update-`, and the Scheme says
+why: `update-activation` is monitored, and a run has not begun yet, so an
+update here would put concept-activation events in the trace before the first
+codelet. Justify mode's answer string is not built — see the stub table."""
+function init_mcat(net::Slipnet, initial_sym, modified_sym, target_sym, seed::Int;
+                   memory = nothing, trace = nothing)
+    rng = PyRandom(seed)
+    foreach(reset!, net.nodes)
+    strings = [make_workspace_string(net, :initial, initial_sym),
+               make_workspace_string(net, :modified, modified_sym),
+               make_workspace_string(net, :target, target_sym)]
+    ctx = MetacatCtx(net, rng, Coderack(), make_themespace(net),
+                     strings[1], strings[2], strings[3], 100, 0)
+    initialize!(ctx.coderack)
+    ctx.temperature_clamped = false
+    ctx.trace = trace
+    ctx.memory = memory
+    # `(tell *memory* 'clear-activations)`. The memory itself SURVIVES a run —
+    # that is what makes reminding possible — but the previous run's reminding
+    # strengths do not.
+    memory === nothing || clear_activations!(memory::Memory)
+    for s in strings
+        add_string_position_descriptions_to_letters!(net, s)
+    end
+    if any(s -> length(s.letters) == 1, strings)
+        set_activation!(net[:plato_object_category], MAX_ACTIVATION)
+    end
+    for o in workspace_objects(ctx), d in o.descriptions
+        set_activation!(d.descriptor, MAX_ACTIVATION)
+    end
+    update_workspace_values!(ctx)
+    clamp_initial_slipnodes!(ctx)
+    post_initial_codelets!(ctx)
+    return ctx
+end
+
+"""`(step-mcat)` — one codelet. NB the increment comes AFTER the run."""
+function step_mcat!(ctx)
+    run_codelet!(ctx, choose_codelet!(ctx.coderack, ctx.rng, ctx.temperature))
+    ctx.codelet_count += 1
+    return ctx
+end
+
+"""`(run-mcat)` — the loop. Returns why it stopped: `:answer` when a codelet
+reported one, `:give_up` when a jootser gave up, `:limit` when the codelet
+budget ran out.
+
+The Scheme returns through an escape continuation the headless harness
+installs; here `report-new-answer` and `give-up` throw `RunFinished` and this
+catches it, which is the same shape. The codelet limit is the harness's too —
+the model itself runs forever."""
+function run_mcat!(ctx; codelet_limit::Int = 100000)
+    try
+        while true
+            ctx.codelet_count >= codelet_limit && return :limit
+            step_mcat!(ctx)
+            if ctx.codelet_count == ctx.initial_slipnode_unclamp_time
+                for n in ctx.net.initially_clamped_nodes
+                    unfreeze!(n)
+                end
+            end
+            # NB `if*` is `when`: BOTH of these run when the rack empties.
+            if coderack_empty(ctx.coderack)
+                post_initial_codelets!(ctx)
+                clamp_initial_slipnodes!(ctx)
+            end
+            ctx.codelet_count % UPDATE_CYCLE_LENGTH == 0 && update_everything!(ctx)
+        end
+    catch e
+        e isa RunFinished || rethrow()
+        return e.reason
+    end
+end
+
+"""`(run-problem initial modified target seed limit)` from the headless
+harness — one problem, start to finish."""
+function run_problem(net::Slipnet, initial_sym, modified_sym, target_sym, seed::Int,
+                     codelet_limit::Int = 100000; memory = make_memory(),
+                     trace = make_temporal_trace())
+    ctx = init_mcat(net, initial_sym, modified_sym, target_sym, seed;
+                    memory = memory, trace = trace)
+    return (run_mcat!(ctx; codelet_limit = codelet_limit), ctx)
 end

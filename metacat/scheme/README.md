@@ -31,7 +31,23 @@ Metacat's own object system is `tell`, which simply applies a closure to a
 message, so a GUI window becomes a closure that swallows every message. A run
 normally ends by calling `(suspend)` → `(break)`, which hands control back to
 the SWL repl; the harness redirects that to an escape continuation so a script
-can collect the answer.
+can collect the answer. `(suspend)`'s own message — "Type (go) or click on the
+Workspace to continue..." — is an instruction to a user of a GUI that is not
+there, so the harness drops it. Two things end a run through that same
+`break`: `report-new-answer` found an answer, and `give-up` decided there was
+nothing better to try. The escape alone cannot tell them apart, so the harness
+has `give-up` record which it was, and `run-problem` returns `answer`,
+`give-up` or `limit`.
+
+Two graphics calls reach past the `tell` guard, because they are ARGUMENTS to
+a `tell` rather than sends themselves, and the harness fills their slots in.
+`group-builder` calls `(group-graphics 'erase ...)` unguarded in each of its
+two consolidation branches, so `group-graphics` is stubbed. And an answer
+description's `update-activation` and `unhighlight` call
+`(get-normal-icon-pexp value)`, a closure only the memory window ever supplies;
+the harness wraps `make-answer-description` and puts a no-op there. That one
+only bites on the second problem of a session, when `init-mcat`'s
+`clear-activations` first has an answer to clear.
 
 Where a *pure* helper happens to live in a graphics file but is called from the
 model proper — `find-next-space-position`, `separate-into-words`,

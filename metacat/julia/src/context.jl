@@ -63,6 +63,10 @@ mutable struct MetacatCtx
     clamp and snag events set the trace's period flags, and no monitor raises
     those. Untyped because trace.jl loads after this file."""
     trace::Any
+    """`*initial-slipnode-unclamp-time*` — the codelet count at which the
+    initially-clamped slipnodes are let go. Set by `clamp-initial-slipnodes`,
+    read once per cycle by the run loop."""
+    initial_slipnode_unclamp_time::Int
 end
 
 """A context with empty bridge storage and zeroed workspace averages, which is
@@ -77,7 +81,7 @@ MetacatCtx(net::Slipnet, rng::PyRandom, coderack::Coderack, ts::Themespace,
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                Dict{Tuple{Int,Int},Vector{Bridge}}(),
                0, 0, 0, 0, 0, 0, 0, 0,
-               Any[], Any[], false, false, Any[], false, nothing, nothing)
+               Any[], Any[], false, false, Any[], false, nothing, nothing, 0)
 
 """`(get-all-vertical-CMs)` — every concept mapping of every built vertical
 bridge, which is what the whole vertical mapping amounts to."""
@@ -280,15 +284,16 @@ averages."""
 function update_workspace_values!(ctx::MetacatCtx)
     TEMPERATURE[] = ctx.temperature
     strings = all_strings(ctx)
-    for s in strings, b in s.bonds
-        update_structure_strength!(b, ctx.net, ctx.rng, ctx.themespace)
-    end
-    for s in strings, g in s.groups
-        update_structure_strength!(g, ctx.net, ctx.rng, ctx.themespace)
-    end
-    all_bridges = get_all_bridges(ctx)
-    for b in all_bridges
-        update_structure_strength!(b, ctx.net, all_bridges, ctx.themespace)
+    # `(for* each structure in (tell *workspace* 'get-structures) do
+    #    (tell structure 'update-strength))`. RULES are structures too, and
+    # theirs is the strength the answer-finder weights its choice of rule by:
+    # a rule's strength is its quality RELATIVE to the other rules, so with two
+    # rules of quality 90 and 99 the strengths are 50 and 100, not 90 and 99.
+    # Skipping rules here leaves `strength` at whatever it was when the rule
+    # was built, which reads as plausible right up to the first time two rules
+    # compete.
+    for structure in get_structures(ctx)
+        update_structure_strength!(structure, ctx)
     end
     update_workspace_values!(strings, nothing, nothing, ctx.themespace)
     update_workspace_averages!(ctx)
@@ -337,15 +342,18 @@ get_possible_rule_types(ctx::MetacatCtx) =
     ctx.top_rule_possible ? Symbol[:top] :
     ctx.bottom_rule_possible ? Symbol[:bottom] : Symbol[]
 
-"""`(get-equivalent-object object)` — the object at the same place in this
-string. When the object already belongs to the string that is the object
-itself; the case where it does not arises only for TRANSLATED strings, which
-come with `jootsing.ss` and are not ported yet."""
-function get_equivalent_object(s::WorkspaceString, o)
-    pool = o isa Letter ? s.letters : s.groups
-    any(x -> x === o, pool) && return o
-    return nothing
-end
+"""`(get-equivalent-object object)` — the object doing the same job in this
+string, which need not be the same object.
+
+This is NOT "is this object in the string": a group that has been rebuilt — by
+consolidation, or by a group-builder replacing a coincident one — is a
+different object occupying the same slot, and the Scheme finds it through the
+string's group vector and accepts it if the category, direction and length all
+agree. That is what keeps a rule SUPPORTED across a rebuild of a group its
+bridge rests on, and hence what keeps the temperature down. Reading it as an
+identity test costs the rule its support the moment any group is rebuilt."""
+get_equivalent_object(s::WorkspaceString, o::Letter) = get_equivalent_letter(s, o)
+get_equivalent_object(s::WorkspaceString, o::Group) = get_equivalent_group(s, o)
 
 """`(get-equivalent-bridge bridge)` — the bridge in the workspace that does the
 same job as this one, which is the bridge itself unless it has been rebuilt."""

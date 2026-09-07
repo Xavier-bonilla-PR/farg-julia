@@ -44,9 +44,39 @@
       (else (find-next-space-position s (+ i 1))))))
 
 ;; Metacat ends a run with (suspend) -> (break), which hands control back to
-;; the SWL repl. Headless, redirect that to an escape continuation.
+;; the SWL repl. Headless, redirect that to an escape continuation. `suspend`
+;; itself only prints "Type (go) or click on the Workspace to continue...",
+;; which is an instruction to a user of a GUI that is not here, so drop it and
+;; go straight to the escape.
+;;
+;; Two things end a run, and they end it the same way: `report-new-answer`
+;; found an answer, and `give-up` decided there is nothing better to try. The
+;; escape alone cannot tell them apart, so `give-up` records which it was.
 (define *escape* #f)
-(set! break (lambda () (*escape* 'answer)))
+(define *stop-reason* 'answer)
+(set! break (lambda () (*escape* *stop-reason*)))
+(set! suspend (lambda () (break)))
+(define original-give-up give-up)
+(set! give-up
+  (lambda ()
+    (set! *stop-reason* 'give-up)
+    (original-give-up)))
+
+;; memory.ss's answer descriptions call (get-normal-icon-pexp new-value)
+;; UNGUARDED from `update-activation` and `unhighlight` (lines 203 and 264).
+;; That slot holds a graphics CLOSURE which only `set-graphics-info` ever fills
+;; in, and headless nothing ever does, so it is #f. It is an ARGUMENT to
+;; `tell`, evaluated before the guard above can route the send to a no-op, so
+;; the guard cannot save it. This only bites on the SECOND problem of a session:
+;; `init-mcat` calls (tell *memory* 'clear-activations), which updates the
+;; activation of every answer already in memory, and until one is there nothing
+;; reaches the call. Fill the slot with a no-op as each description is made.
+(define original-make-answer-description make-answer-description)
+(set! make-answer-description
+  (lambda args
+    (let ((answer (apply original-make-answer-description args)))
+      (tell answer 'set-graphics-info (lambda (activation) #f) #f)
+      answer)))
 
 (define *codelet-limit* 100000)
 (define original-step-mcat step-mcat)
@@ -59,6 +89,7 @@
 (define run-problem
   (lambda (initial modified target seed limit)
     (set! *codelet-limit* limit)
+    (set! *stop-reason* 'answer)
     (call/cc
       (lambda (k)
         (set! *escape* k)
