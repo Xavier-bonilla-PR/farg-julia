@@ -84,6 +84,18 @@ function dump_memory(tag)
         println("MA\t", tag, "\t", problem_print_name(a), "\t",
                 letters_print_name(a.answer_letters), "\t", a.quality, "\t",
                 a.temperature, "\t", a.activation)
+        # The RULE the answer rests on, in English, and whether it is a SWAP.
+        # Without this the probe compares what the model answered but not what
+        # it thought, and an extrinsic (swap) clause -- the one clause kind a
+        # whole run rarely produces -- would go through translation, string
+        # instantiation and abstraction without ever being looked at.
+        for phrase in a.top_rule_phrases
+            println("MAR\t", tag, "\t", letters_print_name(a.answer_letters), "\t",
+                    phrase)
+        end
+        println("MAX\t", tag, "\t", letters_print_name(a.answer_letters), "\t",
+                yn(any(is_extrinsic_clause, a.top_rule_clauses)), "\t",
+                a.top_rule_abstractness)
     end
     for s in get_snags(mem)
         println("MS\t", tag, "\t", problem_print_name(s), "\t", s.snag_explanation,
@@ -116,3 +128,24 @@ probe("full1", "abc", "cba", "pqrs", 42, 20000)
 probe("full2", "abc", "abd", "ijk", 7, 20000)
 # And once more on a problem already in memory, so reminding is live.
 probe("again", "abc", "cba", "pqrs", 99, 20000)
+
+# SWAP (EXTRINSIC) RULE CLAUSES. A rule clause is extrinsic when two objects
+# trade a descriptor along one dimension -- "swap the string-positions of the
+# leftmost and rightmost letter" -- and it takes its own arm through
+# `translate_rule_clause`, which the hand-built probes could not reach.
+#
+# That arm was ALREADY reached, once, by `again` above: its answer sqrp rests
+# on a swap rule, which the MAR line now makes visible. These two widen it.
+#
+#   swaptranslate -- `abc -> cba` seed 4. Twenty passes through the extrinsic
+#                    arm, against one everywhere else, because the model keeps
+#                    proposing and translating swap rules; its own answer then
+#                    comes from a verbatim rule, so this is coverage of the
+#                    TRANSLATION, not of an answer.
+#   swapanswer    -- `mrrjjj -> jjjrrm` seed 4, the case rules.ss and
+#                    answers.jl both name: the [m] and the [jjj] trade places,
+#                    so the swap is between a LETTER and a GROUP and carries
+#                    Length with it -- a shape `abc -> cba` cannot make. Its
+#                    answer IS reported through that rule.
+probe("swaptranslate", "abc", "cba", "pqrs", 4, 4000)
+probe("swapanswer", "mrrjjj", "jjjrrm", "xyz", 4, 4000)

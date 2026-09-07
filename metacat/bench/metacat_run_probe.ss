@@ -101,7 +101,17 @@
       (printf "MA\t~a\t~a\t~a\t~a\t~a\t~a~%" tag
         (tell a 'problem-print-name) (tell a 'get-answer-print-name)
         (tell a 'get-quality) (tell a 'get-temperature)
-        (tell a 'get-activation)))
+        (tell a 'get-activation))
+      ;; The RULE the answer rests on, in English, and whether it is a SWAP.
+      ;; Without this the probe compares what the model answered but not what
+      ;; it thought, and an extrinsic (swap) clause -- the one clause kind a
+      ;; whole run rarely produces -- would go through translation, string
+      ;; instantiation and abstraction without ever being looked at.
+      (for* each phrase in (tell a 'get-top-rule-phrases) do
+        (printf "MAR\t~a\t~a\t~a~%" tag (tell a 'get-answer-print-name) phrase))
+      (printf "MAX\t~a\t~a\t~a\t~a~%" tag (tell a 'get-answer-print-name)
+        (yn (not (null? (filter extrinsic-clause? (tell a 'get-top-rule-clauses)))))
+        (tell a 'get-top-rule-abstractness)))
     (for* each s in (tell *memory* 'get-snags) do
       (printf "MS\t~a\t~a\t~a\t~a~%" tag
         (tell s 'problem-print-name) (tell s 'get-explanation)
@@ -128,3 +138,24 @@
 (probe 'full2 'abc 'abd 'ijk 7 20000)
 ;; And once more on a problem already in memory, so reminding is live.
 (probe 'again 'abc 'cba 'pqrs 99 20000)
+
+;; SWAP (EXTRINSIC) RULE CLAUSES. A rule clause is extrinsic when two objects
+;; trade a descriptor along one dimension -- "swap the string-positions of the
+;; leftmost and rightmost letter" -- and it takes its own arm through
+;; `translate-rule-clause`, which the hand-built probes could not reach.
+;;
+;; That arm was ALREADY reached, once, by `again` above: its answer sqrp rests
+;; on a swap rule, which the MAR line now makes visible. These two widen it.
+;;
+;;   swaptranslate -- `abc -> cba` seed 4. Twenty passes through the extrinsic
+;;                    arm, against one everywhere else, because the model keeps
+;;                    proposing and translating swap rules; its own answer then
+;;                    comes from a verbatim rule, so this is coverage of the
+;;                    TRANSLATION, not of an answer.
+;;   swapanswer    -- `mrrjjj -> jjjrrm` seed 4, the case rules.ss and
+;;                    answers.jl both name: the [m] and the [jjj] trade places,
+;;                    so the swap is between a LETTER and a GROUP and carries
+;;                    Length with it -- a shape `abc -> cba` cannot make. Its
+;;                    answer IS reported through that rule.
+(probe 'swaptranslate 'abc 'cba 'pqrs 4 4000)
+(probe 'swapanswer 'mrrjjj 'jjjrrm 'xyz 4 4000)

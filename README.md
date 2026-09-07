@@ -250,7 +250,7 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      justifymode
 ```
 
-Thirty-three layers, 39,809 trace lines, byte-identical.
+Thirty-three layers, 39,881 trace lines, byte-identical.
 
 The last two are the whole model. `run` calls the same `run-problem` the
 reference runner above calls and compares what Metacat *did*: six problems,
@@ -293,7 +293,7 @@ temperatures, same trace, same memory.
 | memory's two trace-reading abstractors | `memory.jl` | 119 lines |
 | the commentary: what the model says about its answers | `commentary.jl` | 72 lines |
 | the run loop, cycle by cycle, self-watching on | `run.jl`, `codelets_jootsing.jl` | 246 lines |
-| **the whole model, driven by `run-problem`** | `run.jl` | 89 lines |
+| **the whole model, driven by `run-problem`** | `run.jl` | 161 lines |
 | **justify mode: the model with a fourth string** | `justify.jl` and 54 branches through the rest | 169 lines |
 
 ### How much is done

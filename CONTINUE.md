@@ -13,7 +13,7 @@ Scheme run for run in both configurations: `run-problem` for an ordinary run,
 temperatures, same trace, same memory, on runs up to 20,000 codelets with
 reminding live. `%self-watching-enabled%` is ON, which is the model's real
 configuration. The tree is clean and `origin` is in sync. **Thirty-three probes,
-39,809 trace lines byte-identical** — confirmed by a full re-run on this exact
+39,881 trace lines byte-identical** — confirmed by a full re-run on this exact
 tree.
 
 The `run` and `justifymode` probes are the strongest tests in the project, and
@@ -91,7 +91,7 @@ JULIA=$JULIA bash metacat/bench/verify_metacat.sh \
   runloop run justifymode
 ```
 
-Expected — thirty-three layers, **39,809 trace lines byte-identical**:
+Expected — thirty-three layers, **39,881 trace lines byte-identical**:
 
 ```
 ok    util (264 lines identical)
@@ -125,7 +125,7 @@ ok    monitors (808 lines identical)
 ok    abstract (119 lines identical)
 ok    commentary (72 lines identical)
 ok    runloop (246 lines identical)
-ok    run (89 lines identical)
+ok    run (161 lines identical)
 ok    justifymode (169 lines identical)
 all probes matched
 ```
@@ -199,7 +199,7 @@ over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 | memory's two trace-reading abstractors | `memory.jl` | `abstract` | 119 |
 | the commentary: what the model says about its answers | `commentary.jl` | `commentary` | 72 |
 | **the run loop, self-watching ON** | `run.jl`, `codelets_jootsing.jl`, `codelets_breaker.jl` | `runloop` | 246 |
-| **the whole model, driven by `run-problem`** | `run.jl` (`init-mcat`, `step-mcat`, `run-mcat`) | `run` | 89 |
+| **the whole model, driven by `run-problem`** | `run.jl` (`init-mcat`, `step-mcat`, `run-mcat`) | `run` | 161 |
 | **justify mode: the model with a fourth string** | `justify.jl` (`answer-justifier`, `clamp-rules`) and the 54 branches through the rest | `justifymode` | 169 |
 
 ---
@@ -864,6 +864,18 @@ discretionary.
    exists to hand control back to the SWL repl.
    With this in, `metacat/bench/metacat_bench.{ss,jl}` gained its `full-runs`
    workload — see section 8.
+
+   The probe also prints, for every answer in memory, the RULE behind it
+   (`MAR`, its English transcription) and whether that rule contains an
+   EXTRINSIC — swap — clause (`MAX`). Without those it compared what the model
+   answered but not what it thought, which is how the swap alarm in the stub
+   table stayed up long after the behaviour was actually being exercised. Two
+   problems widen that coverage deliberately: `swaptranslate`
+   (`abc -> cba` seed 4) takes the extrinsic arm of `translate-rule-clause`
+   twenty times against one everywhere else, and `swapanswer`
+   (`mrrjjj -> jjjrrm` seed 4) reports its answer through a swap between a
+   LETTER and a GROUP, carrying Length with it — a shape `abc -> cba` cannot
+   make.
 8. ~~**JUSTIFY MODE**~~ (`justify.ss` 20-180, plus the mode itself) — **done**,
    as the rest of `justify.jl` and 54 branches through the rest of the model,
    probe `justifymode`.
@@ -936,13 +948,20 @@ been taught to answer. SIX of their predecessors turned into silent bugs the
 moment the state they excluded became reachable — the last two when justify
 mode first ran — so treat this list as a set of alarms, not a backlog.
 
+One caution about how to read it, learned from the swap entry: an alarm that
+says "never exercised" is a claim about the PROBES, and it is only as good as
+what the probes print. The swap entry sat here for months on the strength of
+`grep Swap` over the traces — but no trace printed a rule, so the grep was
+measuring the absence of a phrase, not the absence of the behaviour. Before
+believing such an entry, instrument the function itself and count the calls.
+
 | where | what is missing | when it becomes wrong |
 |---|---|---|
 | ~~`:answer_finder`~~ | **done** — the real procedure is attached in `answers.jl` | — |
 | ~~`abstract_answer_description` / `abstract_snag_description`~~ | **done** | — |
 | ~~`process_snag`~~ | **done**, with `post-initial-codelets` and `update-everything` | — |
 | ~~the trace's four clamp/snag progress methods~~ | **done** with slice (C) | — |
-| translating an EXTRINSIC (swap) clause | ported but never exercised: no configuration tried produces a swap rule | as soon as one does — and the irrelevant-group deletion goes with it |
+| ~~translating an EXTRINSIC (swap) clause~~ | **covered**, by the `run` probe's `again`, `swaptranslate` and `swapanswer` — and it turned out `again` had been covering it all along. The entry said "no configuration tried produces a swap rule", which was read off traces that never printed a rule; `MAR`/`MAX` print them now | — |
 | ~~`top-down-bond-scout:category` and `:direction`~~ | **done**, with the run loop, exactly when the alarm said they would be needed | — |
 | ~~justify mode~~ | **done** — all 64 branches, probe `justifymode` | — |
 | `joots_from_justify_clamps` | ported, but NO probe reaches it: it needs three equivalent justify clamps to be the most recent cluster in the trace, and twenty seeds across five problems never produced that | the first time a run does cluster three — it is live code on an untested path, which is the shape every other entry in this table had before it bit |
