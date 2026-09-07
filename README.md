@@ -246,10 +246,10 @@ bash metacat/bench/verify_metacat.sh util slipnet workspace cm bonds groups \
                                      ruleapply ruleabstract rulecodelets \
                                      ruletranslate transstring memory \
                                      patterns trace justify wsevents swevents \
-                                     monitors abstract runloop run
+                                     monitors abstract commentary runloop run
 ```
 
-Thirty-one layers, 39,543 trace lines, byte-identical.
+Thirty-two layers, 39,615 trace lines, byte-identical.
 
 The last one is the whole model. `run` calls the same `run-problem` the
 reference runner above calls and compares what Metacat *did*: six problems,
@@ -288,6 +288,7 @@ same temperatures, same trace, same memory.
 | the self-watching events: answer, clamp, snag | `trace.jl` | 453 lines |
 | the trace monitors and what they judge important | `trace.jl` | 808 lines |
 | memory's two trace-reading abstractors | `memory.jl` | 119 lines |
+| the commentary: what the model says about its answers | `commentary.jl` | 72 lines |
 | the run loop, cycle by cycle, self-watching on | `run.jl`, `codelets_jootsing.jl` | 246 lines |
 | **the whole model, driven by `run-problem`** | `run.jl` | 89 lines |
 
@@ -321,9 +322,18 @@ been assuming. Answers and snags are abstracted into an episodic memory that
 outlives the run, so a later run on a related problem is reminded of an earlier
 one, with a strength that falls off with the distance between them.
 
-What remains is about 1,000 lines, all of it prose: the commentary
-`answers.ss` writes about its own answers, and the `answer-justifier` codelet
-that is the rest of `justify.ss`.
+It also writes about what it did. `commentary.jl` is the English Metacat
+produces when asked to explain an answer or to compare two of them: which ideas
+they share, which they disagree about, which one of them never considered,
+which have no justification beyond dodging a snag it remembers hitting — and
+which of the two it prefers, and why. That prose is compared character for
+character with the Scheme's.
+
+What remains is **justify mode**: what Metacat does when given the answer as
+well as the problem and asked *why*. It is a flag, but what it turns on is a
+fourth string in the workspace, with the bottom bridges, bottom rules and
+bottom themes that come with it — 64 branches through the model, of which the
+port has ten — plus the `answer-justifier` codelet that needs them.
 
 The themespace is what makes Metacat more than Copycat, and it was on the
 critical path rather than optional: every workspace structure's strength is
