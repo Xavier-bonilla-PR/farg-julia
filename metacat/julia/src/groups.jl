@@ -342,7 +342,10 @@ function distinguishing_descriptor(net::Slipnet, g::Group, descriptor::Node)
      any(n -> n === descriptor, net.numbers)) && return false
     supergroup = g.enclosing_group
     subgroups = [o for o in g.constituent_objects if o isa Group]
-    for other in g.string.groups
+    # NB: see the note on the Letter method in workspace.jl -- `groups` is a
+    # Vector{WSObject} for the same definition-cycle reason, and only ever holds
+    # Groups, so naming the type here just restores the concrete field access.
+    for other::Group in g.string.groups
         (other === g || other === supergroup ||
          any(sg -> sg === other, subgroups)) && continue
         for d in other.descriptions

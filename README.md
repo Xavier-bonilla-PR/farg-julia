@@ -27,7 +27,7 @@ make that painful:
 
 So this repository ports both to Julia, and — because a fast model that behaves
 differently is worthless — proves the ports run the *identical* computation
-rather than merely a similar one. Copycat gets **6.6x**, Metacat **3.3x**, both
+rather than merely a similar one. Copycat gets **6.6x**, Metacat **3.4x**, both
 with byte-identical output. Metacat also gets a headless reference harness,
 which is what makes it measurable in the first place.
 
@@ -59,7 +59,7 @@ licences** — MIT for Copycat, GPL-2 for Metacat. See the end of this file.
 | reference size | 4,082 lines | 18,752 lines (excl. graphics) |
 | Julia port size | 3,818 lines | 13,670 lines |
 | runs headless out of the box | yes | **no** — `metacat/scheme/headless/` fixes that |
-| speedup, whole model | **6.6x** | **3.3x** |
+| speedup, whole model | **6.6x** | **3.4x** |
 | how the port is checked | 51 answer-distribution and trace comparisons | 33 layer probes, 39,946 trace lines |
 | state | complete | the model is complete; the running narration is not |
 
@@ -166,19 +166,19 @@ unless the two implementations agree on all three.
 
 | problem | codelets | final temp | Chez | Julia | speedup |
 |---|---:|---:|---:|---:|---:|
-| `abc : abd :: ijk : ?` | 364 | 19 | 0.244 s | 0.081 s | **3.0x** |
-| `abc : abd :: iijjkk : ?` | 886 | 20 | 0.603 s | 0.180 s | **3.3x** |
-| `abc : cba :: pqrs : ?` | 726 | 5 | 0.415 s | 0.117 s | **3.5x** |
-| `abc : abd :: xyz : ?` | 1,694 | 51 | 1.042 s | 0.309 s | **3.4x** |
-| `abc : abd :: mrrjjj : ?` | 336 | 40 | 0.243 s | 0.087 s | **2.8x** |
-| `mrrjjj : mrrkkk :: xyz : ?` | 2,925 | 10 | 2.837 s | 0.858 s | **3.3x** |
-| `abc : abd :: ijk : ijl` *(justify)* | 436 | 23 | 0.354 s | 0.119 s | **3.0x** |
-| `abc : cba :: pqrs : srqp` *(justify)* | 1,287 | 15 | 0.977 s | 0.300 s | **3.3x** |
-| `abc : abd :: mrrjjj : mrrjjjj` *(justify)* | 3,282 | 59 | 3.594 s | 1.079 s | **3.3x** |
-| **total** | | | **10.31 s** | **3.13 s** | **3.3x** |
+| `abc : abd :: ijk : ?` | 364 | 19 | 0.195 s | 0.062 s | **3.2x** |
+| `abc : abd :: iijjkk : ?` | 886 | 20 | 0.482 s | 0.134 s | **3.6x** |
+| `abc : cba :: pqrs : ?` | 726 | 5 | 0.339 s | 0.090 s | **3.8x** |
+| `abc : abd :: xyz : ?` | 1,694 | 51 | 0.826 s | 0.253 s | **3.3x** |
+| `abc : abd :: mrrjjj : ?` | 336 | 40 | 0.198 s | 0.061 s | **3.2x** |
+| `mrrjjj : mrrkkk :: xyz : ?` | 2,925 | 10 | 2.296 s | 0.671 s | **3.4x** |
+| `abc : abd :: ijk : ijl` *(justify)* | 436 | 23 | 0.278 s | 0.078 s | **3.6x** |
+| `abc : cba :: pqrs : srqp` *(justify)* | 1,287 | 15 | 0.810 s | 0.251 s | **3.2x** |
+| `abc : abd :: mrrjjj : mrrjjjj` *(justify)* | 3,282 | 59 | 2.959 s | 0.873 s | **3.4x** |
+| **total** | | | **8.38 s** | **2.47 s** | **3.4x** |
 
 The striking thing is how *flat* that column is. Copycat's speedup swings from
-3.6x to 10.1x with the problem; Metacat's sits between 2.8x and 3.5x whether the
+3.6x to 10.1x with the problem; Metacat's sits between 3.2x and 3.8x whether the
 run is 336 codelets or 3,282, whether it hits a snag (`xyz`, which ends at
 temperature 51) or settles cleanly (`pqrs`, temperature 5), and whether or not
 justify mode is on. Metacat's per-codelet work is dominated by machinery that
@@ -198,13 +198,13 @@ whichever implementation happens to suit it.
 
 | workload | iterations | Chez | Julia | speedup |
 |---|---:|---:|---:|---:|
-| slipnet, 50 activation cycles | 400 | 0.522 s | 0.022 s | 24.2x |
-| workspace initialisation | 2,000 | 0.692 s | 0.237 s | 2.9x |
-| concept mappings | 2,000 | 1.208 s | 0.396 s | 3.0x |
-| bonds and groups | 2,000 | 2.377 s | 0.580 s | 4.1x |
-| themespace, 50 activation cycles | 200 | 1.782 s | 0.111 s | 16.1x |
-| **whole runs of the model** | 20 | **7.764 s** | **2.756 s** | **2.8x** |
-| **whole runs, justify mode** | 20 | **5.399 s** | **2.112 s** | **2.6x** |
+| slipnet, 50 activation cycles | 400 | 0.514 s | 0.021 s | 24.5x |
+| workspace initialisation | 2,000 | 0.713 s | 0.241 s | 3.0x |
+| concept mappings | 2,000 | 1.203 s | 0.142 s | 8.5x |
+| bonds and groups | 2,000 | 2.446 s | 0.602 s | 4.1x |
+| themespace, 50 activation cycles | 200 | 1.894 s | 0.101 s | 18.8x |
+| **whole runs of the model** | 20 | **7.762 s** | **2.040 s** | **3.8x** |
+| **whole runs, justify mode** | 20 | **5.420 s** | **1.387 s** | **3.9x** |
 
 The two 16–24x rows are the explanation for the 3.3x. Numeric loops over fixed
 arrays — spreading activation through 59 slipnet nodes, or through the
@@ -225,7 +225,7 @@ Measured as time from `exec` to a printed answer, cold, best of three:
 | one problem, one cold process | reference | Julia | |
 |---|---:|---:|---|
 | Copycat, `abc:abd::ijk:?`, 1 iteration | 0.08 s | 6.16 s | Julia **77x slower** |
-| Metacat, `abc:cba::pqrs:?`, 618 codelets | 0.76 s | 30.80 s | Julia **40x slower** |
+| Metacat, `abc:cba::pqrs:?`, 618 codelets | 0.70 s | 32.35 s | Julia **46x slower** |
 
 Julia compiles the port before it can run a single codelet, and for Metacat's
 13,670 lines that compile costs about half a minute — far more than a small
@@ -238,8 +238,8 @@ the two figures above:
 
 - **Copycat**: about **7 seconds** of Python model time in one process, roughly
   150,000 codelets — one `mrrjjj` problem.
-- **Metacat**: about **43 seconds** of Chez model time in one process, roughly
-  190 runs of the average size in the table above.
+- **Metacat**: about **45 seconds** of Chez model time in one process, roughly
+  240 runs of the average size in the table above.
 
 Past that, everything is profit, and a study that used to be an afternoon is a
 coffee break. Below it, use the original. This is the single most important
@@ -323,6 +323,34 @@ workspace's object list the small union `Union{Group, Letter}` that Julia splits
 into a branch — made the port **~1.7x faster with byte-identical output**. Only
 `WorkspaceString.bonds` still needs an abstract element type, because
 `WorkspaceString` and `Bond` are a genuine definition cycle.
+
+Metacat has the same disease and has only been partly treated. Its
+`WorkspaceString` declares `letters::Vector{WSObject}` and
+`groups::Vector{WSObject}` for that same cycle reason, though instrumenting six
+problems shows those vectors only ever hold `Letter` and `Group` respectively —
+as do `bonds`, `outgoing_bonds`, `incoming_bonds` and `proposed_groups`, all
+declared `Vector{Any}`. A sampling profile attributing each overhead sample to
+the model function responsible put **~12% of a whole run** in the two
+`distinguishing_descriptor` methods alone, almost all of it Julia resolving
+`other.descriptions` at runtime instead of at a fixed field offset. Naming the
+concrete type on those two loop variables — two lines, no struct changes — is
+worth **1.16x on the whole model** with all 33 probes still byte-identical.
+
+There is more where that came from, but not much that is as cheap. After the fix
+the profile is flat: ~21% of the run is still method dispatch and ~23% is GC and
+allocation, but the worst single site is 2.4% and the top ten are all between
+0.4% and 2.4%. Collecting the rest means making the container fields concrete
+rather than annotating call sites one at a time, and that runs into the
+definition cycle properly — the honest fix being an arena with integer indices
+instead of pointers. A plausible ceiling is 1.5–1.8x over the current port.
+
+One caveat found the hard way: `objects(s) = vcat(s.letters, s.groups)` is
+called from 111 sites and looks like the biggest prize, but rewriting it to
+return a `Vector{Union{Letter,Group}}` **breaks the build**. The `workspace`,
+`cm` and `bonds` probes deliberately load the model *before* `groups.jl` exists,
+so naming `Group` in a function defined in `workspace.jl` is an
+`UndefVarError` there — and the whole-model probes do not catch it, because they
+load everything. Run the full thirty-three before believing any optimisation.
 
 ### Not ported
 

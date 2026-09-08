@@ -62,6 +62,13 @@
       (let ((outcome (run-justify-problem i m t a seed limit)))
         (list outcome *codelet-count* *temperature*)))))
 
+;; A whole run before any timing starts, matching the Julia counterpart, which
+;; needs it: its per-problem warm-ups alone left the FIRST problem in the file
+;; absorbing residual compilation and reading ~3x slow. Costs Chez two runs and
+;; buys it nothing, but the two harnesses must have the same shape.
+((ordinary-problem 'abc 'abd 'ijk 99 2000))
+((justify-problem 'abc 'abd 'ijk 'ijl 98 2000))
+
 ;;--- ordinary runs ----------------------------------------------------------
 (timeit-problem "abc:abd::ijk:?"     5 (ordinary-problem 'abc 'abd 'ijk 11 5000))
 (timeit-problem "abc:abd::iijjkk:?"  5 (ordinary-problem 'abc 'abd 'iijjkk 12 5000))

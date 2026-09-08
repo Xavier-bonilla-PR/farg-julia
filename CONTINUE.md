@@ -1319,7 +1319,7 @@ not a regression: the codelet counts are identical to the earlier run.
 per individual trial). Throughput 21,463 codelets/s Python vs 142,516 Julia.
 Table in `README.md`, raw data in `copycat/results/benchmark.json`.
 
-### Metacat — 3.3x
+### Metacat — 3.4x
 
 Three benchmarks, all in `metacat/bench/benchmark.py`:
 
@@ -1328,13 +1328,13 @@ aggregate:
 
 | workload | iterations | Chez (s) | Julia (s) | speedup | checksum |
 |---|---:|---:|---:|---:|---:|
-| slipnet-50-cycles | 400 | 0.522 | 0.022 | 24.2x | 4800 |
-| workspace-init | 2000 | 0.692 | 0.237 | 2.9x | 1720000 |
-| concept-mappings | 2000 | 1.208 | 0.396 | 3.0x | 14268000 |
-| bonds-and-groups | 2000 | 2.377 | 0.580 | 4.1x | 2096000 |
-| themespace-50-cycles | 200 | 1.782 | 0.111 | 16.1x | 9506200 |
-| **full-runs** | 20 | 7.764 | 2.756 | **2.8x** | 59320 |
-| **justify-runs** | 20 | 5.399 | 2.112 | **2.6x** | 46220 |
+| slipnet-50-cycles | 400 | 0.514 | 0.021 | 24.5x | 4800 |
+| workspace-init | 2000 | 0.713 | 0.241 | 3.0x | 1720000 |
+| concept-mappings | 2000 | 1.203 | 0.142 | 8.5x | 14268000 |
+| bonds-and-groups | 2000 | 2.446 | 0.602 | 4.1x | 2096000 |
+| themespace-50-cycles | 200 | 1.894 | 0.101 | 18.8x | 9506200 |
+| **full-runs** | 20 | 7.762 | 2.040 | **3.8x** | 59320 |
+| **justify-runs** | 20 | 5.420 | 1.387 | **3.9x** | 46220 |
 
 **Quote the whole-model rows, not the layer ones.** Each layer workload
 exercises one thing in a tight loop and flatters whichever implementation suits
@@ -1345,7 +1345,7 @@ Metacat is pointer-chasing over a graph, where the advantage is 2.5-4x.
 `metacat_problems.{ss,jl}` — the model one problem at a time, nine problems,
 five runs each, memory cleared between runs, all reaching an answer under a
 5,000-codelet budget. Checksum is outcome + codelets + final temperature.
-Speedups run 2.8x-3.5x and are strikingly flat: the ratio barely moves with
+Speedups run 3.2x-3.8x and are strikingly flat: the ratio barely moves with
 problem size, with whether the run hits a snag, or with justify mode, because
 Metacat's per-cycle machinery dominates whatever the codelet did. Table in
 `README.md`, raw data in `metacat/results/benchmark.json`.
@@ -1354,13 +1354,13 @@ Metacat's per-cycle machinery dominates whatever the codelet did. Table in
 
 | | Chez | Julia | |
 |---|---:|---:|---|
-| Metacat, 618 codelets | 0.76 s | 30.80 s | Julia **40x slower** |
+| Metacat, 618 codelets | 0.70 s | 32.35 s | Julia **46x slower** |
 | Copycat, `ijk`, 1 iteration (Python vs Julia) | 0.08 s | 6.16 s | Julia **77x slower** |
 
 This is the honest counterweight and the driver prints it deliberately. Julia
 compiles the port before it can run a codelet; for Metacat's 13,670 lines that
 is ~30 s, far more than a small problem costs. **The ports lose outright on a
-single run.** Break-even is ~43 s of Chez model time (~190 runs of the
+single run.** Break-even is ~45 s of Chez model time (~240 runs of the
 benchmark's average size) for Metacat, ~7 s of Python model time (~150,000
 codelets, one `mrrjjj`) for Copycat. Past that it is all profit; below it, use
 the original.
@@ -1372,7 +1372,36 @@ activations after 50 cycles, by which point everything had decayed to zero on
 both sides. It now accumulates the trajectory across cycles instead, which is
 what actually distinguishes the two runs.
 
-Give the Julia side **two** warm-up iterations, not one, and give the Scheme
-side the same for symmetry. With one, the first problem in the file is still
-paying for compilation inside the timed loop and reads ~2.4x slow; the rest of
-the file is unaffected, which makes it easy to miss.
+Warm up TWICE per problem AND once globally before any timing, on both sides.
+Neither alone is enough. With one per-problem warm-up the first problem in the
+file reads ~2.4x slow; with two it still did so intermittently, because until
+something has run end to end there are paths no warm-up of that problem has
+reached. `metacat_problems.{ss,jl}` now run a throwaway ordinary problem and a
+throwaway justify problem before the first timed one, and the per-problem
+spread went from 1.0x-3.8x to a tight 3.2x-3.8x.
+
+### Where the remaining Julia overhead is — profiled 2026-09-08
+
+A sampling profile attributing each overhead sample to the model function
+responsible (dispatch ~21%, GC/alloc ~23%, runtime field access ~3%) found the
+two `distinguishing_descriptor` methods were **~12% of a whole run** on their
+own. `WorkspaceString.letters` and `.groups` are declared `Vector{WSObject}`
+because of the WorkspaceString-to-Letter/Group definition cycle, so
+`other.descriptions` was resolved at runtime. Instrumenting six problems shows
+those vectors — and `bonds`, `outgoing_bonds`, `incoming_bonds` and
+`proposed_groups`, all `Vector{Any}` — are **homogeneous at runtime**. Naming
+the type on the loop variable is worth **1.16x whole-model**, verified 33/33,
+and is now in `workspace.jl` and `groups.jl` with an `NB:` note.
+
+After it the profile is flat: worst single site 2.4%, top ten all 0.4-2.4%.
+Collecting the rest means typing the fields themselves, which needs the cycle
+broken properly (arena plus integer indices). Ceiling estimate 1.5-1.8x over the
+current port.
+
+**Do not rewrite `objects()` to return `Vector{Union{Letter,Group}}`.** It is
+called from 111 sites and looks like the biggest prize, but `workspace`, `cm`
+and `bonds` load the model before `groups.jl` exists, so naming `Group` in a
+`workspace.jl` function is an `UndefVarError` in those three probes. The
+whole-model probes pass, which is exactly what makes it a trap — `run`,
+`justifymode`, `runloop`, `groupcodelets`, `bridgecodelets` and `themecodelets`
+all went green on a build that could not load. Run all thirty-three.

@@ -60,6 +60,13 @@ justify_problem(i, m, t, a, seed, limit) = function ()
     return (outcome, ctx.codelet_count, ctx.temperature)
 end
 
+# A whole run before any timing starts. The per-problem warm-ups are not enough
+# on their own: the FIRST problem in the file still absorbed residual
+# compilation and intermittently read ~3x slow, because until something has run
+# end to end there are code paths no warm-up of that problem has reached.
+ordinary_problem("abc", "abd", "ijk", 99, 2000)()
+justify_problem("abc", "abd", "ijk", "ijl", 98, 2000)()
+
 #--- ordinary runs -----------------------------------------------------------
 timeit_problem("abc:abd::ijk:?",     5, ordinary_problem("abc", "abd", "ijk", 11, 5000))
 timeit_problem("abc:abd::iijjkk:?",  5, ordinary_problem("abc", "abd", "iijjkk", 12, 5000))
