@@ -6,7 +6,7 @@ Because the two implementations share a bit-exact RNG stream, a given
 codelets. The codelet counts are asserted equal, so the timings compare the
 same work rather than two different random walks.
 
-Writes results/benchmark.json and prints a summary table.
+Writes results/benchmark.json and results/benchmark.txt, and prints the table.
 """
 import argparse
 import json
@@ -86,30 +86,35 @@ def main():
                    'results': results}, fh, indent=1)
 
     # aggregate per problem
-    print('%-24s %9s %10s %10s %10s %8s' %
-          ('problem', 'codelets', 'python s', 'julia s', 'py+log s', 'speedup'))
-    print('-' * 76)
+    report = ['%-24s %9s %10s %10s %10s %8s' %
+              ('problem', 'codelets', 'python s', 'julia s', 'py+log s', 'speedup'),
+              '-' * 76]
     for problem in PROBLEMS:
         rows = [r for r in results if r['problem'] == list(problem)]
         name = '%s:%s::%s:?' % problem
-        print('%-24s %9d %10.3f %10.3f %10.3f %7.1fx' % (
+        report.append('%-24s %9d %10.3f %10.3f %10.3f %7.1fx' % (
             name, sum(r['codelets'] for r in rows) // len(rows),
             statistics.mean(r['python_s'] for r in rows),
             statistics.mean(r['julia_s'] for r in rows),
             statistics.mean(r['python_logging_s'] for r in rows),
             statistics.mean(r['speedup'] for r in rows)))
-    print('-' * 76)
+    report.append('-' * 76)
     tot_py = sum(r['python_s'] for r in results)
     tot_jl = sum(r['julia_s'] for r in results)
     tot_cod = sum(r['codelets'] for r in results)
-    print('%-24s %9d %10.3f %10.3f %10.3f %7.1fx' % (
+    report.append('%-24s %9d %10.3f %10.3f %10.3f %7.1fx' % (
         'TOTAL', tot_cod, tot_py, tot_jl,
         sum(r['python_logging_s'] for r in results), tot_py / tot_jl))
-    print()
-    print('throughput: python %.0f codelets/s, julia %.0f codelets/s' %
-          (tot_cod / tot_py, tot_cod / tot_jl))
-    print('julia process wall (warm run incl. startup+JIT): %.2f s avg' %
-          statistics.mean(r['julia_cold_process_wall_s'] for r in results))
+    report.append('')
+    report.append('throughput: python %.0f codelets/s, julia %.0f codelets/s' %
+                  (tot_cod / tot_py, tot_cod / tot_jl))
+    report.append('julia process wall (cold run incl. startup+JIT): %.2f s avg' %
+                  statistics.mean(r['julia_cold_process_wall_s'] for r in results))
+
+    text = '\n'.join(report)
+    print(text)
+    with open(os.path.join(os.path.dirname(opts.out), 'benchmark.txt'), 'w') as fh:
+        fh.write(text + '\n')
 
 
 if __name__ == '__main__':

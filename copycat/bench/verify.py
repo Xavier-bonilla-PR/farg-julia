@@ -63,7 +63,9 @@ def main():
     ap.add_argument('--seeds', type=int, nargs='+', default=[1, 2, 3])
     ap.add_argument('--julia', default=os.environ.get('JULIA', 'julia'))
     ap.add_argument('--timeout', type=int, default=180)
-    ap.add_argument('--trace-codelets', type=int, default=4000)
+    # 5000 is what results/verify.log was produced at, and what README.md
+    # quotes; both trace scripts finish it in seconds, well inside --timeout.
+    ap.add_argument('--trace-codelets', type=int, default=5000)
     opts = ap.parse_args()
 
     fails = ok = 0

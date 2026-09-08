@@ -1211,11 +1211,22 @@ copycat/results/          Copycat benchmark + verification output
 metacat/julia/src/        Metacat port (the model is complete)
 metacat/scheme/metacat/   Metacat reference, GPL-2, vendored
 metacat/scheme/headless/  makes Metacat run without its SWL GUI
-metacat/bench/            probe pairs, verifier, benchmark, audit scripts
+metacat/bench/            runners, probe pairs, verifier, benchmark, audits
+metacat/results/          Metacat benchmark + verification output
 
 README.md                 project overview and results
 metacat/scheme/README.md  how the headless harness works and why
 ```
+
+Each model has a matched pair of CLI runners that print the same block, so a
+single problem can be diffed between implementations without a probe:
+
+```bash
+scheme --quiet --script metacat/bench/run_metacat_scm.ss abc cba pqrs 42 5000
+cd metacat/bench && julia run_metacat_jl.jl abc cba pqrs 42 5000
+```
+
+Both take `--answer <string>` to run in justify mode.
 
 Two audit scripts, both run from the repo root and neither needing Julia:
 
@@ -1283,37 +1294,85 @@ harness has `give-up` record which it was, so `run-problem` can return
 
 ## 8. Benchmarks
 
-Copycat is fully benchmarked (`copycat/results/benchmark.json`, table in
-`README.md`): **7.5x** over 1.4M codelets, range 3.3x–11.3x per problem.
+One driver per model. Each asserts the two implementations did the same work
+before reporting any timing, writes `results/benchmark.{json,txt}`, and prints
+the table:
 
-Metacat has a harness (`metacat/bench/metacat_bench.{ss,jl}`), seven workloads,
-all with matching checksums. Five are micro-benchmarks of layers. The last two
-are **the model**: three problems run from `init-mcat` to an answer or a
-2,000-codelet budget, twenty times over — `full-runs` ordinarily,
-`justify-runs` with the fourth string — checksummed on codelet count, final
-temperature and whether an answer was found, so a run that got faster by doing
-different work would not pass.
+```bash
+python3 copycat/bench/benchmark.py --iterations 10 --seeds 1 2 3
+python3 metacat/bench/benchmark.py
+```
 
-Measured on this tree (Chez 9.5.8, Julia 1.10.9), on an otherwise idle machine:
+**Measure on an idle machine.** Running the verification suite alongside the
+benchmark moved the Metacat layer numbers by a factor of two or more. Expect
+~10% run-to-run variance even when idle; three consecutive whole-benchmark runs
+put Metacat between 3.1x and 3.3x overall.
+
+Everything below was measured on Intel Xeon @ 2.80GHz (4 cores), CPython
+3.11.15, Chez 9.5.8, Julia 1.10.9. **These are ~15% slower across the board
+than the numbers this file carried before 2026-09-08** — that is the machine,
+not a regression: the codelet counts are identical to the earlier run.
+
+### Copycat — 6.6x
+
+1,408,529 codelets over seven problems, range 3.6x-10.1x per problem (2.1x-11.9x
+per individual trial). Throughput 21,463 codelets/s Python vs 142,516 Julia.
+Table in `README.md`, raw data in `copycat/results/benchmark.json`.
+
+### Metacat — 3.3x
+
+Three benchmarks, all in `metacat/bench/benchmark.py`:
+
+`metacat_bench.{ss,jl}` — five layer micro-benchmarks plus the model in
+aggregate:
 
 | workload | iterations | Chez (s) | Julia (s) | speedup | checksum |
 |---|---:|---:|---:|---:|---:|
-| slipnet-50-cycles | 400 | 0.486 | 0.018 | 27.1x | 4800 |
-| workspace-init | 2000 | 0.610 | 0.255 | 2.4x | 1720000 |
-| concept-mappings | 2000 | 1.044 | 0.374 | 2.8x | 14268000 |
-| bonds-and-groups | 2000 | 2.240 | 0.621 | 3.6x | 2096000 |
-| themespace-50-cycles | 200 | 1.673 | 0.093 | 18.0x | 9506200 |
-| **full-runs** | 20 | 7.591 | 2.202 | **3.4x** | 59320 |
-| **justify-runs** | 20 | 5.223 | 1.521 | **3.4x** | 46220 |
+| slipnet-50-cycles | 400 | 0.522 | 0.022 | 24.2x | 4800 |
+| workspace-init | 2000 | 0.692 | 0.237 | 2.9x | 1720000 |
+| concept-mappings | 2000 | 1.208 | 0.396 | 3.0x | 14268000 |
+| bonds-and-groups | 2000 | 2.377 | 0.580 | 4.1x | 2096000 |
+| themespace-50-cycles | 200 | 1.782 | 0.111 | 16.1x | 9506200 |
+| **full-runs** | 20 | 7.764 | 2.756 | **2.8x** | 59320 |
+| **justify-runs** | 20 | 5.399 | 2.112 | **2.6x** | 46220 |
 
-**Quote the full-runs and justify-runs numbers, not the others.** The layer
-workloads exercise one thing in a tight loop and flatter whichever
-implementation happens to suit it; only the two whole-run workloads have the
-model's real mixture of work. Measure on an idle machine: running the
-verification suite alongside the benchmark moved the layer numbers by a factor
-of two or more.
+**Quote the whole-model rows, not the layer ones.** Each layer workload
+exercises one thing in a tight loop and flatters whichever implementation suits
+it. The two 16-24x rows are numeric loops over fixed arrays (slipnet and
+themespace activation); they are a small fraction of a real run, and the rest of
+Metacat is pointer-chasing over a graph, where the advantage is 2.5-4x.
 
-When adding a workload, check the checksum is not trivially constant: the
-themespace one summed activations after 50 cycles, by which point everything
-had decayed to zero on both sides. It now accumulates the trajectory across
-cycles instead, which is what actually distinguishes the two runs.
+`metacat_problems.{ss,jl}` — the model one problem at a time, nine problems,
+five runs each, memory cleared between runs, all reaching an answer under a
+5,000-codelet budget. Checksum is outcome + codelets + final temperature.
+Speedups run 2.8x-3.5x and are strikingly flat: the ratio barely moves with
+problem size, with whether the run hits a snag, or with justify mode, because
+Metacat's per-cycle machinery dominates whatever the codelet did. Table in
+`README.md`, raw data in `metacat/results/benchmark.json`.
+
+**Time to first answer** — one cold process, `abc cba pqrs 42 5000`, best of 3:
+
+| | Chez | Julia | |
+|---|---:|---:|---|
+| Metacat, 618 codelets | 0.76 s | 30.80 s | Julia **40x slower** |
+| Copycat, `ijk`, 1 iteration (Python vs Julia) | 0.08 s | 6.16 s | Julia **77x slower** |
+
+This is the honest counterweight and the driver prints it deliberately. Julia
+compiles the port before it can run a codelet; for Metacat's 13,670 lines that
+is ~30 s, far more than a small problem costs. **The ports lose outright on a
+single run.** Break-even is ~43 s of Chez model time (~190 runs of the
+benchmark's average size) for Metacat, ~7 s of Python model time (~150,000
+codelets, one `mrrjjj`) for Copycat. Past that it is all profit; below it, use
+the original.
+
+### Adding a workload
+
+Check the checksum is not trivially constant: the themespace one summed
+activations after 50 cycles, by which point everything had decayed to zero on
+both sides. It now accumulates the trajectory across cycles instead, which is
+what actually distinguishes the two runs.
+
+Give the Julia side **two** warm-up iterations, not one, and give the Scheme
+side the same for symmetry. With one, the first problem in the file is still
+paying for compilation inside the timed loop and reads ~2.4x slow; the rest of
+the file is unaffected, which makes it easy to miss.
