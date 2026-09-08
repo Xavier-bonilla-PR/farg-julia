@@ -6,9 +6,9 @@ toolchain, nothing cached. Start here.
 **Branch:** `claude/copycat-metacat-folders-iybxko` — on the GitHub remote
 `Xavier-bonilla-PR/farg-julia`. All work goes here; do not push elsewhere.
 
-**State at time of writing: THE PORT IS COMPLETE.** Every non-graphics line of
-Metacat's Scheme is ported, including justify mode, and the Julia matches the
-Scheme run for run in both configurations: `run-problem` for an ordinary run,
+**State at time of writing: THE MODEL IS COMPLETE.** Every line of Metacat's
+Scheme that decides what the model does is ported, including justify mode, and
+the Julia matches the Scheme run for run in both configurations: `run-problem` for an ordinary run,
 `run-justify-problem` for a justify one. Same answers, same codelet counts, same
 temperatures, same trace, same memory, on runs up to 20,000 codelets with
 reminding live. `%self-watching-enabled%` is ON, which is the model's real
@@ -26,10 +26,25 @@ codelet-type clamp, the rebuilt group that costs a rule its support, the rule
 whose strength was never updated, the bottom bridge that could never be found
 equivalent to itself, and the target string with only one partner.
 
-**Next up:** nothing is outstanding. What is left is discretionary — see
-section 6's closing note for the short list (an `answers.ss` commentary hook
-nothing calls, the `joots-from-justify-clamps` arm no probe has reached yet,
-and the graphics, which are deliberately out of scope).
+**Next up: the RUNNING NARRATION.** A definition-by-definition audit on
+2026-09-07 (`metacat/bench/audit_coverage.sh`) confirmed the model has no gaps
+— every name it flagged turned out to be a deliberate rename, a struct, a
+flattened closure, or code that is dead in the Scheme itself. But it found one
+real omission outside the model: Metacat narrates itself as it runs, and those
+thirteen `add-comment` sites (151 lines) are not ported. The machinery behind
+them IS — `explain`, `get_answer_comparison_text`, `answer_quality_phrase`,
+`get_snag_explanation`, `how_strings_change` — so what is missing is the
+sentences that wrap them and the emission.
+
+Read the audit note after step 8 in section 6 before starting: it has the site
+list, the suggested shape, and the two facts that make this cheap (the Scheme
+already computes all of it on every probe run and discards it, and the
+arguments have no side effects). `metacat/bench/audit_narration.sh` prints the
+sites.
+
+Do NOT trust the alarm table's old verdict on this. It read "never — it is
+graphics" for months and was wrong; that row is now corrected and explains how
+the mistake was made, which is the same lesson section 5 draws twice already.
 
 **Toolchain this state was verified against** (section 1 installs exactly
 these): Chez Scheme **9.5.8**, Julia **1.10.9**, Python **3.11.15**. The Julia
@@ -164,7 +179,12 @@ ported to Julia (`copycat/julia/src/*.jl`). Verified by bit-exact RNG parity:
 51/51 comparisons byte-identical. Benchmarked at **7.5x** faster than Python
 over 1.4M codelets (`copycat/results/benchmark.json`). Nothing outstanding.
 
-### Metacat — **complete**: every non-graphics line, in both configurations, verified run for run
+### Metacat — **the model is complete**: every line that decides what it does, in both configurations, verified run for run
+
+Thirty-three probes, 39,946 lines byte-identical. One non-graphics gap remains
+and it is not in the model: the RUNNING NARRATION, 151 lines across 13
+`add-comment` sites. That is the next piece of work — see the audit note after
+step 8 in section 6.
 
 | layer | Julia file | probe | lines |
 |---|---|---|---:|
@@ -517,10 +537,10 @@ by reading the code.
 
 ## 6. How it was built, in order — and what is left
 
-**Every Scheme file is ported.** The steps below are all done; they are kept for
-the "not ported, deliberately" notes buried in them, and for the traps each
-layer cost. The closing note after step 8 has what remains, all of it
-discretionary.
+**Every Scheme file's model code is ported.** The steps below are all done;
+they are kept for the "not ported, deliberately" notes buried in them, and for
+the traps each layer cost. The audit note after step 8 has what remains: one
+real gap (the narration), and two things properly out of scope.
 
 0. ~~`themes.ss`~~ — **done.** `themes.jl` covers the themespace, its clusters
    and their recurrent dynamics, freezing and deletion, theme patterns, the
@@ -943,16 +963,96 @@ discretionary.
 
 ~~`breakers.ss` (47)~~ — **done**, as `codelets_breaker.jl`.
 
-**Nothing is outstanding.** What is left is discretionary:
+### What is left — audited definition by definition, 2026-09-07
 
-- `joots-from-justify-clamps`, above — ported, never yet exercised.
-- The `*comment-window*` prose individual codelets write as they run
-  (`how-strings-change`, the two `joots-from-*-clamps` messages). The
-  commentary proper is in `commentary.jl`; these are one-line asides, and
-  nothing reads them back.
-- The GRAPHICS, which are out of scope by design: `metacat/scheme/metacat/`
-  vendors them, `headless/load-core.ss` skips them, and the port has no GUI.
-  That is the boundary the whole project was drawn around.
+The audit was a mechanical diff: every top-level `(define ...)` in the 29
+non-graphics Scheme files, matched against the Julia by name and then, where
+the name did not match, by hand. It is committed as
+`metacat/bench/audit_coverage.sh` — re-run it after any new layer. It threw
+about eighty "unmatched" names; every one of them resolved into one of four
+things, so treat a name it prints as "look at this", never as "port this".
+
+**(a) Renames the port made on purpose.** The Scheme has eight pairs of
+horizontal/vertical twins — `incompatible-horizontal-bridges?` /
+`incompatible-vertical-bridges?`, `supporting-horizontal-CMs?` /
+`supporting-vertical-CMs?`, and six more. The port has ONE
+orientation-parameterised function each (`get_incompatible_bridges(b,
+:horizontal, net)`). Same behaviour; do not "restore" the twins.
+
+**(b) Constructors, accessors and globals** that became structs, fields and
+`CONST_NAMES`: `make-coderack-bin`, `schema-dim`, `*slipnet-nodes*`.
+
+**(c) Curried closures flattened.** `theme-support-tester` returns a
+predicate; the port passes the arguments directly as
+`themes_support(a, b, themes, net)`.
+
+**(d) Dead code in the Scheme.** Five definitions with ZERO non-defining call
+sites anywhere in the non-graphics corpus — Marshall wrote them and never
+wired them up. Correctly absent from the port, and they should stay absent:
+`propose-singleton-group` and `try-to-propose-singleton-group` (`bridges.ss`),
+`bonds-equal?` (`bonds.ss`), `highest-level-object` (`workspace-objects.ss`),
+`current-translation-temperature-threshold-distribution` (`formulas.ss`).
+
+That leaves ONE genuine gap in non-graphics code, and two things that are
+properly out of scope.
+
+**THE ONE GAP: the running narration — 151 lines across 13 `add-comment`
+sites.** This is the next piece of work, and it is worth doing.
+
+Metacat narrates itself as it runs. Thirteen sites hand the comment window a
+PAIR of strings — a first-person sentence and a terse log line:
+
+```
+"Okay, I'm stumped.  This answer makes no sense to me."  /  "Run terminated.  Unable to make the necessary ~a slippage~a."
+"Aha!  I see why this answer makes sense"                /  "Successfully justified answer.  Answer quality = ~a."
+"Uh-oh, I seem to have run into a little problem~a."     /  "Hit ~a snag:  ~a."
+"Excuse me -- I think I'll go get some more punch."      /  "Run terminated."
+```
+
+The sites are `answers.ss` 36/47/61/89/326/431/1164, `jootsing.ss`
+175/183/319, `memory.ss` 215, `trace.ss` 137/592. `bash
+metacat/bench/audit_narration.sh` lists them with brace-matched sizes; re-run
+it rather than trusting the number above.
+
+The INGREDIENTS are all already ported — `explain`, `get_answer_comparison_text`
+and `answer_quality_phrase` in `commentary.jl`, `get_snag_explanation`,
+`how_strings_change` in `codelets_jootsing.jl`, and the unjustified-slippage
+english-names. What is missing is the sentences that wrap them and the
+emission itself.
+
+Two facts make this cheap and safe to do:
+
+- **It is free to test.** `harness.ss` stubs `*comment-window*` as
+  `(lambda msg (void))`, and Chez still EVALUATES the arguments. So the Scheme
+  computes all 151 lines of this on every probe run today and discards the
+  result. Replacing that one stub with a printer gives a `narration` probe with
+  no change to the model at all.
+- **The arguments have no side effects.** Every state change at these sites
+  (`update-progress-achieved`, `update-activation`, `add-event`) happens BEFORE
+  the `add-comment`; the arguments only format. That is consistent with the 33
+  probes already being byte-identical without any of this.
+
+Suggested shape: a `narration.jl` alongside `commentary.jl`, a `NARRATION`
+sink on the context so a headless run can collect the pairs, and a
+`metacat_narration_probe.{ss,jl}` that runs the same problems as the `run` and
+`justifymode` probes and prints both halves of every pair in order. The order
+is the test: it says when the model spoke, not just what it would have said.
+
+`print-pattern` (`trace.ss` 1477, 8 call sites) belongs with this. The pattern
+SEMANTICS — equality, complement, type tests — are all in `trace.jl`; only the
+pretty-printer is missing.
+
+**Out of scope, correctly.**
+
+- The INTERACTIVE console halves: `run.ss`'s ten debugger commands
+  (`runtil`, step mode, breakpoints, `prompt`, `quiet-break`) and `themes.ss`'s
+  manual theme API (`set-themes`, `freeze-themes`, `unfreeze-themes`,
+  `clear-themes`, `ignore-themes`, plus the `bot`/`ver`/`lcat`/`opp` shorthand
+  symbols). All of it hands control back to the SWL repl. Note that the
+  `set-themes` "uses" are all COMMENTS — a worked example in `themes.ss` 1206.
+- The GRAPHICS: 7,017 lines across 16 files. `metacat/scheme/metacat/` vendors
+  them, `headless/load-core.ss` skips them, the port has no GUI. That is the
+  boundary the whole project was drawn around.
 
 ### Known stubs and deliberate omissions
 
@@ -968,6 +1068,11 @@ what the probes print. The swap entry sat here for months on the strength of
 measuring the absence of a phrase, not the absence of the behaviour. Before
 believing such an entry, instrument the function itself and count the calls.
 
+The comment-window row failed the same way for a different reason: it was
+dismissed as GRAPHICS. Check that kind of claim too, by asking where the
+strings are COMPUTED rather than where they are displayed. A `printf` to a
+stubbed window is still model output.
+
 | where | what is missing | when it becomes wrong |
 |---|---|---|
 | ~~`:answer_finder`~~ | **done** — the real procedure is attached in `answers.jl` | — |
@@ -978,11 +1083,12 @@ believing such an entry, instrument the function itself and count the calls.
 | ~~`top-down-bond-scout:category` and `:direction`~~ | **done**, with the run loop, exactly when the alarm said they would be needed | — |
 | ~~justify mode~~ | **done** — all 64 branches, probe `justifymode` | — |
 | ~~`joots_from_justify_clamps`~~ | **covered**, by the `justifymode` probe's `unjustified` problem — found by instrumenting the arm and sweeping, not by grepping traces | — |
-| the `*comment-window*` sends | the prose is all ported (`commentary.jl`); what is dropped is the DRAWING of it, and the running commentary individual codelets write about what they just did (`how-strings-change`, the two `joots-from-*-clamps` messages) | never — it is graphics |
+| **the `*comment-window*` sends** — **OPEN, and this row used to be wrong** | the RUNNING NARRATION: 151 lines across 13 `add-comment` sites. This row said "never — it is graphics". That is the same FAMILY of error as the swap and jootsing rows, though not the same shape: those two dismissed a behaviour as unreached, this one dismissed it as out of scope, and all three were believed for months without anyone checking the claim against the source. `*comment-window*` is a GUI widget, but the strings handed to it are computed by MODEL code, and each send carries a terse log variant that is exactly what a headless run would print. The ingredients are ported (`commentary.jl`, `answer_quality_phrase`, `get_snag_explanation`, `how_strings_change`); the sentences and the emission are not | **already** — it is the model's own voice, and the one non-graphics gap left. See the audit note after step 8 |
+| `print-pattern` (`trace.ss`) | the pattern PRETTY-PRINTER. The semantics — equality, complement, type tests — are all in `trace.jl` | with the narration above; same layer |
 | the run.ss INTERACTIVE half | breakpoints, step mode, `go`, `rerun`, `runtil` | never headless — all of it hands control back to the SWL repl |
 | the GRAPHICS | out of scope by design: vendored, skipped by `load-core.ss`, no GUI in the port | never — it is the boundary the project was drawn around |
 | themespace state save/restore | not ported | only the GUI history browser uses it |
-| `propose-singleton-group` (`bridges.ss`) | not ported | never — nothing in the model calls it |
+| five DEAD Scheme definitions | `propose-singleton-group`, `try-to-propose-singleton-group`, `bonds-equal?`, `highest-level-object`, `current-translation-temperature-threshold-distribution` | never — the 2026-09-07 audit confirmed ZERO non-defining call sites for each in the whole non-graphics corpus |
 
 The rule is the one in section 5: a stub justified by "this state cannot arise
 yet" needs a probe the moment that state can arise. Adding a layer means
@@ -1102,14 +1208,24 @@ copycat/python/           Copycat reference, MIT, vendored
 copycat/bench/            runners, verifier, benchmark
 copycat/results/          Copycat benchmark + verification output
 
-metacat/julia/src/        Metacat port (in progress)
+metacat/julia/src/        Metacat port (the model is complete)
 metacat/scheme/metacat/   Metacat reference, GPL-2, vendored
 metacat/scheme/headless/  makes Metacat run without its SWL GUI
-metacat/bench/            probe pairs, verifier, benchmark
+metacat/bench/            probe pairs, verifier, benchmark, audit scripts
 
 README.md                 project overview and results
 metacat/scheme/README.md  how the headless harness works and why
 ```
+
+Two audit scripts, both run from the repo root and neither needing Julia:
+
+```bash
+bash metacat/bench/audit_coverage.sh    # Scheme defines with no Julia match
+bash metacat/bench/audit_narration.sh   # the 13 add-comment sites, sized
+```
+
+`audit_coverage.sh` is a screen, not a verdict — see the note after step 8 for
+the four kinds of false positive it reports and why none of them is a bug.
 
 ### Licences — they differ
 

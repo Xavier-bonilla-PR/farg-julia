@@ -298,11 +298,20 @@ temperatures, same trace, same memory.
 
 ### How much is done
 
-**All of it.** Every non-graphics line of Metacat's Scheme is ported, in both
-of the model's configurations, and verified run for run against the original.
-Given a problem and a seed, the Julia port initializes itself, posts its own
-codelets, and runs until it finds an answer, gives up, or exhausts a codelet
-budget — in step with the Scheme the whole way.
+**The whole model.** Every line of Metacat's Scheme that decides what the model
+does is ported, in both of the model's configurations, and verified run for run
+against the original. Given a problem and a seed, the Julia port initializes
+itself, posts its own codelets, and runs until it finds an answer, gives up, or
+exhausts a codelet budget — in step with the Scheme the whole way.
+
+One thing that is not the graphics is still missing, and it is worth naming
+rather than rounding away: the **running narration**. Metacat talks to itself
+as it works — *"Uh-oh, I seem to have run into a little problem"*, *"Okay, I'm
+stumped"*, *"Excuse me — I think I'll go get some more punch"* — and those
+thirteen asides are not ported yet. The machinery behind them is: the port can
+already explain an answer, compare two of them, name a snag and say how one
+string changes into another. What it does not yet do is say those things out
+loud, at the moment it thinks them.
 
 All three perceptual structures — bonds, groups and bridges — build, fight and
 break each other through the real coderack. The self-watching loop is closed in
