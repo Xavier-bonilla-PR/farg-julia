@@ -1,0 +1,409 @@
+{
+ "iterations": 10,
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "results": [
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "ijk"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 16798,
+   "python_s": 0.6416483530001642,
+   "python_logging_s": 1.1360676829999647,
+   "julia_s": 0.108722981,
+   "python_process_wall_s": 0.7711465219999809,
+   "julia_process_wall_s": 6.840415391000079,
+   "julia_cold_process_wall_s": 5.995661026000107,
+   "speedup": 5.901681016271659,
+   "python_codelets_per_s": 26179.448480553805,
+   "julia_codelets_per_s": 154502.75411414632
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "ijk"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 16664,
+   "python_s": 0.5703105840002536,
+   "python_logging_s": 1.0780102879998594,
+   "julia_s": 0.125147976,
+   "python_process_wall_s": 0.6883124789997055,
+   "julia_process_wall_s": 5.71296447099985,
+   "julia_cold_process_wall_s": 5.721926285999871,
+   "speedup": 4.557089952459588,
+   "python_codelets_per_s": 29219.166656729256,
+   "julia_codelets_per_s": 133154.3707906231
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "ijk"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 17552,
+   "python_s": 0.6315899169999284,
+   "python_logging_s": 1.1495878009995977,
+   "julia_s": 0.302033915,
+   "python_process_wall_s": 0.7619902330002333,
+   "julia_process_wall_s": 5.9620468119996985,
+   "julia_cold_process_wall_s": 5.78709328900004,
+   "speedup": 2.0911225052323292,
+   "python_codelets_per_s": 27790.18399054333,
+   "julia_codelets_per_s": 58112.67916717234
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "iijjkk"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 38129,
+   "python_s": 1.8225264009997773,
+   "python_logging_s": 3.0199024949997693,
+   "julia_s": 0.280769765,
+   "python_process_wall_s": 2.0079929880002965,
+   "julia_process_wall_s": 6.307674389000113,
+   "julia_cold_process_wall_s": 6.368599897999957,
+   "speedup": 6.491177570347638,
+   "python_codelets_per_s": 20920.95893869285,
+   "julia_codelets_per_s": 135801.65941300694
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "iijjkk"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 44487,
+   "python_s": 2.249715524000294,
+   "python_logging_s": 3.7571943560001273,
+   "julia_s": 0.40293466,
+   "python_process_wall_s": 2.436337875999925,
+   "julia_process_wall_s": 6.231485051999698,
+   "julia_cold_process_wall_s": 6.3052285589997155,
+   "speedup": 5.5833259020216675,
+   "python_codelets_per_s": 19774.500164756915,
+   "julia_codelets_per_s": 110407.47896941901
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "iijjkk"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 59073,
+   "python_s": 2.9827937489999385,
+   "python_logging_s": 4.77608731600003,
+   "julia_s": 0.384152603,
+   "python_process_wall_s": 3.1680045490002158,
+   "julia_process_wall_s": 6.5565423680000094,
+   "julia_cold_process_wall_s": 6.264887787000134,
+   "speedup": 7.764606371806724,
+   "python_codelets_per_s": 19804.587568217146,
+   "julia_codelets_per_s": 153774.82682318307
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "mrrjjj"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 86383,
+   "python_s": 5.509058235999873,
+   "python_logging_s": 8.516846393999913,
+   "julia_s": 0.73492894,
+   "python_process_wall_s": 9.08854092699994,
+   "julia_process_wall_s": 8.559708688000228,
+   "julia_cold_process_wall_s": 8.005471213999954,
+   "speedup": 7.496042047275854,
+   "python_codelets_per_s": 15680.175503594364,
+   "julia_codelets_per_s": 117539.25488360821
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "mrrjjj"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 110979,
+   "python_s": 6.017878012999972,
+   "python_logging_s": 9.601495477000299,
+   "julia_s": 0.627447096,
+   "python_process_wall_s": 9.800369832999877,
+   "julia_process_wall_s": 6.862431705999825,
+   "julia_cold_process_wall_s": 6.520317322999745,
+   "speedup": 9.591052459026717,
+   "python_codelets_per_s": 18441.550287370457,
+   "julia_codelets_per_s": 176873.87623194928
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "mrrjjj"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 247884,
+   "python_s": 12.204934410999613,
+   "python_logging_s": 20.064743760000056,
+   "julia_s": 1.471366286,
+   "python_process_wall_s": 15.758205001000078,
+   "julia_process_wall_s": 8.744211557999733,
+   "julia_cold_process_wall_s": 9.319828357999995,
+   "speedup": 8.294966744262897,
+   "python_codelets_per_s": 20310.146015745588,
+   "julia_codelets_per_s": 168471.98577173325
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "ppqqrr"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 38129,
+   "python_s": 2.0231096930001513,
+   "python_logging_s": 3.3757663049996154,
+   "julia_s": 0.278001395,
+   "python_process_wall_s": 2.2290967539997837,
+   "julia_process_wall_s": 6.070174728999973,
+   "julia_cold_process_wall_s": 6.262241214999904,
+   "speedup": 7.277336478833681,
+   "python_codelets_per_s": 18846.72894006897,
+   "julia_codelets_per_s": 137153.98802225434
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "ppqqrr"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 44487,
+   "python_s": 2.253381759000149,
+   "python_logging_s": 3.9940983050000796,
+   "julia_s": 0.435285392,
+   "python_process_wall_s": 2.4330910399999084,
+   "julia_process_wall_s": 6.979160237000087,
+   "julia_cold_process_wall_s": 6.608025487000305,
+   "speedup": 5.176791595616305,
+   "python_codelets_per_s": 19742.32720324291,
+   "julia_codelets_per_s": 102201.91354365506
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "ppqqrr"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 59073,
+   "python_s": 2.967170831999738,
+   "python_logging_s": 4.6298528990000705,
+   "julia_s": 0.378862954,
+   "python_process_wall_s": 3.1493716350000796,
+   "julia_process_wall_s": 6.145746493999923,
+   "julia_cold_process_wall_s": 7.856925134999983,
+   "speedup": 7.8317787492089765,
+   "python_codelets_per_s": 19908.863811588326,
+   "julia_codelets_per_s": 155921.81652049307
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "xyz"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 109449,
+   "python_s": 5.580969348000053,
+   "python_logging_s": 8.375931685000069,
+   "julia_s": 0.576509854,
+   "python_process_wall_s": 7.350268447999952,
+   "julia_process_wall_s": 7.917535115999726,
+   "julia_cold_process_wall_s": 7.490795538999919,
+   "speedup": 9.680613972645215,
+   "python_codelets_per_s": 19611.109320860392,
+   "julia_codelets_per_s": 189847.57891059396
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "xyz"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 141171,
+   "python_s": 5.133031705000121,
+   "python_logging_s": 9.020420316999662,
+   "julia_s": 0.432901355,
+   "python_process_wall_s": 6.868273517000034,
+   "julia_process_wall_s": 7.085691474000214,
+   "julia_cold_process_wall_s": 6.13245120900001,
+   "speedup": 11.857277981955315,
+   "python_codelets_per_s": 27502.460166471283,
+   "julia_codelets_per_s": 326104.315381503
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "xyz"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 146298,
+   "python_s": 5.048585674999686,
+   "python_logging_s": 9.163516792999872,
+   "julia_s": 0.585739725,
+   "python_process_wall_s": 6.792535133999991,
+   "julia_process_wall_s": 7.769820778999929,
+   "julia_cold_process_wall_s": 7.788630474999991,
+   "speedup": 8.619162162852597,
+   "python_codelets_per_s": 28978.016699698597,
+   "julia_codelets_per_s": 249766.22509255284
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "kji"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 36033,
+   "python_s": 1.4515651930000786,
+   "python_logging_s": 2.491214859000138,
+   "julia_s": 0.487846445,
+   "python_process_wall_s": 1.6240493189998233,
+   "julia_process_wall_s": 7.123940789000244,
+   "julia_cold_process_wall_s": 7.4401526540000305,
+   "speedup": 2.9754551004262795,
+   "python_codelets_per_s": 24823.549210027144,
+   "julia_codelets_per_s": 73861.35610765801
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "kji"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 24988,
+   "python_s": 0.8801769070000773,
+   "python_logging_s": 1.614798988000075,
+   "julia_s": 0.285729459,
+   "python_process_wall_s": 1.081756445999872,
+   "julia_process_wall_s": 5.876771883999936,
+   "julia_cold_process_wall_s": 5.969397108999601,
+   "speedup": 3.08045558228589,
+   "python_codelets_per_s": 28389.74733518861,
+   "julia_codelets_per_s": 87453.35565836773
+  },
+  {
+   "problem": [
+    "abc",
+    "abd",
+    "kji"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 55280,
+   "python_s": 2.6458357479996266,
+   "python_logging_s": 4.229565067000294,
+   "julia_s": 0.532275644,
+   "python_process_wall_s": 2.810280254999725,
+   "julia_process_wall_s": 7.631436732000111,
+   "julia_cold_process_wall_s": 7.233235094000065,
+   "speedup": 4.970799956421876,
+   "python_codelets_per_s": 20893.209278691702,
+   "julia_codelets_per_s": 103855.96377203387
+  },
+  {
+   "problem": [
+    "abcd",
+    "abcde",
+    "ijkl"
+   ],
+   "seed": 1,
+   "iterations": 10,
+   "codelets": 40905,
+   "python_s": 1.7442055199999231,
+   "python_logging_s": 3.013539475000016,
+   "julia_s": 0.601607195,
+   "python_process_wall_s": 1.9380510549999599,
+   "julia_process_wall_s": 6.018044121999992,
+   "julia_cold_process_wall_s": 5.797597461999885,
+   "speedup": 2.899243118260783,
+   "python_codelets_per_s": 23451.938163801824,
+   "julia_codelets_per_s": 67992.87033127986
+  },
+  {
+   "problem": [
+    "abcd",
+    "abcde",
+    "ijkl"
+   ],
+   "seed": 2,
+   "iterations": 10,
+   "codelets": 36773,
+   "python_s": 1.5378666309998152,
+   "python_logging_s": 2.6203645609998603,
+   "julia_s": 0.490646602,
+   "python_process_wall_s": 1.7577155670001048,
+   "julia_process_wall_s": 5.977444634999756,
+   "julia_cold_process_wall_s": 7.461969431999933,
+   "speedup": 3.134367230367195,
+   "python_codelets_per_s": 23911.696410301018,
+   "julia_codelets_per_s": 74948.03765093639
+  },
+  {
+   "problem": [
+    "abcd",
+    "abcde",
+    "ijkl"
+   ],
+   "seed": 3,
+   "iterations": 10,
+   "codelets": 37994,
+   "python_s": 1.7294440600003327,
+   "python_logging_s": 3.026653516999886,
+   "julia_s": 0.360364275,
+   "python_process_wall_s": 1.930848314999821,
+   "julia_process_wall_s": 5.8575309820002985,
+   "julia_cold_process_wall_s": 5.915026634999776,
+   "speedup": 4.799155132678822,
+   "python_codelets_per_s": 21968.90947718349,
+   "julia_codelets_per_s": 105432.20467678156
+  }
+ ]
+}

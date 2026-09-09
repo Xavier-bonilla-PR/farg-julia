@@ -1,0 +1,563 @@
+# Ported from Metacat's coderack.ss.
+#
+# The coderack holds the pending codelets, sorted into seven urgency bins. A
+# codelet is chosen by first picking a bin with probability proportional to the
+# bin's urgency sum, then picking uniformly at random inside that bin. Both the
+# bin urgencies and the posting probabilities are functions of temperature, so
+# the whole scheduler anneals along with the rest of the program.
+#
+# The codelet PROCEDURES - what each codelet type actually does - live in the
+# structure files (bonds.ss, groups.ss, bridges.ss, ...) and are ported with
+# their layers; this file is the scheduling machinery around them.
+
+const MAX_CODERACK_SIZE = 100
+const NUM_OF_CODERACK_BINS = 7
+
+const EXTREMELY_LOW_URGENCY = 7
+const VERY_LOW_URGENCY = 21
+const LOW_URGENCY = 35
+const MEDIUM_URGENCY = 49
+const HIGH_URGENCY = 63
+const VERY_HIGH_URGENCY = 77
+const EXTREMELY_HIGH_URGENCY = 91
+
+function urgency_name(v)
+    v <= EXTREMELY_LOW_URGENCY && return :extremely_low_urgency
+    v <= VERY_LOW_URGENCY && return :very_low_urgency
+    v <= LOW_URGENCY && return :low_urgency
+    v <= MEDIUM_URGENCY && return :medium_urgency
+    v <= HIGH_URGENCY && return :high_urgency
+    v <= VERY_HIGH_URGENCY && return :very_high_urgency
+    return :extremely_high_urgency
+end
+
+"""`%urgency-value-table%` — bin urgency by (bin number, temperature),
+precomputed once. Note the 15.0: this exponent is inexact, so the whole entry
+is computed in floating point and then rounded."""
+const URGENCY_VALUE_TABLE = [sround(sexpt(bin + 1, ((100 - temp) + 10) / 15.0))
+                             for bin in 0:(NUM_OF_CODERACK_BINS - 1), temp in 0:100]
+
+bin_urgency(bin_number::Int, temperature::Int) =
+    URGENCY_VALUE_TABLE[bin_number + 1, temperature + 1]
+
+mutable struct CodeletType
+    name::Symbol
+    codelet_proc::Any
+    urgency_clamped::Bool
+    clamped_relative_urgency::Int
+end
+
+CodeletType(name::Symbol) = CodeletType(name, nothing, false, 0)
+
+mutable struct Codelet
+    codelet_type::CodeletType
+    original_urgency::Real
+    relative_urgency::Real
+    coderack_bin::Int              # 0-based bin number
+    index_in_bin::Int              # 0-based; -1 when not in a bin
+    arguments::Vector{Any}
+    proposed_structure_argument::Bool
+    time_stamp::Int
+    selection_probability::Float64
+    codelet_count::Int
+end
+
+"""`(get-coderack-bin urgency)` — which bin an urgency falls in."""
+function coderack_bin_for(urgency)
+    i = urgency <= 0 ? 0 :
+        urgency >= 100 ? NUM_OF_CODERACK_BINS - 1 :
+        sfloor(pct(urgency) * NUM_OF_CODERACK_BINS)
+    return Int(i)
+end
+
+"""A codelet argument is a "proposed structure" when it is a bond, group or
+bridge - descriptions do not count, since they are not stored in the
+workspace. NB both methods must be dispatched on, not written as an untyped
+predicate plus an `::Any` fallback: those are the same signature, and the
+second silently replaces the first."""
+is_proposed_structure(::Union{Bond,Group,Bridge}) = true
+is_proposed_structure(::Any) = false
+
+function make_codelet(ct::CodeletType, urgency::Real, arguments::Vector{Any} = Any[])
+    relative_urgency = ct.urgency_clamped ? ct.clamped_relative_urgency : urgency
+    return Codelet(ct, urgency, relative_urgency, coderack_bin_for(relative_urgency),
+                   -1, arguments,
+                   !isempty(arguments) && is_proposed_structure(arguments[1]),
+                   0, 0.0, 0)
+end
+
+mutable struct CoderackBin
+    bin_number::Int
+    codelet_vector::Vector{Union{Nothing,Codelet}}
+    current_index::Int
+    codelet_list::Vector{Codelet}
+end
+
+CoderackBin(n::Int) = CoderackBin(n, Union{Nothing,Codelet}[nothing for _ in 1:MAX_CODERACK_SIZE],
+                                  0, Codelet[])
+
+bin_urgency_sum(b::CoderackBin, temperature::Int) =
+    b.current_index * bin_urgency(b.bin_number, temperature)
+
+function add_codelet!(b::CoderackBin, c::Codelet, codelet_count::Int)
+    b.codelet_vector[b.current_index + 1] = c
+    c.index_in_bin = b.current_index
+    b.current_index += 1
+    pushfirst!(b.codelet_list, c)
+    c.time_stamp = codelet_count
+    return b
+end
+
+"""`(choose-random-codelet)` — uniform over the bin's occupied slots."""
+choose_random_codelet(rng::PyRandom, b::CoderackBin) =
+    b.codelet_vector[random_int(rng, b.current_index) + 1]::Codelet
+
+"""`(remove-codelet codelet)` — swaps the last codelet into the freed slot."""
+function remove_codelet!(b::CoderackBin, c::Codelet)
+    index = c.index_in_bin
+    b.current_index -= 1
+    if index != b.current_index
+        swap = b.codelet_vector[b.current_index + 1]::Codelet
+        b.codelet_vector[index + 1] = swap
+        swap.index_in_bin = index
+    end
+    c.index_in_bin = -1
+    i = findfirst(x -> x === c, b.codelet_list)
+    i === nothing || deleteat!(b.codelet_list, i)
+    return b
+end
+
+function clear_codelets!(b::CoderackBin)
+    b.current_index = 0
+    b.codelet_list = Codelet[]
+    return b
+end
+
+mutable struct Coderack
+    bins::Vector{CoderackBin}
+    codelet_list::Vector{Codelet}
+    current_num::Int
+    deferred_codelets::Vector{Codelet}
+end
+
+Coderack() = Coderack([CoderackBin(n) for n in 0:(NUM_OF_CODERACK_BINS - 1)],
+                      Codelet[], 0, Codelet[])
+
+coderack_empty(cr::Coderack) = isempty(cr.codelet_list)
+total_urgency_sum(cr::Coderack, temperature::Int) =
+    ssum([bin_urgency_sum(b, temperature) for b in cr.bins])
+highest_bin_urgency(cr::Coderack, temperature::Int) =
+    bin_urgency(cr.bins[end].bin_number, temperature)
+
+function initialize!(cr::Coderack)
+    foreach(clear_codelets!, cr.bins)
+    cr.codelet_list = Codelet[]
+    cr.current_num = 0
+    cr.deferred_codelets = Codelet[]
+    # The Scheme also unclamps every codelet type here. That matters because
+    # `CODELET_TYPES` is global and outlives any one Coderack, so a clamp left
+    # standing at the end of one run would silently carry into the next.
+    for ct in values(CODELET_TYPES)
+        ct.urgency_clamped = false
+        ct.clamped_relative_urgency = 0
+    end
+    return cr
+end
+
+add_deferred_codelet!(cr::Coderack, c::Codelet) = (pushfirst!(cr.deferred_codelets, c); cr)
+
+"""`(post codelet)`."""
+function post!(cr::Coderack, c::Codelet, codelet_count::Int, rng::PyRandom,
+               temperature::Int, ctx = nothing)
+    cr.current_num == MAX_CODERACK_SIZE &&
+        delete_codelets!(cr, 1, codelet_count, rng, temperature, ctx)
+    add_codelet!(cr.bins[c.coderack_bin + 1], c, codelet_count)
+    pushfirst!(cr.codelet_list, c)
+    cr.current_num += 1
+    return cr
+end
+
+"""`(post-deferred-codelets)` — makes room first, then posts them all."""
+function post_deferred_codelets!(cr::Coderack, codelet_count::Int, rng::PyRandom,
+                                 temperature::Int, ctx = nothing)
+    num_to_delete = cr.current_num + length(cr.deferred_codelets) - MAX_CODERACK_SIZE
+    num_to_delete > 0 &&
+        delete_codelets!(cr, num_to_delete, codelet_count, rng, temperature, ctx)
+    for c in cr.deferred_codelets
+        add_codelet!(cr.bins[c.coderack_bin + 1], c, codelet_count)
+        pushfirst!(cr.codelet_list, c)
+        cr.current_num += 1
+    end
+    cr.deferred_codelets = Codelet[]
+    return cr
+end
+
+"""`(get-removal-weight)` — older codelets in low-urgency bins go first."""
+removal_weight(c::Codelet, cr::Coderack, codelet_count::Int, temperature::Int) =
+    (codelet_count - c.time_stamp) *
+    (1 + (highest_bin_urgency(cr, temperature) - bin_urgency(c.coderack_bin, temperature)))
+
+"""`(delete-proposed-structure struc)` from workspace.ss — when a codelet
+carrying a proposed structure is culled, the structure goes with it. The
+methods live with their structure layers, which load after this file."""
+function delete_proposed_structure! end
+
+function delete_codelets!(cr::Coderack, num_to_delete::Int, codelet_count::Int,
+                          rng::PyRandom, temperature::Int, ctx = nothing)
+    for _ in 1:num_to_delete
+        weights = [removal_weight(c, cr, codelet_count, temperature) for c in cr.codelet_list]
+        c = stochastic_pick(rng, cr.codelet_list, weights)::Codelet
+        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1], ctx)
+        remove_codelet!(cr.bins[c.coderack_bin + 1], c)
+        i = findfirst(x -> x === c, cr.codelet_list)
+        i === nothing || deleteat!(cr.codelet_list, i)
+    end
+    cr.current_num -= num_to_delete
+    return cr
+end
+
+"""`(choose-codelet)` — pick a bin weighted by its urgency sum, then a codelet
+uniformly within it."""
+function choose_codelet!(cr::Coderack, rng::PyRandom, temperature::Int)
+    bin = stochastic_pick(rng, cr.bins,
+                          [bin_urgency_sum(b, temperature) for b in cr.bins])::CoderackBin
+    c = choose_random_codelet(rng, bin)
+    remove_codelet!(bin, c)
+    i = findfirst(x -> x === c, cr.codelet_list)
+    i === nothing || deleteat!(cr.codelet_list, i)
+    cr.current_num -= 1
+    return c
+end
+
+"""`(update-all-selection-probabilities)`."""
+function update_all_selection_probabilities!(cr::Coderack, temperature::Int)
+    for c in cr.codelet_list
+        c.selection_probability = 0.0
+        c.codelet_count = 0
+    end
+    total = total_urgency_sum(cr, temperature)
+    total == 0 && return cr
+    for b in cr.bins
+        b.current_index == 0 && continue
+        urgency_sum = bin_urgency_sum(b, temperature)
+        codelet_probability = sdiv(sdiv(urgency_sum, total), b.current_index)
+        for c in b.codelet_list
+            c.codelet_count += 1
+            c.selection_probability += sinexact(codelet_probability)
+        end
+    end
+    return cr
+end
+
+"""`(bottom-up-urgency codelet-type)`."""
+function bottom_up_urgency(ct::CodeletType, temperature::Int)
+    ct.name === :answer_finder && return sub_from_100(temperature)
+    ct.name === :answer_justifier && return sub_from_100(temperature)
+    ct.name === :breaker && return EXTREMELY_LOW_URGENCY
+    ct.name === :progress_watcher && return MEDIUM_URGENCY
+    ct.name === :jootser && return MEDIUM_URGENCY
+    return LOW_URGENCY
+end
+
+"""`*bottom-up-codelet-types*`, in declaration order. The codelet procedures
+themselves live with their structure layers; these are the scheduling
+identities."""
+const BOTTOM_UP_CODELET_TYPE_NAMES = [
+    :bottom_up_bond_scout, :group_scout_whole_string, :bottom_up_bridge_scout,
+    :important_object_bridge_scout, :bottom_up_description_scout, :rule_scout,
+    :answer_finder, :answer_justifier, :progress_watcher, :jootser, :breaker,
+]
+
+make_bottom_up_codelet_types() = [CodeletType(n) for n in BOTTOM_UP_CODELET_TYPE_NAMES]
+
+"""The Scheme prints codelet type names with hyphens, and a colon before the
+qualifier on the scouts that have one."""
+function codelet_type_display(ct::CodeletType)
+    name = String(ct.name)
+    for (suffix, replacement) in ("_scout_whole_string" => "-scout:whole-string",
+                                  "_scout_category" => "-scout:category",
+                                  "_scout_direction" => "-scout:direction")
+        endswith(name, suffix) &&
+            return replace(name[1:(end - length(suffix))], "_" => "-") * replacement
+    end
+    return replace(name, "_" => "-")
+end
+
+"""The codelet-type registry. Procedures are attached by the codelet layers as
+they are ported, mirroring set-codelet-procedure in the Scheme."""
+const CODELET_TYPES = Dict{Symbol,CodeletType}()
+
+function register_codelet_type!(name::Symbol, proc)
+    ct = get!(CODELET_TYPES, name, CodeletType(name))
+    ct.codelet_proc = proc
+    return ct
+end
+
+"""Run a codelet: apply its type's procedure to its arguments."""
+run_codelet!(ctx, c::Codelet) = c.codelet_type.codelet_proc(ctx, c.arguments)
+
+# --- clamping (trace.ss drives this) ----------------------------------------
+#
+# A clamped codelet type keeps a fixed urgency: newly made codelets of that
+# type take it (see `make_codelet`), and every one already on the rack is moved
+# to it, which can move it between bins.
+
+"""`*codelet-types*` in declaration order (coderack.ss). The list exists
+independently of whether a procedure has been attached to each type, which is
+what lets `get_complement_codelet_pattern` name every type the model has."""
+const ALL_CODELET_TYPE_NAMES = [
+    :bottom_up_bond_scout, :top_down_bond_scout_category,
+    :top_down_bond_scout_direction, :bond_evaluator, :bond_builder,
+    :top_down_group_scout_category, :top_down_group_scout_direction,
+    :group_scout_whole_string, :group_evaluator, :group_builder,
+    :bottom_up_bridge_scout, :important_object_bridge_scout, :bridge_evaluator,
+    :bridge_builder, :bottom_up_description_scout, :top_down_description_scout,
+    :description_evaluator, :description_builder, :rule_scout, :rule_evaluator,
+    :rule_builder, :answer_finder, :answer_justifier, :thematic_bridge_scout,
+    :progress_watcher, :jootser, :breaker,
+]
+
+"""The `CodeletType` objects, in that order, creating any that no layer has
+registered a procedure for yet."""
+all_codelet_types() =
+    [get!(CODELET_TYPES, n, CodeletType(n)) for n in ALL_CODELET_TYPE_NAMES]
+
+"""`(set-urgency new-value)` on a codelet — may move it to a different bin.
+
+NB the re-stamping. The Scheme moves the codelet by calling the destination
+bin's `add-codelet`, and `add-codelet` unconditionally does `(tell codelet
+'set-time-stamp)`. So a codelet that changes bins is treated as freshly
+posted, and its removal weight — which is `(- *codelet-count* time-stamp)` —
+drops to zero. Clamping a codelet pattern therefore does not merely raise
+some urgencies: it also makes every codelet it moved temporarily immune to
+being culled, which changes WHICH codelets the next `delete-codelets` throws
+away. Preserving the old time stamp here looks tidier and diverges from the
+reference within a cycle of the first clamp."""
+function set_urgency!(cr::Coderack, c::Codelet, new_value::Real, codelet_count::Int)
+    new_bin = coderack_bin_for(new_value)
+    if new_bin != c.coderack_bin
+        remove_codelet!(cr.bins[c.coderack_bin + 1], c)
+        c.coderack_bin = new_bin
+        add_codelet!(cr.bins[new_bin + 1], c, codelet_count)
+    end
+    c.relative_urgency = new_value
+    return c
+end
+
+"""`(reset-urgency)` — back to the urgency the codelet was posted with."""
+reset_urgency!(cr::Coderack, c::Codelet, codelet_count::Int) =
+    set_urgency!(cr, c, c.original_urgency, codelet_count)
+
+"""`(set-urgencies codelet-type new-value)`."""
+function set_urgencies!(cr::Coderack, ct::CodeletType, new_value::Real,
+                        codelet_count::Int)
+    for c in cr.codelet_list
+        c.codelet_type === ct && set_urgency!(cr, c, new_value, codelet_count)
+    end
+    return cr
+end
+
+"""`(reset-urgencies codelet-type)`."""
+function reset_urgencies!(cr::Coderack, ct::CodeletType, codelet_count::Int)
+    for c in cr.codelet_list
+        c.codelet_type === ct && reset_urgency!(cr, c, codelet_count)
+    end
+    return cr
+end
+
+"""`(clamp urgency)` on a codelet type. NB: the Scheme only acts when the
+clamp actually CHANGES something, so re-clamping to the same urgency does not
+disturb the rack."""
+function clamp_codelet_type!(ct::CodeletType, urgency::Real, cr::Coderack,
+                            codelet_count::Int)
+    if !ct.urgency_clamped || urgency != ct.clamped_relative_urgency
+        ct.urgency_clamped = true
+        ct.clamped_relative_urgency = urgency
+        set_urgencies!(cr, ct, urgency, codelet_count)
+    end
+    return ct
+end
+
+"""`(unclamp)`. NB: also only acts when there is a clamp to remove."""
+function unclamp_codelet_type!(ct::CodeletType, cr::Coderack, codelet_count::Int)
+    if ct.urgency_clamped
+        ct.urgency_clamped = false
+        ct.clamped_relative_urgency = 0
+        reset_urgencies!(cr, ct, codelet_count)
+    end
+    return ct
+end
+
+# --- deciding what to post each cycle (coderack.ss 465-575) -----------------
+#
+# Once per cycle the model refills the rack from the bottom up, and every
+# active slipnode gets a chance to post its top-down codelets. Two questions
+# per type: how LIKELY it is to post at all, and how MANY it posts if it does.
+# Both read the workspace, which is what makes the rack track what the model is
+# currently bad at — lots of unhappy objects means lots of scouts.
+
+"""`*thematic-codelet-types*` and `*self-watching-codelet-types*`."""
+const THEMATIC_CODELET_TYPE_NAMES = [:thematic_bridge_scout]
+const SELF_WATCHING_CODELET_TYPE_NAMES =
+    [:thematic_bridge_scout, :progress_watcher, :jootser]
+
+"""`(post-codelet-probability codelet-type)`.
+
+A clamped type posts at its clamped urgency, whatever the workspace says —
+that is what clamping a codelet pattern MEANS. Otherwise the probability is
+whichever workspace measure the type responds to."""
+function post_codelet_probability(ct::CodeletType, ctx)
+    # answer-justifier belongs to justify mode and answer-finder to normal mode;
+    # each is dead in the other. Self-watching types are dead when self-watching
+    # is off.
+    justify = JUSTIFY_MODE[]
+    (justify && ct.name === :answer_finder) && return 0
+    (!justify && ct.name === :answer_justifier) && return 0
+    (!SELF_WATCHING_ENABLED[] &&
+     any(n -> n === ct.name, SELF_WATCHING_CODELET_TYPE_NAMES)) && return 0
+    ct.urgency_clamped && return pct(ct.clamped_relative_urgency)
+    n = ct.name
+    if n === :bottom_up_bond_scout || n === :top_down_bond_scout_category ||
+       n === :top_down_bond_scout_direction || n === :top_down_group_scout_category ||
+       n === :top_down_group_scout_direction || n === :group_scout_whole_string
+        return pct(get_average_intra_string_unhappiness(ctx))
+    elseif n === :bottom_up_bridge_scout || n === :important_object_bridge_scout
+        return pct(sub_from_100(get_min_mapping_strength(ctx)))
+    elseif n === :bottom_up_description_scout || n === :top_down_description_scout
+        return pct(get_average_unhappiness(ctx))
+    elseif n === :rule_scout
+        return isempty(get_possible_rule_types(ctx)) ? 0.5 : 1
+    elseif n === :answer_finder
+        return supported_rule_exists(ctx, :top) ?
+               pct(sub_from_100(ctx.temperature)) : 0
+    elseif n === :answer_justifier
+        return (supported_rule_exists(ctx, :top) ||
+                supported_rule_exists(ctx, :bottom)) ?
+               pct(sub_from_100(ctx.temperature)) : 0
+    elseif n === :breaker
+        return pct(ctx.temperature)
+    elseif n === :progress_watcher
+        return has_thematic_pressure(ctx.themespace) ? 1 : 0.25
+    elseif n === :jootser
+        tr = ctx.trace
+        within = tr !== nothing && ((tr::TemporalTrace).within_snag_period ||
+                                    (tr::TemporalTrace).within_clamp_period)
+        return within ? 0.4 : 0.1
+    elseif n === :thematic_bridge_scout
+        types = get_active_bridge_theme_types(ctx.themespace)
+        return isempty(types) ? 0 :
+               pct(get_max_positive_theme_activation(ctx.themespace, types))
+    end
+    # NB the Scheme's `case` has no else: an unlisted type returns Chez's
+    # unspecified value, which `stochastic-if*` would then compare against a
+    # random draw. Every type the model posts bottom-up or top-down is listed.
+    return 0
+end
+
+"""`(num-of-codelets-to-post codelet-type)`. The rough-num calls DRAW."""
+function num_of_codelets_to_post(ct::CodeletType, ctx)
+    justify = JUSTIFY_MODE[]
+    (justify && ct.name === :answer_finder) && return 0
+    (!justify && ct.name === :answer_justifier) && return 0
+    n = ct.name
+    if n === :bottom_up_bond_scout || n === :top_down_bond_scout_category ||
+       n === :top_down_bond_scout_direction
+        r = rough_num_of_unrelated_objects(ctx)
+        return r === :few ? 2 : r === :some ? 4 : 6
+    elseif n === :top_down_group_scout_category ||
+           n === :top_down_group_scout_direction || n === :group_scout_whole_string
+        isempty(workspace_bonds(ctx)) && return 0
+        r = rough_num_of_ungrouped_objects(ctx)
+        return r === :few ? 1 : r === :some ? 2 : 3
+    elseif n === :bottom_up_bridge_scout || n === :important_object_bridge_scout
+        r = rough_num_of_unmapped_objects(ctx)
+        return r === :few ? 2 : r === :some ? 5 : 6
+    elseif n === :bottom_up_description_scout || n === :top_down_description_scout
+        return 2
+    elseif n === :rule_scout
+        return max(1, 2 * length(get_possible_rule_types(ctx)))
+    elseif n === :answer_finder || n === :answer_justifier || n === :breaker
+        return 1
+    elseif n === :thematic_bridge_scout
+        return sround(10 * pct(get_max_inter_string_unhappiness(ctx)))
+    elseif n === :progress_watcher
+        return 2
+    elseif n === :jootser
+        return justify ? 1 : 2
+    end
+    return 0
+end
+
+"""`(thematic-codelet-urgency codelet-type)` — how loudly the themes are
+calling. NB the Scheme's `case` covers only `thematic-bridge-scout`."""
+thematic_codelet_urgency(ct::CodeletType, ctx) =
+    get_max_positive_theme_activation(ctx.themespace,
+                                      get_active_bridge_theme_types(ctx.themespace))
+
+"""`(add-bottom-up-codelets)` — one pass over the bottom-up types. Codelets are
+DEFERRED, not posted: they all go on together at the end of the cycle, so the
+rack sees one coherent refill rather than a trickle."""
+function add_bottom_up_codelets!(ctx)
+    for name in BOTTOM_UP_CODELET_TYPE_NAMES
+        # NB `get!`, not `get`: the Scheme iterates every type in the list and
+        # draws for each, so skipping a type whose procedure is not attached
+        # yet would silently drop a draw and desynchronise the whole run.
+        ct = get!(CODELET_TYPES, name, CodeletType(name))
+        # stochastic-if* ALWAYS draws, unlike prob?
+        random_real(ctx.rng, 1.0) < post_codelet_probability(ct, ctx) || continue
+        urgency = bottom_up_urgency(ct, ctx.temperature)
+        for _ in 1:num_of_codelets_to_post(ct, ctx)
+            add_deferred_codelet!(ctx.coderack, make_codelet(ct, urgency))
+        end
+    end
+    return ctx
+end
+
+"""`(add-top-down-codelets)` — every active slipnode posts the codelet types
+attached to it, then the thematic types get their turn."""
+function add_top_down_codelets!(ctx)
+    for node in ctx.net.top_down_nodes
+        attempt_to_post_top_down_codelets!(node, ctx)
+    end
+    for name in THEMATIC_CODELET_TYPE_NAMES
+        ct = get!(CODELET_TYPES, name, CodeletType(name))
+        random_real(ctx.rng, 1.0) < post_codelet_probability(ct, ctx) || continue
+        urgency = thematic_codelet_urgency(ct, ctx)
+        for _ in 1:num_of_codelets_to_post(ct, ctx)
+            add_deferred_codelet!(ctx.coderack, make_codelet(ct, urgency))
+        end
+    end
+    return ctx
+end
+
+"""`(attempt-to-post-top-down-codelets)` on a slipnode — an active concept
+pushes the model to look for what it is about. The urgency is the concept's
+depth scaled by how awake it is, and the scope is the whole workspace."""
+function attempt_to_post_top_down_codelets!(node::Node, ctx)
+    above_threshold(node) || return node
+    urgency = pct(node.conceptual_depth) * node.activation
+    for name in node.top_down_codelet_types
+        ct = get!(CODELET_TYPES, name, CodeletType(name))
+        random_real(ctx.rng, 1.0) < post_codelet_probability(ct, ctx) || continue
+        for _ in 1:num_of_codelets_to_post(ct, ctx)
+            add_deferred_codelet!(ctx.coderack,
+                                  make_codelet(ct, urgency, Any[node, nothing]))
+        end
+    end
+    return node
+end
+
+"""`(delete-all-codelets)` — wipe the rack, deleting any proposed structure a
+codelet was carrying. `process-snag` does this: after a snag the model starts
+over, and half-finished proposals would be about the world as it was."""
+function delete_all_codelets!(cr::Coderack, ctx = nothing)
+    for c in cr.codelet_list
+        c.proposed_structure_argument && delete_proposed_structure!(c.arguments[1], ctx)
+    end
+    for b in cr.bins
+        clear_codelets!(b)
+    end
+    cr.codelet_list = Codelet[]
+    cr.current_num = 0
+    return cr
+end

@@ -1,0 +1,489 @@
+# Ported from Metacat's groups.ss.
+#
+# A group is a chunk of a string perceived as a unit - a run of successor
+# bonds, a run of sameness bonds - and is itself a workspace object, so groups
+# can nest and can be bonded and bridged like letters.
+
+mutable struct Group <: WSObject
+    string::WorkspaceString
+    group_category::Node
+    group_bond_facet::Union{Nothing,Node}
+    direction::Union{Nothing,Node}
+    left_object::WSObject
+    right_object::WSObject
+    constituent_objects::Vector{WSObject}
+    constituent_bonds::Vector{Any}
+    left_string_pos::Int
+    right_string_pos::Int
+    bond_category::Node
+    group_length::Int
+    platonic_length::Union{Nothing,Node}
+    all_letter_group::Bool
+    letters::Vector{WSObject}
+    image::Image
+    initial_letter_category::Union{Nothing,Node}
+    middle_object::Union{Nothing,WSObject}
+    bond_descriptions::Vector{Description}
+    print_name::Union{Nothing,String}
+    ascii_name_::String
+    # shared workspace-object fields
+    id_num::Int
+    descriptions::Vector{Description}
+    raw_importance::Union{Int,Rational{Int}}
+    relative_importance::Int
+    intra_string_unhappiness::Int
+    # `(100- (* 1/2 strength))` for an object whose ENCLOSING GROUP carries the
+    # bridge is an exact rational whenever that strength is odd, so these are
+    # not integers.
+    horizontal_inter_string_unhappiness::Union{Int,Rational{Int}}
+    vertical_inter_string_unhappiness::Union{Int,Rational{Int}}
+    average_unhappiness::Int
+    intra_string_salience::Int
+    horizontal_inter_string_salience::Int
+    vertical_inter_string_salience::Int
+    average_salience::Int
+    enclosing_group::Union{Nothing,WSObject}
+    salience_clamped::Bool
+    left_bond::Union{Nothing,Any}
+    right_bond::Union{Nothing,Any}
+    outgoing_bonds::Vector{Any}
+    incoming_bonds::Vector{Any}
+    horizontal_bridge::Union{Nothing,Any}
+    vertical_bridge::Union{Nothing,Any}
+    # workspace-structure fields
+    time_stamp::Int
+    strength::Int
+    proposal_level::Int
+end
+
+is_group(::Group) = true
+is_group(::Letter) = false
+group_length(g::Group) = g.group_length
+
+singleton_group(g::Group) = g.group_length == 1
+singleton_group(::Letter) = false
+top_level_member(g::Group, object::WSObject) = any(o -> o === object, g.constituent_objects)
+all_descriptions(g::Group) = vcat(g.descriptions, g.bond_descriptions)
+get_letter_span(o::Letter) = 1
+get_letter_span(g::Group) = length(g.letters)
+
+get_string(g::Group) = g.string
+left_string_pos(g::Group) = g.left_string_pos
+right_string_pos(g::Group) = g.right_string_pos
+print_name(g::Group) = g.print_name
+ascii_name(g::Group) = g.ascii_name_
+get_letters(o::Letter) = WSObject[o]
+get_letters(g::Group) = g.letters
+get_initial_letter_category(o::Letter) = o.letter_category
+get_initial_letter_category(g::Group) = g.initial_letter_category
+get_platonic_length(o::Letter, net::Slipnet) = net[:plato_one]
+get_platonic_length(g::Group, ::Slipnet) = g.platonic_length
+get_image(o::Letter) = o.image
+get_image(g::Group) = g.image
+
+"""`(get-constituent-objects)` for a group: the objects it was built from."""
+get_constituent_objects(g::Group) = g.constituent_objects
+
+"""`(get-bond-facet)`."""
+get_bond_facet(g::Group, ::Slipnet) = g.group_bond_facet
+
+"""The group's objects in reading order — reversed for a leftward group."""
+ordered_objects(g::Group, net::Slipnet) =
+    g.direction === net[:plato_left] ? reverse(g.constituent_objects) :
+                                       g.constituent_objects
+
+"""`(get-ending-letter-category)` — the letter category of the LAST object in
+reading order, which is what a group-category reversal moves to the front."""
+get_ending_letter_category(g::Group, net::Slipnet) =
+    get_descriptor_for(ordered_objects(g, net)[end], net[:plato_letter_category])
+
+leftmost_in_string(g::Group) = g.left_string_pos == 0
+rightmost_in_string(g::Group) = g.right_string_pos == string_length(g.string) - 1
+spans_whole_string(g::Group) = leftmost_in_string(g) && rightmost_in_string(g)
+string_spanning_group(g::Group) = spans_whole_string(g)
+string_spanning_group(::Letter) = false
+
+"""`(nested-member? object)` — whether the object is somewhere inside this
+group's constituent tree. Untyped in the argument, as in the Scheme: asked
+about a workspace string it simply answers no, which `sort-templates` relies
+on when a template's reference object is the string itself."""
+function nested_member(g::Group, object)
+    for o in g.constituent_objects
+        o === object && return true
+        o isa Group && nested_member(o::Group, object) && return true
+    end
+    return false
+end
+
+function new_bond_description!(g::Group, description_type::Node, descriptor::Node,
+                               codelet_count::Int = 0)
+    d = make_description(g, description_type, descriptor, codelet_count)
+    d.proposal_level = BUILT
+    pushfirst!(g.bond_descriptions, d)
+    return d
+end
+
+"""`(make-group ...)` — builds the group and attaches its descriptions in the
+order groups.ss does, which is the order they come back out in reverse."""
+function make_group(net::Slipnet, string::WorkspaceString, group_category::Node,
+                    group_bond_facet::Union{Nothing,Node}, direction::Union{Nothing,Node},
+                    left_object::WSObject, right_object::WSObject,
+                    objs::Vector{WSObject}, bonds::Vector{Any},
+                    codelet_count::Int = 0)
+    ordered_objects = direction === net[:plato_left] ? reverse(objs) : objs
+    initial_letter_category = get_descriptor_for(ordered_objects[1],
+                                                 net[:plato_letter_category])
+    bond_category = get_related_node(group_category, net[:plato_bond_category],
+                                     net[:plato_identity])::Node
+    group_length = length(objs)
+    middle_idx = findfirst(o -> get_descriptor_for(o, net[:plato_string_position_category]) ===
+                                net[:plato_middle], objs)
+    letter_relation = group_length > 1 ?
+        relationship_between([get_initial_letter_category(o) for o in ordered_objects],
+                             net[:plato_identity]) :
+        (bond_category === net[:plato_sameness] ? net[:plato_identity] : bond_category)
+    length_relation = group_length > 1 ?
+        relationship_between([get_platonic_length(o, net) for o in ordered_objects],
+                             net[:plato_identity]) :
+        net[:plato_identity]
+    image = make_image(initial_letter_category, group_bond_facet, letter_relation,
+                       length_relation, direction === nothing ? net[:plato_right] : direction,
+                       [get_image(o) for o in ordered_objects])
+
+    g = Group(string, group_category, group_bond_facet, direction,
+              left_object, right_object, objs, bonds,
+              left_string_pos(left_object), right_string_pos(right_object),
+              bond_category, group_length,
+              number_to_platonic_number(net, group_length),
+              all(o -> o isa Letter, objs),
+              vcat((get_letters(o) for o in objs)...),
+              image, initial_letter_category,
+              middle_idx === nothing ? nothing : objs[middle_idx],
+              Description[], nothing, "",
+              0, Description[], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              nothing, false, nothing, nothing, Any[], Any[], nothing, nothing,
+              codelet_count, 0, 0)
+
+    new_description!(g, net[:plato_object_category], net[:plato_group])
+    new_description!(g, net[:plato_group_category], group_category)
+    new_bond_description!(g, net[:plato_bond_category], g.bond_category)
+    direction === nothing || new_description!(g, net[:plato_direction_category], direction)
+    if spans_whole_string(g)
+        new_description!(g, net[:plato_string_position_category], net[:plato_whole])
+    elseif leftmost_in_string(g)
+        new_description!(g, net[:plato_string_position_category], net[:plato_leftmost])
+    elseif middle_in_string(g)
+        new_description!(g, net[:plato_string_position_category], net[:plato_middle])
+    elseif rightmost_in_string(g)
+        new_description!(g, net[:plato_string_position_category], net[:plato_rightmost])
+    end
+    new_bond_description!(g, net[:plato_bond_facet], group_bond_facet::Node)
+    # LettCtgy descriptions go on even for successor/predecessor groups, so that
+    # horizontal bridges such as [abc] --> [bcd] can be built.
+    if group_bond_facet === net[:plato_letter_category]
+        new_description!(g, net[:plato_letter_category], initial_letter_category::Node)
+        if group_category === net[:plato_samegrp]
+            g.print_name = (initial_letter_category::Node).uppercase_name
+        end
+    end
+    set_ascii_name!(g, net)
+    return g
+end
+
+function set_ascii_name!(g::Group, net::Slipnet)
+    head = g.print_name !== nothing ? g.print_name :
+           (g.direction === net[:plato_right] ? ">" :
+            g.direction === net[:plato_left] ? "<" : string(g.group_length))
+    tail = spans_whole_string(g) ? "*" : string(g.left_string_pos, ",", g.right_string_pos)
+    g.ascii_name_ = string("[", head, "]:", tail)
+    return g
+end
+
+"""`(build-group proposed-group flipped?)` — attaches the group to its string
+and its constituents, activates its descriptors, and invalidates any "middle"
+descriptions the new grouping has made false. The trace and graphics parts of
+the Scheme are not ported."""
+function build_group!(g::Group, net::Slipnet, ctx = nothing, flipped::Bool = false)
+    g.id_num = g.string.next_id_num
+    g.string.next_id_num += 1
+    pushfirst!(g.string.left_edge_groups[g.left_string_pos + 1], g)
+    pushfirst!(g.string.right_edge_groups[g.right_string_pos + 1], g)
+    g.string.group_by_leftmost_id[g.left_object.id_num] = g
+    pushfirst!(g.string.groups, g)
+    for o in g.constituent_objects
+        o.enclosing_group = g
+    end
+    for b in g.constituent_bonds
+        b.enclosing_group = g
+    end
+    for d in g.descriptions
+        activate_from_workspace!(d.descriptor)
+    end
+    g.proposal_level = BUILT
+    spans_whole_string(g) ||
+        delete_invalid_string_position_middle_descriptions!(g.string, net, ctx)
+    # Guarded on the TRACE, not just the context: trace.jl loads after this
+    # file, and a probe that never loads it must not resolve the name at all.
+    (ctx === nothing || ctx.trace === nothing) ||
+        monitor_new_groups(g, flipped, ctx)
+    return g
+end
+
+"""Building or breaking a non-spanning group can make an object no longer
+"middle". Such a description is removed — AND so is the string-position concept
+mapping of any bridge the object is part of, since that mapping now rests on a
+description that no longer exists. A bridge left with no concept mappings at
+all is broken outright."""
+function delete_invalid_string_position_middle_descriptions!(s::WorkspaceString,
+                                                             net::Slipnet, ctx = nothing)
+    for object in all_objects(s)
+        (any(d -> d.descriptor === net[:plato_middle], all_descriptions(object)) &&
+         !middle_in_string(object)) || continue
+        idx = findfirst(d -> d.description_type === net[:plato_string_position_category],
+                        object.descriptions)
+        idx === nothing || deleteat!(object.descriptions, idx)
+        ctx === nothing && continue
+        for orientation in (:vertical, :horizontal)
+            bridge = get_bridge(object, orientation)
+            bridge === nothing && continue
+            b = bridge::Bridge
+            cm_type_present(b, net[:plato_string_position_category]) || continue
+            delete_concept_mapping_type!(b, net[:plato_string_position_category])
+            isempty(b.all_concept_mappings) && break_bridge!(b, ctx)
+        end
+    end
+    return s
+end
+
+function get_num_of_local_supporting_groups(g::Group)
+    n = 0
+    for other in g.string.groups
+        other === g && continue
+        if disjoint_objects(g, other) && other.group_category === g.group_category &&
+           other.direction === g.direction
+            n += 1
+        end
+    end
+    return n
+end
+
+"""`(get-local-density)` — the neighbour walk steps up to an enclosing group
+whenever it lands on a letter that has one."""
+function get_local_density(rng::PyRandom, g::Group)
+    spans_whole_string(g) && return 100
+    function neighbors(object, chooser)
+        result = WSObject[]
+        current = object
+        while true
+            n = chooser(rng, current)
+            n === nothing && break
+            grp = n.enclosing_group
+            step = (n isa Letter && grp !== nothing) ? grp::WSObject : n
+            push!(result, step)
+            current = step
+        end
+        return result
+    end
+    # NB the Scheme builds this with (append (neighbors ... left) (neighbors ...
+    # right)), and Chez evaluates procedure arguments RIGHT TO LEFT — so the
+    # RIGHT walk draws first, even though the result lists left first. The bond
+    # version of this walk uses let*, which is sequential, and so goes left
+    # first; the two are genuinely different orders.
+    right_side = neighbors(g, choose_right_neighbor)
+    left_side = neighbors(g, choose_left_neighbor)
+    other_objects = vcat(left_side, right_side)
+    num_of_objects = length(other_objects)
+    num_of_similar_groups = count(other_objects) do o
+        o isa Group && disjoint_objects(g, o) &&
+            (o::Group).group_category === g.group_category &&
+            (o::Group).direction === g.direction
+    end
+    num_of_objects == 0 && return 100
+    return sround(100 * sdiv(num_of_similar_groups, num_of_objects))
+end
+
+function get_local_support(rng::PyRandom, g::Group)
+    num = get_num_of_local_supporting_groups(g)
+    num == 0 && return 0
+    density = get_local_density(rng, g)
+    adjusted_density = 100 * ssqrt(pct(density))
+    num_factor = min(1, sexpt(0.6, sdiv(1, cube(num))))
+    return sround(adjusted_density * num_factor)
+end
+
+function calculate_internal_strength(g::Group, net::Slipnet)
+    bond_factor = degree_of_assoc(g.bond_category) *
+        ((g.group_bond_facet !== nothing &&
+          g.group_bond_facet === net[:plato_letter_category]) ? 1 : 1 // 2)
+    length_factor = g.group_length == 1 ? 5 :
+                    g.group_length == 2 ? 40 :
+                    g.group_length == 3 ? 60 : 90
+    bond_factor_weight = sexpt(bond_factor, 0.98)
+    length_factor_weight = sub_from_100(bond_factor_weight)
+    return sround(weighted_average([bond_factor, length_factor],
+                                   [bond_factor_weight, length_factor_weight]))
+end
+
+calculate_external_strength(g::Group, rng::PyRandom) =
+    spans_whole_string(g) ? 100 : get_local_support(rng, g)
+
+function update_structure_strength!(g::Group, net::Slipnet, rng::PyRandom, ts = nothing)
+    internal = calculate_internal_strength(g, net)
+    external = calculate_external_strength(g, rng)
+    intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
+    g.strength = sround(weighted_average([0, intrinsic], [0, 1]))
+    return g
+end
+
+"""`(distinguishing-descriptor? descriptor)` for groups: compare against the
+string's other groups, excluding this group's supergroup and its subgroups."""
+function distinguishing_descriptor(net::Slipnet, g::Group, descriptor::Node)
+    (descriptor === net[:plato_letter] || descriptor === net[:plato_group] ||
+     any(n -> n === descriptor, net.numbers)) && return false
+    supergroup = g.enclosing_group
+    # NB: see the note on the Letter method in workspace.jl -- `groups` is a
+    # Vector{WSObject} for the same definition-cycle reason, and only ever holds
+    # Groups, so naming the type here just restores the concrete field access.
+    for other::Group in g.string.groups
+        # NB: this tested membership against a freshly built `subgroups` list --
+        # `[o for o in g.constituent_objects if o isa Group]`, allocated on every
+        # call. `other` is always a Group, so a Letter constituent can never be
+        # `===` it, and scanning the constituents directly asks the same question
+        # with nothing allocated.
+        (other === g || other === supergroup) && continue
+        is_subgroup = false
+        for o in g.constituent_objects
+            if o === other; is_subgroup = true; break; end
+        end
+        is_subgroup && continue
+        for d in other.descriptions
+            d.descriptor === descriptor && return false
+        end
+    end
+    return true
+end
+
+"""`(break-group group)` — recursively breaks any enclosing group first, then
+detaches this one and the bonds incident on it. The bridge handling is added
+once the bridge codelets are ported."""
+function break_group!(g::Group, net::Slipnet, ctx = nothing)
+    s = g.string
+    # both bridges are read BEFORE anything is broken, since breaking the
+    # enclosing group can clear them
+    vertical_bridge = get_bridge(g, :vertical)
+    horizontal_bridge = get_bridge(g, :horizontal)
+    g.enclosing_group === nothing || break_group!(g.enclosing_group::Group, net, ctx)
+    i = findfirst(x -> x === g, s.groups)
+    i === nothing || deleteat!(s.groups, i)
+    delete!(s.group_by_leftmost_id, g.left_object.id_num)
+    for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
+                        (g.right_string_pos, s.right_edge_groups))
+        j = findfirst(x -> x === g, list[pos + 1])
+        j === nothing || deleteat!(list[pos + 1], j)
+    end
+    delete_proposed_bonds!(s, g)
+    for b in incident_bonds(g)
+        break_bond!(b::Bond, net)
+    end
+    if ctx !== nothing
+        delete_proposed_bridges!(ctx, g)
+        vertical_bridge === nothing || break_bridge!(vertical_bridge::Bridge, ctx)
+        horizontal_bridge === nothing || break_bridge!(horizontal_bridge::Bridge, ctx)
+    end
+    for o in g.constituent_objects
+        o.enclosing_group = nothing
+    end
+    for b in g.constituent_bonds
+        b.enclosing_group = nothing
+    end
+    spans_whole_string(g) ||
+        delete_invalid_string_position_middle_descriptions!(s, net, ctx)
+    return g
+end
+
+"""`(spanning-group-exists?)`."""
+spanning_group_exists(s::WorkspaceString) = any(spans_whole_string, s.groups)
+
+"""`(get-spanning-group)`."""
+function get_spanning_group(s::WorkspaceString)
+    i = findfirst(spans_whole_string, s.groups)
+    return i === nothing ? nothing : s.groups[i]
+end
+
+"""`(get-all-nested-groups object)` — a group, then every group inside it, all
+the way down. A letter contributes none."""
+function get_all_nested_groups(object::WSObject)
+    object isa Letter && return WSObject[]
+    result = WSObject[object]
+    for o in get_constituent_objects(object::Group)
+        append!(result, get_all_nested_groups(o))
+    end
+    return result
+end
+
+# --- plain registration, for instantiated groups ----------------------------
+#
+# `build_group!` is what a group BUILDER does: it activates descriptors, breaks
+# what it conflicts with, and stamps the trace. Instantiating an image into a
+# translated string needs only the registration half.
+
+"""`(add-group group)` — register a group in its string's indexes."""
+function add_group!(s::WorkspaceString, g::Group)
+    assign_id_num!(s, g)
+    pushfirst!(s.left_edge_groups[g.left_string_pos + 1], g)
+    pushfirst!(s.right_edge_groups[g.right_string_pos + 1], g)
+    s.group_by_leftmost_id[g.left_object.id_num] = g
+    pushfirst!(s.groups, g)
+    return s
+end
+
+"""`(delete-group group)` — the plain removal that pairs with `add_group!`.
+NB: this is NOT `break-group!`; it does not touch bonds, bridges or the
+enclosing group, because the groups it removes were never really built."""
+function remove_group!(s::WorkspaceString, g::Group)
+    j = findfirst(x -> x === g, s.groups)
+    j === nothing || deleteat!(s.groups, j)
+    delete!(s.group_by_leftmost_id, g.left_object.id_num)
+    for (pos, list) in ((g.left_string_pos, s.left_edge_groups),
+                        (g.right_string_pos, s.right_edge_groups))
+        k = findfirst(x -> x === g, list[pos + 1])
+        k === nothing || deleteat!(list[pos + 1], k)
+    end
+    return s
+end
+
+"""`(get-equivalent-letter letter)` / `(get-equivalent-group group)` — the
+object at the same place in this string. Both assume the two strings have
+exactly the same letter categories; they may or may not be the same string,
+since one can be a TRANSLATED string."""
+function get_equivalent_letter(s::WorkspaceString, letter::Letter)
+    any(x -> x === letter, s.letters) && return letter
+    equivalent = s.letters[letter.string_pos + 1]
+    return equivalent.letter_category === letter.letter_category ? equivalent : nothing
+end
+
+function get_equivalent_group(s::WorkspaceString, g::Group)
+    any(x -> x === g, s.groups) && return g
+    equivalent = get(s.group_by_leftmost_id, g.left_object.id_num, nothing)
+    equivalent === nothing && return nothing
+    other = equivalent::Group
+    return (same_group_category(g, other) && same_group_direction(g, other) &&
+            g.group_length == other.group_length) ? other : nothing
+end
+
+"""`(equivalent-workspace-objects? o1 o2)` (trace.ss) — same kind, same string,
+same span, and recursively the same constituents. Ported here rather than with
+the trace because it has no trace dependencies and `get-real-object` needs it."""
+function equivalent_workspace_objects(o1, o2)
+    (o1 isa Letter) == (o2 isa Letter) || return false
+    o1.string.string_type === o2.string.string_type || return false
+    left_string_pos(o1) == left_string_pos(o2) || return false
+    right_string_pos(o1) == right_string_pos(o2) || return false
+    o1 isa Letter && return o1.letter_category === o2.letter_category
+    g1, g2 = o1::Group, o2::Group
+    return same_group_category(g1, g2) && same_group_direction(g1, g2) &&
+           g1.group_length == g2.group_length &&
+           length(g1.constituent_objects) == length(g2.constituent_objects) &&
+           all(equivalent_workspace_objects(a, b)
+               for (a, b) in zip(g1.constituent_objects, g2.constituent_objects))
+end

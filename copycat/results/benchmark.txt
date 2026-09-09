@@ -1,0 +1,14 @@
+problem                   codelets   python s    julia s   py+log s  speedup
+----------------------------------------------------------------------------
+abc:abd::ijk:?               17004      0.615      0.179      1.121     4.2x
+abc:abd::iijjkk:?            47229      2.352      0.356      3.851     6.6x
+abc:abd::mrrjjj:?           148415      7.911      0.945     12.728     8.5x
+abc:abd::ppqqrr:?            47229      2.415      0.364      4.000     6.8x
+abc:abd::xyz:?              132306      5.254      0.532      8.853    10.1x
+abc:abd::kji:?               38767      1.659      0.435      2.779     3.7x
+abcd:abcde::ijkl:?           38557      1.671      0.484      2.887     3.6x
+----------------------------------------------------------------------------
+TOTAL                      1408529     65.626      9.883    108.656     6.6x
+
+throughput: python 21463 codelets/s, julia 142516 codelets/s
+julia process wall (cold run incl. startup+JIT): 6.77 s avg

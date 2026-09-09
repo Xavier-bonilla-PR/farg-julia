@@ -1,0 +1,33 @@
+workload              iters     chez s    julia s  speedup  checksum
+--------------------------------------------------------------------------------
+slipnet-50-cycles       400      0.495      0.018    28.2x  4800
+workspace-init         2000      0.622      0.078     8.0x  1720000
+concept-mappings       2000      1.041      0.118     8.8x  14268000
+bonds-and-groups       2000      2.269      0.315     7.2x  2096000
+themespace-50-cycles    200      1.791      0.094    19.0x  9506200
+full-runs                20      7.420      1.219     6.1x  59320
+justify-runs             20      5.395      0.873     6.2x  46220
+--------------------------------------------------------------------------------
+TOTAL                           19.033      2.715     7.0x
+
+problem                  iters     chez s    julia s  speedup  outcome  codelets  temp
+-----------------------------------------------------------------------------------
+abc:abd::ijk:?               5      0.185      0.026     7.2x  answer 364 19
+abc:abd::iijjkk:?            5      0.406      0.080     5.0x  answer 886 20
+abc:cba::pqrs:?              5      0.282      0.058     4.8x  answer 726 5
+abc:abd::xyz:?               5      0.724      0.147     4.9x  answer 1694 51
+abc:abd::mrrjjj:?            5      0.184      0.033     5.6x  answer 336 40
+mrrjjj:mrrkkk::xyz:?         5      2.066      0.392     5.3x  answer 2925 10
+abc:abd::ijk:ijl             5      0.262      0.047     5.6x  answer 436 23
+abc:cba::pqrs:srqp           5      0.729      0.148     4.9x  answer 1287 15
+abc:abd::mrrjjj:mrrjjjj      5      2.832      0.520     5.4x  answer 3282 59
+-----------------------------------------------------------------------------------
+TOTAL                               7.670      1.450     5.3x
+
+process wall clock, whole benchmark, including load and JIT:
+  metacat_bench      chez  20.41 s   julia  37.77 s
+  metacat_problems   chez  11.41 s   julia  39.39 s
+
+time to first answer -- cold process, abc cba pqrs 42 5000, best of 3:
+  chez   0.71 s   julia  29.29 s   (julia is 41.1x SLOWER here)
+  break-even at ~35 s of Chez model time in one process (whole-model speedup 5.3x)
