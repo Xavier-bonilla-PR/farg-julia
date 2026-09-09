@@ -108,8 +108,13 @@ answer string."""
 justify_mode(ctx::MetacatCtx) = ctx.answer_string !== nothing
 
 """`*non-answer-strings*` — the three strings every run works on."""
+# NB: these five return TUPLES rather than Vectors. Every caller only iterates
+# or indexes them, and they are rebuilt on every read -- `workspace_objects`
+# alone calls `all_strings` on each of its twelve call sites -- so returning a
+# heap-allocated Vector each time was pure churn. A tuple carries the same
+# elements in the same order, is stack-allocated, and keeps its element types.
 non_answer_strings(ctx::MetacatCtx) =
-    WorkspaceString[ctx.initial_string, ctx.modified_string, ctx.target_string]
+    (ctx.initial_string, ctx.modified_string, ctx.target_string)
 
 """`*all-strings*` — the four, or the three when there is no answer string.
 
@@ -120,27 +125,55 @@ here rather than carrying a `nothing` makes the readers guard-free and cannot
 change a decision, because the weight paired with that entry is always 0."""
 all_strings(ctx::MetacatCtx) =
     ctx.answer_string === nothing ? non_answer_strings(ctx) :
-    WorkspaceString[ctx.initial_string, ctx.modified_string, ctx.target_string,
-                    ctx.answer_string::WorkspaceString]
+    (ctx.initial_string, ctx.modified_string, ctx.target_string,
+     ctx.answer_string::WorkspaceString)
 
 """`*top-strings*`, `*bottom-strings*` and `*vertical-strings*` — the string
 pairs the three bridge types map between. NB `*bottom-strings*` holds `#f` for
 the answer string outside justify mode, and only `get-possible-bridge-objects`
 reads it, always for a bridge type that cannot exist then."""
-top_strings(ctx::MetacatCtx) =
-    WorkspaceString[ctx.initial_string, ctx.modified_string]
-vertical_strings(ctx::MetacatCtx) =
-    WorkspaceString[ctx.initial_string, ctx.target_string]
+top_strings(ctx::MetacatCtx) = (ctx.initial_string, ctx.modified_string)
+vertical_strings(ctx::MetacatCtx) = (ctx.initial_string, ctx.target_string)
 bottom_strings(ctx::MetacatCtx) =
-    ctx.answer_string === nothing ? WorkspaceString[ctx.target_string] :
-    WorkspaceString[ctx.target_string, ctx.answer_string::WorkspaceString]
+    ctx.answer_string === nothing ? (ctx.target_string,) :
+    (ctx.target_string, ctx.answer_string::WorkspaceString)
 
-workspace_objects(ctx::MetacatCtx) = vcat((objects(s) for s in all_strings(ctx))...)
-workspace_bonds(ctx::MetacatCtx) = vcat((s.bonds for s in all_strings(ctx))...)
-workspace_groups(ctx::MetacatCtx) = vcat((s.groups for s in all_strings(ctx))...)
+# NB: `vcat((... for s in ...)...)` splats a generator, which goes through
+# vcat's fully generic path and allocates once per string plus once for the
+# result. Appending into one vector is the same concatenation, in the same
+# order, for one allocation.
+function workspace_objects(ctx::MetacatCtx)
+    out = WSObject[]
+    for s in all_strings(ctx)
+        append!(out, s.letters)
+        append!(out, s.groups)
+    end
+    return out
+end
+
+function workspace_bonds(ctx::MetacatCtx)
+    out = Any[]
+    for s in all_strings(ctx); append!(out, s.bonds); end
+    return out
+end
+
+function workspace_groups(ctx::MetacatCtx)
+    out = WSObject[]
+    for s in all_strings(ctx); append!(out, s.groups); end
+    return out
+end
 
 """`(object-exists? object)`."""
-object_exists(ctx::MetacatCtx, o::WSObject) = any(x -> x === o, workspace_objects(ctx))
+# NB: this built the entire workspace object list just to ask whether one
+# object was in it. Scanning the strings directly answers the same question and
+# allocates nothing.
+function object_exists(ctx::MetacatCtx, o::WSObject)
+    for s in all_strings(ctx)
+        for x in s.letters; x === o && return true; end
+        for x in s.groups;  x === o && return true; end
+    end
+    return false
+end
 
 # Structure strengths, dispatched through the context so codelets need only
 # one call shape. TEMPERATURE is the global the formulas read.

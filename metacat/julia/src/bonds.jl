@@ -174,7 +174,7 @@ structure types."""
 function update_structure_strength!(b::Bond, net::Slipnet, rng::PyRandom, ts = nothing)
     internal = calculate_internal_strength(b, net)
     external = calculate_external_strength(b, rng)
-    intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
-    b.strength = sround(weighted_average([0, intrinsic], [0, 1]))
+    intrinsic = weighted_average((internal, external), (internal, sub_from_100(internal)))
+    b.strength = sround(weighted_average((0, intrinsic), (0, 1)))
     return b
 end

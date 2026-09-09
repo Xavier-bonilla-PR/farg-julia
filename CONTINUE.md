@@ -1319,7 +1319,7 @@ not a regression: the codelet counts are identical to the earlier run.
 per individual trial). Throughput 21,463 codelets/s Python vs 142,516 Julia.
 Table in `README.md`, raw data in `copycat/results/benchmark.json`.
 
-### Metacat — 3.4x
+### Metacat — 5.3x
 
 Three benchmarks, all in `metacat/bench/benchmark.py`:
 
@@ -1328,13 +1328,13 @@ aggregate:
 
 | workload | iterations | Chez (s) | Julia (s) | speedup | checksum |
 |---|---:|---:|---:|---:|---:|
-| slipnet-50-cycles | 400 | 0.514 | 0.021 | 24.5x | 4800 |
-| workspace-init | 2000 | 0.713 | 0.241 | 3.0x | 1720000 |
-| concept-mappings | 2000 | 1.203 | 0.142 | 8.5x | 14268000 |
-| bonds-and-groups | 2000 | 2.446 | 0.602 | 4.1x | 2096000 |
-| themespace-50-cycles | 200 | 1.894 | 0.101 | 18.8x | 9506200 |
-| **full-runs** | 20 | 7.762 | 2.040 | **3.8x** | 59320 |
-| **justify-runs** | 20 | 5.420 | 1.387 | **3.9x** | 46220 |
+| slipnet-50-cycles | 400 | 0.495 | 0.018 | 28.2x | 4800 |
+| workspace-init | 2000 | 0.622 | 0.078 | 8.0x | 1720000 |
+| concept-mappings | 2000 | 1.041 | 0.118 | 8.8x | 14268000 |
+| bonds-and-groups | 2000 | 2.269 | 0.315 | 7.2x | 2096000 |
+| themespace-50-cycles | 200 | 1.791 | 0.094 | 19.0x | 9506200 |
+| **full-runs** | 20 | 7.420 | 1.219 | **6.1x** | 59320 |
+| **justify-runs** | 20 | 5.395 | 0.873 | **6.2x** | 46220 |
 
 **Quote the whole-model rows, not the layer ones.** Each layer workload
 exercises one thing in a tight loop and flatters whichever implementation suits
@@ -1345,7 +1345,7 @@ Metacat is pointer-chasing over a graph, where the advantage is 2.5-4x.
 `metacat_problems.{ss,jl}` — the model one problem at a time, nine problems,
 five runs each, memory cleared between runs, all reaching an answer under a
 5,000-codelet budget. Checksum is outcome + codelets + final temperature.
-Speedups run 3.2x-3.8x and are strikingly flat: the ratio barely moves with
+Speedups run 4.8x-5.6x for eight of the nine (the ninth, the smallest problem, is 7.2x) and are strikingly flat: the ratio barely moves with
 problem size, with whether the run hits a snag, or with justify mode, because
 Metacat's per-cycle machinery dominates whatever the codelet did. Table in
 `README.md`, raw data in `metacat/results/benchmark.json`.
@@ -1354,13 +1354,13 @@ Metacat's per-cycle machinery dominates whatever the codelet did. Table in
 
 | | Chez | Julia | |
 |---|---:|---:|---|
-| Metacat, 618 codelets | 0.70 s | 32.35 s | Julia **46x slower** |
+| Metacat, 618 codelets | 0.71 s | 29.29 s | Julia **41x slower** |
 | Copycat, `ijk`, 1 iteration (Python vs Julia) | 0.08 s | 6.16 s | Julia **77x slower** |
 
 This is the honest counterweight and the driver prints it deliberately. Julia
 compiles the port before it can run a codelet; for Metacat's 13,670 lines that
 is ~30 s, far more than a small problem costs. **The ports lose outright on a
-single run.** Break-even is ~45 s of Chez model time (~240 runs of the
+single run.** Break-even is ~35 s of Chez model time (~200 runs of the
 benchmark's average size) for Metacat, ~7 s of Python model time (~150,000
 codelets, one `mrrjjj`) for Copycat. Past that it is all profit; below it, use
 the original.
@@ -1380,23 +1380,47 @@ reached. `metacat_problems.{ss,jl}` now run a throwaway ordinary problem and a
 throwaway justify problem before the first timed one, and the per-problem
 spread went from 1.0x-3.8x to a tight 3.2x-3.8x.
 
-### Where the remaining Julia overhead is — profiled 2026-09-08
+### Optimising the Julia — method, results, and what failed
 
-A sampling profile attributing each overhead sample to the model function
-responsible (dispatch ~21%, GC/alloc ~23%, runtime field access ~3%) found the
-two `distinguishing_descriptor` methods were **~12% of a whole run** on their
-own. `WorkspaceString.letters` and `.groups` are declared `Vector{WSObject}`
-because of the WorkspaceString-to-Letter/Group definition cycle, so
-`other.descriptions` was resolved at runtime. Instrumenting six problems shows
-those vectors — and `bonds`, `outgoing_bonds`, `incoming_bonds` and
-`proposed_groups`, all `Vector{Any}` — are **homogeneous at runtime**. Naming
-the type on the loop variable is worth **1.16x whole-model**, verified 33/33,
-and is now in `workspace.jl` and `groups.jl` with an `NB:` note.
+**2.10x on the whole model**, in four verified rounds, taking Metacat from 3.3x
+to 5.3x against Chez. The method is the reusable part:
 
-After it the profile is flat: worst single site 2.4%, top ten all 0.4-2.4%.
-Collecting the rest means typing the fields themselves, which needs the cycle
-broken properly (arena plus integer indices). Ceiling estimate 1.5-1.8x over the
-current port.
+1. Sample-profile a run with `Profile.fetch(include_meta=false)`.
+2. For each sample, classify the LEAF frame (dispatch / GC-alloc / runtime field
+   access / other), then walk up the stack to the first frame in the repo and
+   attribute the cost THERE. Profiling that stops at the runtime frame tells you
+   only that Julia is dispatching; this tells you which model function is
+   causing it.
+3. Fix the top few. Re-profile. Repeat.
+
+| round | change | cumulative |
+|---|---|---:|
+| 1 | element type named on the two `distinguishing_descriptor` loops | 1.16x |
+| 2 | `weighted_average` folds its products instead of building an array, tuples at its hot call sites, `calculate_local_support` walks letters+groups instead of `objects()` | 1.49x |
+| 3 | `update_raw_importance!` folds; neighbour lists built directly, not splatted; `get_possible_relations` stops slicing once per element | 1.61x |
+| 4 | context string lists return TUPLES not Vectors; `workspace_objects` built in one pass; `object_exists` scans instead of materialising; `distinguishing_descriptor` drops its per-call `subgroups` array | **2.10x** |
+
+Nearly all of it is two mistakes repeated: **an intermediate collection built to
+be thrown away, and an abstract element type on a container that is homogeneous
+in practice.** Instrumenting six problems confirms `letters`, `groups`, `bonds`,
+`outgoing_bonds`, `incoming_bonds` and `proposed_groups` never hold anything but
+their one concrete type. The biggest single item was the context's five string
+lists: they returned a freshly allocated `Vector{WorkspaceString}` on every
+read, and `workspace_objects` alone reads them from twelve call sites.
+
+`update_workspace_values!` had to lose its `::Vector{WorkspaceString}` signature
+for the tuple change; it takes any iterable now.
+
+**What failed, and stays failed.** Rewriting `theme_type_matches` and
+`sintersect` with explicit loops instead of `any(...)` closures — which should
+avoid boxing the captured variable — made the model **15% slower**. Reverted.
+Measure every change; the principle does not carry on its own.
+
+**What is left.** The profile is flat: ~23% dispatch and ~21% GC/alloc, worst
+single site 1.5%. There is no next move that does not mean making the container
+fields concrete, and that needs the WorkspaceString-to-Letter/Group definition
+cycle broken properly — an arena with integer indices instead of pointers, which
+is a redesign rather than an optimisation.
 
 **Do not rewrite `objects()` to return `Vector{Union{Letter,Group}}`.** It is
 called from 111 sites and looks like the biggest prize, but `workspace`, `cm`

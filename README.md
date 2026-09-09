@@ -27,7 +27,7 @@ make that painful:
 
 So this repository ports both to Julia, and — because a fast model that behaves
 differently is worthless — proves the ports run the *identical* computation
-rather than merely a similar one. Copycat gets **6.6x**, Metacat **3.4x**, both
+rather than merely a similar one. Copycat gets **6.6x**, Metacat **5.3x**, both
 with byte-identical output. Metacat also gets a headless reference harness,
 which is what makes it measurable in the first place.
 
@@ -59,7 +59,7 @@ licences** — MIT for Copycat, GPL-2 for Metacat. See the end of this file.
 | reference size | 4,082 lines | 18,752 lines (excl. graphics) |
 | Julia port size | 3,818 lines | 13,670 lines |
 | runs headless out of the box | yes | **no** — `metacat/scheme/headless/` fixes that |
-| speedup, whole model | **6.6x** | **3.4x** |
+| speedup, whole model | **6.6x** | **5.3x** |
 | how the port is checked | 51 answer-distribution and trace comparisons | 33 layer probes, 39,946 trace lines |
 | state | complete | the model is complete; the running narration is not |
 
@@ -166,25 +166,28 @@ unless the two implementations agree on all three.
 
 | problem | codelets | final temp | Chez | Julia | speedup |
 |---|---:|---:|---:|---:|---:|
-| `abc : abd :: ijk : ?` | 364 | 19 | 0.195 s | 0.062 s | **3.2x** |
-| `abc : abd :: iijjkk : ?` | 886 | 20 | 0.482 s | 0.134 s | **3.6x** |
-| `abc : cba :: pqrs : ?` | 726 | 5 | 0.339 s | 0.090 s | **3.8x** |
-| `abc : abd :: xyz : ?` | 1,694 | 51 | 0.826 s | 0.253 s | **3.3x** |
-| `abc : abd :: mrrjjj : ?` | 336 | 40 | 0.198 s | 0.061 s | **3.2x** |
-| `mrrjjj : mrrkkk :: xyz : ?` | 2,925 | 10 | 2.296 s | 0.671 s | **3.4x** |
-| `abc : abd :: ijk : ijl` *(justify)* | 436 | 23 | 0.278 s | 0.078 s | **3.6x** |
-| `abc : cba :: pqrs : srqp` *(justify)* | 1,287 | 15 | 0.810 s | 0.251 s | **3.2x** |
-| `abc : abd :: mrrjjj : mrrjjjj` *(justify)* | 3,282 | 59 | 2.959 s | 0.873 s | **3.4x** |
-| **total** | | | **8.38 s** | **2.47 s** | **3.4x** |
+| `abc : abd :: ijk : ?` | 364 | 19 | 0.185 s | 0.026 s | **7.2x** |
+| `abc : abd :: iijjkk : ?` | 886 | 20 | 0.406 s | 0.080 s | **5.0x** |
+| `abc : cba :: pqrs : ?` | 726 | 5 | 0.282 s | 0.058 s | **4.8x** |
+| `abc : abd :: xyz : ?` | 1,694 | 51 | 0.724 s | 0.147 s | **4.9x** |
+| `abc : abd :: mrrjjj : ?` | 336 | 40 | 0.184 s | 0.033 s | **5.6x** |
+| `mrrjjj : mrrkkk :: xyz : ?` | 2,925 | 10 | 2.066 s | 0.392 s | **5.3x** |
+| `abc : abd :: ijk : ijl` *(justify)* | 436 | 23 | 0.262 s | 0.047 s | **5.6x** |
+| `abc : cba :: pqrs : srqp` *(justify)* | 1,287 | 15 | 0.729 s | 0.148 s | **4.9x** |
+| `abc : abd :: mrrjjj : mrrjjjj` *(justify)* | 3,282 | 59 | 2.832 s | 0.520 s | **5.4x** |
+| **total** | | | **7.67 s** | **1.45 s** | **5.3x** |
 
 The striking thing is how *flat* that column is. Copycat's speedup swings from
-3.6x to 10.1x with the problem; Metacat's sits between 3.2x and 3.8x whether the
-run is 336 codelets or 3,282, whether it hits a snag (`xyz`, which ends at
-temperature 51) or settles cleanly (`pqrs`, temperature 5), and whether or not
-justify mode is on. Metacat's per-codelet work is dominated by machinery that
-runs on every cycle regardless of what the codelet did — updating the workspace,
-spreading activation through the slipnet and the themespace, and maintaining the
-temporal trace — so the mixture barely changes and neither does the ratio.
+3.6x to 10.1x with the problem; eight of Metacat's nine sit between 4.8x and
+5.6x whether the run is 336 codelets or 3,282, whether it hits a snag (`xyz`,
+which ends at temperature 51) or settles cleanly (`pqrs`, temperature 5), and
+whether or not justify mode is on. Metacat's per-codelet work is dominated by
+machinery that runs on every cycle regardless of what the codelet did — updating
+the workspace, spreading activation through the slipnet and the themespace, and
+maintaining the temporal trace — so the mixture barely changes and neither does
+the ratio. The outlier is the smallest problem, `ijk` at 7.2x, where 364
+codelets are not enough for the run's fixed set-up to be amortised on the Chez
+side.
 
 Expect roughly ±10% run to run on these; the three consecutive whole-benchmark
 runs made while writing this varied between 3.1x and 3.3x overall.
@@ -198,13 +201,13 @@ whichever implementation happens to suit it.
 
 | workload | iterations | Chez | Julia | speedup |
 |---|---:|---:|---:|---:|
-| slipnet, 50 activation cycles | 400 | 0.514 s | 0.021 s | 24.5x |
-| workspace initialisation | 2,000 | 0.713 s | 0.241 s | 3.0x |
-| concept mappings | 2,000 | 1.203 s | 0.142 s | 8.5x |
-| bonds and groups | 2,000 | 2.446 s | 0.602 s | 4.1x |
-| themespace, 50 activation cycles | 200 | 1.894 s | 0.101 s | 18.8x |
-| **whole runs of the model** | 20 | **7.762 s** | **2.040 s** | **3.8x** |
-| **whole runs, justify mode** | 20 | **5.420 s** | **1.387 s** | **3.9x** |
+| slipnet, 50 activation cycles | 400 | 0.495 s | 0.018 s | 28.2x |
+| workspace initialisation | 2,000 | 0.622 s | 0.078 s | 8.0x |
+| concept mappings | 2,000 | 1.041 s | 0.118 s | 8.8x |
+| bonds and groups | 2,000 | 2.269 s | 0.315 s | 7.2x |
+| themespace, 50 activation cycles | 200 | 1.791 s | 0.094 s | 19.0x |
+| **whole runs of the model** | 20 | **7.420 s** | **1.219 s** | **6.1x** |
+| **whole runs, justify mode** | 20 | **5.395 s** | **0.873 s** | **6.2x** |
 
 The two 16–24x rows are the explanation for the 3.3x. Numeric loops over fixed
 arrays — spreading activation through 59 slipnet nodes, or through the
@@ -225,7 +228,7 @@ Measured as time from `exec` to a printed answer, cold, best of three:
 | one problem, one cold process | reference | Julia | |
 |---|---:|---:|---|
 | Copycat, `abc:abd::ijk:?`, 1 iteration | 0.08 s | 6.16 s | Julia **77x slower** |
-| Metacat, `abc:cba::pqrs:?`, 618 codelets | 0.70 s | 32.35 s | Julia **46x slower** |
+| Metacat, `abc:cba::pqrs:?`, 618 codelets | 0.71 s | 29.29 s | Julia **41x slower** |
 
 Julia compiles the port before it can run a single codelet, and for Metacat's
 13,670 lines that compile costs about half a minute — far more than a small
@@ -238,8 +241,8 @@ the two figures above:
 
 - **Copycat**: about **7 seconds** of Python model time in one process, roughly
   150,000 codelets — one `mrrjjj` problem.
-- **Metacat**: about **45 seconds** of Chez model time in one process, roughly
-  240 runs of the average size in the table above.
+- **Metacat**: about **35 seconds** of Chez model time in one process, roughly
+  200 runs of the average size in the table above.
 
 Past that, everything is profit, and a study that used to be an afternoon is a
 coffee break. Below it, use the original. This is the single most important
@@ -324,25 +327,39 @@ into a branch — made the port **~1.7x faster with byte-identical output**. Onl
 `WorkspaceString.bonds` still needs an abstract element type, because
 `WorkspaceString` and `Bond` are a genuine definition cycle.
 
-Metacat has the same disease and has only been partly treated. Its
+Metacat had the same disease, and treating it is worth **2.10x on the whole
+model** — every step of it verified byte-identical against the Scheme. Its
 `WorkspaceString` declares `letters::Vector{WSObject}` and
 `groups::Vector{WSObject}` for that same cycle reason, though instrumenting six
 problems shows those vectors only ever hold `Letter` and `Group` respectively —
 as do `bonds`, `outgoing_bonds`, `incoming_bonds` and `proposed_groups`, all
-declared `Vector{Any}`. A sampling profile attributing each overhead sample to
-the model function responsible put **~12% of a whole run** in the two
-`distinguishing_descriptor` methods alone, almost all of it Julia resolving
-`other.descriptions` at runtime instead of at a fixed field offset. Naming the
-concrete type on those two loop variables — two lines, no struct changes — is
-worth **1.16x on the whole model** with all 33 probes still byte-identical.
+declared `Vector{Any}`. The method was to sample-profile a run, attribute every
+overhead sample to the *model* function responsible rather than the runtime
+frame it landed in, fix the top few, and re-profile. Four rounds:
 
-There is more where that came from, but not much that is as cheap. After the fix
-the profile is flat: ~21% of the run is still method dispatch and ~23% is GC and
-allocation, but the worst single site is 2.4% and the top ten are all between
-0.4% and 2.4%. Collecting the rest means making the container fields concrete
-rather than annotating call sites one at a time, and that runs into the
-definition cycle properly — the honest fix being an arena with integer indices
-instead of pointers. A plausible ceiling is 1.5–1.8x over the current port.
+| | change | cumulative |
+|---|---|---:|
+| 1 | name the element type on the two `distinguishing_descriptor` loops | 1.16x |
+| 2 | fold `weighted_average`'s products instead of building an array; pass tuples at its hot call sites; drop the `objects()` vcat from `calculate_local_support` | 1.49x |
+| 3 | fold `update_raw_importance!`; build the neighbour lists directly instead of splatting; stop slicing the array once per element in `get_possible_relations` | 1.61x |
+| 4 | return the context's five string lists as tuples rather than freshly allocated Vectors; build `workspace_objects` in one pass; answer `object_exists` without materialising the list; drop the per-call `subgroups` array in `distinguishing_descriptor` | **2.10x** |
+
+Almost none of that is clever. It is nearly all the same two mistakes repeated:
+**an intermediate collection built to be thrown away, and an abstract element
+type on a container that is homogeneous in practice.** The single biggest item
+was the string lists — `non_answer_strings` and friends returned a heap-allocated
+`Vector{WorkspaceString}` rebuilt on every read, and `workspace_objects` alone
+reads them from twelve call sites.
+
+Not everything worked. Rewriting `theme_type_matches` and `sintersect` to use
+explicit loops instead of `any(...)` closures — which *should* avoid boxing the
+captured variable — made the model **15% slower**, and was reverted. Measure
+each change; do not assume the principle carries.
+
+After all of it the profile is flat: ~23% dispatch and ~21% GC still, but the
+worst single site is 1.5% and there is no obvious next move that does not mean
+making the container fields concrete, which needs the definition cycle broken
+properly — an arena with integer indices rather than pointers.
 
 One caveat found the hard way: `objects(s) = vcat(s.letters, s.groups)` is
 called from 111 sites and looks like the biggest prize, but rewriting it to

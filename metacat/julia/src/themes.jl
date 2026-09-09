@@ -96,8 +96,19 @@ function get_possible_relations(dimension::Node, net::Slipnet)
     for n1 in nodes, n2 in nodes
         push!(labels, label_between(n1, n2, net[:plato_identity]))
     end
-    return Union{Nothing,Node}[l for (i, l) in enumerate(labels)
-                               if !any(x -> x === l, labels[(i + 1):end])]
+    # NB: `labels[(i + 1):end]` allocated a fresh slice for EVERY element, so
+    # this dedup was quadratic in allocations as well as comparisons. Scanning
+    # the tail in place keeps the same rule -- drop a label if it recurs later,
+    # so the LAST occurrence of each is the one kept, in order.
+    out = Union{Nothing,Node}[]
+    for (i, l) in enumerate(labels)
+        recurs = false
+        for j in (i + 1):length(labels)
+            if labels[j] === l; recurs = true; break; end
+        end
+        recurs || push!(out, l)
+    end
+    return out
 end
 
 function make_theme_cluster(theme_type::Symbol, dimension::Node, net::Slipnet)

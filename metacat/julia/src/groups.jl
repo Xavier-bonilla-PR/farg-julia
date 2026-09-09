@@ -341,13 +341,21 @@ function distinguishing_descriptor(net::Slipnet, g::Group, descriptor::Node)
     (descriptor === net[:plato_letter] || descriptor === net[:plato_group] ||
      any(n -> n === descriptor, net.numbers)) && return false
     supergroup = g.enclosing_group
-    subgroups = [o for o in g.constituent_objects if o isa Group]
     # NB: see the note on the Letter method in workspace.jl -- `groups` is a
     # Vector{WSObject} for the same definition-cycle reason, and only ever holds
     # Groups, so naming the type here just restores the concrete field access.
     for other::Group in g.string.groups
-        (other === g || other === supergroup ||
-         any(sg -> sg === other, subgroups)) && continue
+        # NB: this tested membership against a freshly built `subgroups` list --
+        # `[o for o in g.constituent_objects if o isa Group]`, allocated on every
+        # call. `other` is always a Group, so a Letter constituent can never be
+        # `===` it, and scanning the constituents directly asks the same question
+        # with nothing allocated.
+        (other === g || other === supergroup) && continue
+        is_subgroup = false
+        for o in g.constituent_objects
+            if o === other; is_subgroup = true; break; end
+        end
+        is_subgroup && continue
         for d in other.descriptions
             d.descriptor === descriptor && return false
         end

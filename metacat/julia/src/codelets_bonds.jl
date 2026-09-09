@@ -178,7 +178,12 @@ end
 
 """`(get-relevance get-category-method-name category)`."""
 function get_relevance(s::WorkspaceString, getter, category::Node)
-    non_spanning = WSObject[o for o in objects(s) if !spans_whole_string(o)]
+    # NB: was `WSObject[o for o in objects(s) if !spans_whole_string(o)]`, which
+    # allocated `objects(s)` and then the filtered copy. Walking the two vectors
+    # in the same order -- letters, then groups -- builds the same list once.
+    non_spanning = WSObject[]
+    for o::Letter in s.letters; spans_whole_string(o) || push!(non_spanning, o); end
+    for o in s.groups;          spans_whole_string(o) || push!(non_spanning, o); end
     isempty(non_spanning) && return 0
     n = count(non_spanning) do o
         rb = o.right_bond

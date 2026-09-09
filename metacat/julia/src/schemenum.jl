@@ -139,8 +139,16 @@ end
 
 ssum(l) = isempty(l) ? 0 : reduce(+, l)
 
+# NB: `map(*, weights, values)` built a fresh array on every call, and this is
+# called for every workspace structure on every update cycle -- it was the single
+# largest allocation site in a run. Reducing a generator instead folds the same
+# products in the same left-to-right order, so the exactness of the result is
+# unchanged (which the probes check to the numerator), with nothing allocated.
+# Pass TUPLES rather than array literals at the hot call sites and the whole
+# call becomes allocation-free.
 function weighted_average(values, weights)
     s = ssum(weights)
     s == 0 && return 0
-    return sdiv(ssum(map(*, weights, values)), s)
+    isempty(weights) && return sdiv(0, s)
+    return sdiv(reduce(+, (w * v for (w, v) in zip(weights, values))), s)
 end

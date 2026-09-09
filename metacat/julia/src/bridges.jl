@@ -379,11 +379,11 @@ function update_structure_strength!(b::Bridge, net::Slipnet, all_bridges::Vector
                                     ts = nothing)
     internal = calculate_internal_strength(b, net)
     external = calculate_external_strength(b, all_bridges, net)
-    intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
+    intrinsic = weighted_average((internal, external), (internal, sub_from_100(internal)))
     compatibility = get_thematic_compatibility(b, ts, net)
     thematic_weight = abs(compatibility)
-    b.strength = sround(weighted_average([compatibility > 0 ? 100 : 0, intrinsic],
-                                         [thematic_weight, sub_from_1(thematic_weight)]))
+    b.strength = sround(weighted_average((compatibility > 0 ? 100 : 0, intrinsic),
+                                         (thematic_weight, sub_from_1(thematic_weight))))
     return b
 end
 

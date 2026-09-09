@@ -1,14 +1,14 @@
 {
  "metacat_bench": {
-  "scheme_process_wall_s": 21.32087358300032,
-  "julia_process_wall_s": 41.59835878500007,
+  "scheme_process_wall_s": 20.409109331999844,
+  "julia_process_wall_s": 37.76911102400027,
   "rows": [
    {
     "name": "slipnet-50-cycles",
     "iterations": 400,
-    "scheme_s": 0.514,
-    "julia_s": 0.020950661,
-    "speedup": 24.533832130642562,
+    "scheme_s": 0.495,
+    "julia_s": 0.017535887,
+    "speedup": 28.227827882330676,
     "checksum": [
      "4800"
     ]
@@ -16,9 +16,9 @@
    {
     "name": "workspace-init",
     "iterations": 2000,
-    "scheme_s": 0.713,
-    "julia_s": 0.241277002,
-    "speedup": 2.9551096627104143,
+    "scheme_s": 0.622,
+    "julia_s": 0.077987543,
+    "speedup": 7.975632723805646,
     "checksum": [
      "1720000"
     ]
@@ -26,9 +26,9 @@
    {
     "name": "concept-mappings",
     "iterations": 2000,
-    "scheme_s": 1.203,
-    "julia_s": 0.142332949,
-    "speedup": 8.452013454734224,
+    "scheme_s": 1.041,
+    "julia_s": 0.117777767,
+    "speedup": 8.838680054105627,
     "checksum": [
      "14268000"
     ]
@@ -36,9 +36,9 @@
    {
     "name": "bonds-and-groups",
     "iterations": 2000,
-    "scheme_s": 2.446,
-    "julia_s": 0.602353056,
-    "speedup": 4.060741413421169,
+    "scheme_s": 2.269,
+    "julia_s": 0.314869598,
+    "speedup": 7.206157769477637,
     "checksum": [
      "2096000"
     ]
@@ -46,9 +46,9 @@
    {
     "name": "themespace-50-cycles",
     "iterations": 200,
-    "scheme_s": 1.894,
-    "julia_s": 0.100808199,
-    "speedup": 18.788154324629883,
+    "scheme_s": 1.791,
+    "julia_s": 0.094305557,
+    "speedup": 18.991457735624213,
     "checksum": [
      "9506200"
     ]
@@ -56,9 +56,9 @@
    {
     "name": "full-runs",
     "iterations": 20,
-    "scheme_s": 7.762,
-    "julia_s": 2.039882105,
-    "speedup": 3.805121865118769,
+    "scheme_s": 7.42,
+    "julia_s": 1.219195731,
+    "speedup": 6.085979315162153,
     "checksum": [
      "59320"
     ]
@@ -66,9 +66,9 @@
    {
     "name": "justify-runs",
     "iterations": 20,
-    "scheme_s": 5.42,
-    "julia_s": 1.386840353,
-    "speedup": 3.9081643307216343,
+    "scheme_s": 5.395,
+    "julia_s": 0.87336685,
+    "speedup": 6.17724384661497,
     "checksum": [
      "46220"
     ]
@@ -76,15 +76,15 @@
   ]
  },
  "metacat_problems": {
-  "scheme_process_wall_s": 12.519073388999914,
-  "julia_process_wall_s": 43.90874235399997,
+  "scheme_process_wall_s": 11.405512729000293,
+  "julia_process_wall_s": 39.39196649099995,
   "rows": [
    {
     "name": "abc:abd::ijk:?",
     "iterations": 5,
-    "scheme_s": 0.195,
-    "julia_s": 0.06168345,
-    "speedup": 3.1613017754357124,
+    "scheme_s": 0.185,
+    "julia_s": 0.025694303,
+    "speedup": 7.200039635245213,
     "checksum": [
      "answer",
      "364",
@@ -94,9 +94,9 @@
    {
     "name": "abc:abd::iijjkk:?",
     "iterations": 5,
-    "scheme_s": 0.482,
-    "julia_s": 0.134192692,
-    "speedup": 3.591849845295599,
+    "scheme_s": 0.406,
+    "julia_s": 0.080405969,
+    "speedup": 5.04937637154774,
     "checksum": [
      "answer",
      "886",
@@ -106,9 +106,9 @@
    {
     "name": "abc:cba::pqrs:?",
     "iterations": 5,
-    "scheme_s": 0.339,
-    "julia_s": 0.090188847,
-    "speedup": 3.758779619391298,
+    "scheme_s": 0.282,
+    "julia_s": 0.058200174,
+    "speedup": 4.8453463386552755,
     "checksum": [
      "answer",
      "726",
@@ -118,9 +118,9 @@
    {
     "name": "abc:abd::xyz:?",
     "iterations": 5,
-    "scheme_s": 0.826,
-    "julia_s": 0.252837639,
-    "speedup": 3.266918656838114,
+    "scheme_s": 0.724,
+    "julia_s": 0.14654326,
+    "speedup": 4.940520635340035,
     "checksum": [
      "answer",
      "1694",
@@ -130,9 +130,9 @@
    {
     "name": "abc:abd::mrrjjj:?",
     "iterations": 5,
-    "scheme_s": 0.198,
-    "julia_s": 0.061460409,
-    "speedup": 3.2215861108246124,
+    "scheme_s": 0.184,
+    "julia_s": 0.032745636,
+    "speedup": 5.6190693624029775,
     "checksum": [
      "answer",
      "336",
@@ -142,9 +142,9 @@
    {
     "name": "mrrjjj:mrrkkk::xyz:?",
     "iterations": 5,
-    "scheme_s": 2.296,
-    "julia_s": 0.67122443,
-    "speedup": 3.420614473165108,
+    "scheme_s": 2.066,
+    "julia_s": 0.392248076,
+    "speedup": 5.267074911031558,
     "checksum": [
      "answer",
      "2925",
@@ -154,9 +154,9 @@
    {
     "name": "abc:abd::ijk:ijl",
     "iterations": 5,
-    "scheme_s": 0.278,
-    "julia_s": 0.077915986,
-    "speedup": 3.567945607464943,
+    "scheme_s": 0.262,
+    "julia_s": 0.046577945,
+    "speedup": 5.624979805356376,
     "checksum": [
      "answer",
      "436",
@@ -166,9 +166,9 @@
    {
     "name": "abc:cba::pqrs:srqp",
     "iterations": 5,
-    "scheme_s": 0.81,
-    "julia_s": 0.250956992,
-    "speedup": 3.227644679451689,
+    "scheme_s": 0.729,
+    "julia_s": 0.147524633,
+    "speedup": 4.9415476261513565,
     "checksum": [
      "answer",
      "1287",
@@ -178,9 +178,9 @@
    {
     "name": "abc:abd::mrrjjj:mrrjjjj",
     "iterations": 5,
-    "scheme_s": 2.959,
-    "julia_s": 0.872814075,
-    "speedup": 3.3901836424899545,
+    "scheme_s": 2.832,
+    "julia_s": 0.520431224,
+    "speedup": 5.441641218667541,
     "checksum": [
      "answer",
      "3282",
@@ -192,17 +192,17 @@
  "time_to_first_answer": {
   "problem": "abc cba pqrs 42 5000",
   "repeats": 3,
-  "scheme_s": 0.6953594400001748,
-  "julia_s": 32.34641430600004,
+  "scheme_s": 0.7134126349997132,
+  "julia_s": 29.290601818999676,
   "scheme_all_s": [
-   0.7551036620002378,
-   0.6953594400001748,
-   0.701355833999969
+   0.8055504860003566,
+   0.7965575120001631,
+   0.7134126349997132
   ],
   "julia_all_s": [
-   32.39913508100017,
-   32.34641430600004,
-   32.94434808699998
+   33.6014028579998,
+   29.290601818999676,
+   30.61616015499976
   ]
  }
 }

@@ -292,15 +292,25 @@ the second somewhere inside it. Only groups can contain anything, and
 `nested-member?` is false for a letter, so this is just the nesting test."""
 contains_object(outer::WSObject, inner::WSObject) = nested_member(outer, inner)
 
+"""Whether `other` is one of the objects that count as local support for `d` —
+the body of `calculate_local_support`'s loop, lifted out so the loop does not
+need a closure over its counter."""
+function supports_description(d::Description, other)
+    other === d.object && return false
+    (contains_object(d.object, other) || contains_object(other, d.object)) && return false
+    return any(od -> od.description_type === d.description_type, other.descriptions)
+end
+
 function calculate_local_support(d::Description)
     n = 0
-    for other in objects(d.string)
-        other === d.object && continue
-        (contains_object(d.object, other) || contains_object(other, d.object)) && continue
-        if any(od -> od.description_type === d.description_type, other.descriptions)
-            n += 1
-        end
-    end
+    # NB: this used `objects(d.string)`, which is `vcat(letters, groups)` and so
+    # allocated a fresh vector per call -- and this runs for every description of
+    # every object on every update cycle. Walking the two vectors in the same
+    # order counts the same objects with nothing allocated. The letters loop can
+    # name its element type; the groups one cannot, because `Group` is defined in
+    # groups.jl and the workspace/cm/bonds probes load this file without it.
+    for other::Letter in d.string.letters; n += supports_description(d, other); end
+    for other in d.string.groups;          n += supports_description(d, other); end
     n == 0 && return 0
     n == 1 && return 20
     n == 2 && return 60
@@ -322,11 +332,11 @@ proportion to how strongly the themes feel about it."""
 function update_strength!(s, ts = nothing)
     internal = calculate_internal_strength(s)
     external = calculate_external_strength(s)
-    intrinsic = weighted_average([internal, external], [internal, sub_from_100(internal)])
+    intrinsic = weighted_average((internal, external), (internal, sub_from_100(internal)))
     compatibility = get_thematic_compatibility(s, ts)
     thematic_weight = abs(compatibility)
-    s.strength = sround(weighted_average([compatibility > 0 ? 100 : 0, intrinsic],
-                                         [thematic_weight, sub_from_1(thematic_weight)]))
+    s.strength = sround(weighted_average((compatibility > 0 ? 100 : 0, intrinsic),
+                                         (thematic_weight, sub_from_1(thematic_weight))))
     return s
 end
 
@@ -335,7 +345,20 @@ get_weakness(s) = sub_from_100(sexpt(s.strength, 0.95))
 # --- objects ----------------------------------------------------------------
 
 function update_raw_importance!(o::WSObject)
-    result = min(300, ssum([descriptor_activation(d) for d in get_relevant_descriptions(o)]))
+    # NB: this was `ssum([descriptor_activation(d) for d in
+    # get_relevant_descriptions(o)])`, which allocated the filtered list AND the
+    # mapped list on every object on every update cycle. Folding in place keeps
+    # `ssum`'s exact shape -- 0 for an empty sequence, otherwise a left-to-right
+    # sum of the same terms in the same order -- with nothing allocated.
+    total = 0
+    any_relevant = false
+    for d in o.descriptions
+        relevant(d) || continue
+        a = descriptor_activation(d)
+        total = any_relevant ? total + a : a
+        any_relevant = true
+    end
+    result = min(300, any_relevant ? total : 0)
     o.raw_importance = o.enclosing_group !== nothing ? 2 // 3 * result : result
     return o
 end
@@ -372,8 +395,14 @@ groups whose RIGHT edge sits at that position."""
 function all_left_neighbors(o::WSObject)
     leftmost_in_string(o) && return WSObject[]
     left_pos = left_string_pos(o) - 1
-    return WSObject[o.string.letters[left_pos + 1],
-                    o.string.right_edge_groups[left_pos + 1]...]
+    # NB: the splat form allocated twice and went through `vcat`'s generic path.
+    # Sizing the vector up front and filling it is the same list in the same
+    # order -- the letter first, then the groups -- for one allocation.
+    edge = o.string.right_edge_groups[left_pos + 1]
+    out = Vector{WSObject}(undef, length(edge) + 1)
+    out[1] = o.string.letters[left_pos + 1]
+    @inbounds for i in eachindex(edge); out[i + 1] = edge[i]; end
+    return out
 end
 
 """`(get-all-right-neighbors)` — the letter immediately to the right, plus any
@@ -381,8 +410,11 @@ groups whose LEFT edge sits at that position."""
 function all_right_neighbors(o::WSObject)
     rightmost_in_string(o) && return WSObject[]
     right_pos = right_string_pos(o) + 1
-    return WSObject[o.string.letters[right_pos + 1],
-                    o.string.left_edge_groups[right_pos + 1]...]
+    edge = o.string.left_edge_groups[right_pos + 1]           # see note above
+    out = Vector{WSObject}(undef, length(edge) + 1)
+    out[1] = o.string.letters[right_pos + 1]
+    @inbounds for i in eachindex(edge); out[i + 1] = edge[i]; end
+    return out
 end
 
 function choose_left_neighbor(rng::PyRandom, o::WSObject)
@@ -607,7 +639,9 @@ later groups, bridges and rules - before touching the objects, because object
 unhappiness is computed from the strengths of the bonds incident on it. Passing
 the rng is what lets a bond's external strength do its stochastic local-density
 walk; it is optional so the pre-bond layers can call this without one."""
-function update_workspace_values!(strings::Vector{WorkspaceString},
+# NB: takes any iterable of strings, not a Vector specifically -- the context's
+# `all_strings` returns a tuple so that reading it allocates nothing.
+function update_workspace_values!(strings,
                                   rng::Union{Nothing,PyRandom} = nothing,
                                   net::Union{Nothing,Slipnet} = nothing,
                                   ts = nothing)
