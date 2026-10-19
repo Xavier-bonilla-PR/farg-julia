@@ -46,6 +46,11 @@ are solved 70–100% of the time, same texture about 55%, and convexity
 17–20%, like BP #4 in the thesis. What the fresh instances exposed, and what
 was changed, is in `DECISIONS.md` D43.
 
+Beyond the fifteen: on Bongard's other 85 problems
+(`results/survey_judged.md`) it solves 3 reliably (#12, #34, #89) and 2
+occasionally (#24, #33), and on 9 more it finds a rule that separates the
+boxes but is not Bongard's.
+
 After a lesson on triangles and quadrilaterals, BP #6 is sometimes solved
 in those terms ("some triangle" vs "no triangle", "no quadrilateral" vs
 "some quadrilateral"). Untaught, it is solved by counting lines or vertices
@@ -58,6 +63,7 @@ Get the real images: see `bench/fetch/screenshot_to_bp.py` and
 julia --project=phaeaco/julia phaeaco/bench/run_real.jl 20      # real BPs vs Appendix A
 julia --project=phaeaco/julia phaeaco/bench/run_synth.jl 30     # synthetic analogues (add bpseed=2 for a held-out instance)
 julia --project=phaeaco/julia phaeaco/bench/run_mentor.jl 20    # BP #6 before and after a lesson
+julia --project=phaeaco/julia phaeaco/bench/run_survey.jl 20    # every other BP in data/, answers listed
 julia --project=phaeaco/julia phaeaco/bench/retina_score.jl 100 # retina vs ground truth
 julia --project=phaeaco/julia phaeaco/bench/clustering.jl 400   # Table 8.1
 ```
