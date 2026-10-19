@@ -22,4 +22,10 @@ include("input/image.jl")
 include("input/synth.jl")
 include("input/synthbp.jl")
 
+include("retina/geometry.jl")
+include("retina/detectors.jl")
+include("retina/pixels.jl")
+include("retina/lines.jl")
+include("retina/structure.jl")
+
 end

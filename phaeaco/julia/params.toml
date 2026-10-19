@@ -2,3 +2,47 @@
 # at every decision (§7.4.1); a bare number is a plain parameter.
 # Every value here that the thesis does not state is a choice recorded in
 # ../DECISIONS.md.
+
+[retina]
+a_batch = 25                 # pixels A looks at per turn
+a_stop_fraction = 0.9        # A may retire after looking at this much of the box ...
+a_stop_rate = 0.002          # ... once its smoothed hit rate is this low
+a_weight = 4.0               # scheduler weights (relative work per queued item)
+f_weight = 3.0
+d_weight = 1.0
+thick_depth = 3              # B's ring index from which a region counts as thick (width ≳ 5 px)
+f_source_prob = 0.15         # chance a thick skeleton pixel becomes a source for F
+line_tol = 1.2               # px: a point joins a line within this perpendicular distance
+line_tol_per_px = 0.012      # ... plus this much per px of the line's length (D15)
+line_rms_per_px = 0.008      # rms limits (line_rms, merge_rms) grow by this per px (D15)
+line_gap = 3.0               # px: ... and within this distance beyond its ends
+line_rms = 0.75              # px: ... if the fit stays this tight
+seed_radius = 4.0            # px: loose points this close may start a line
+seed_rms = 0.6
+line_act_steps = 10
+line_act_period = 200
+min_line_points = 5
+min_line_length = 3.0
+fragment_length = 12.0       # px: shorter lines whose points lie on other lines are dissolved
+merge_angle = 10.0           # degrees
+merge_offset = 1.6           # px
+merge_gap = 5.0              # px
+merge_bridge = 14.0          # px: a longer gap merges only if ink runs across it
+merge_rms = 0.9              # px
+collinear_angle = 20.0       # degrees: below this, lines meet only end to end
+junction_reach = 6.5         # px (sharp corners leave one side short; the ink test guards)
+junction_end = 7.0           # px
+kpoint_radius = 4.0          # px
+gentle_turn = 25.0           # degrees: joints turning less than this are curve joints
+curve_turn = 60.0            # degrees: joints up to this are curve joints if the segments bow
+bow_min = 0.3                # px
+conic_rms = 0.5              # px: rms of the conic fit for an ellipse (D14)
+conic_coverage = 0.85        # fraction of the way round the points must go
+hole_min_area = 4            # px: enclosed regions smaller than this are not seen
+dot_size = 5                 # px: objects no larger are dots (§10.3.10)
+zoom_gray = 0.4              # gray level kept after fuzzy magnification
+concavity_min = 0.04         # missing fraction below which an object has no concavity
+openness_samples = 12
+circle_ecc = {mu = 0.45, sigma = 0.02}        # Appendix B
+zoom_size = {mu = 18.0, sigma = 2.0}          # px: objects smaller are magnified (§10.3.17)
+filled_fraction = {mu = 0.3, sigma = 0.03}    # thick fraction of ink above which a figure is filled

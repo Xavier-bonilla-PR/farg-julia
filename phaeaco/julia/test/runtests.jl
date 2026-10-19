@@ -6,4 +6,6 @@ const P = PhaeacoJL
 @testset "PhaeacoJL" begin
     include("test_core.jl")
     include("test_input.jl")
+    include("test_geometry.jl")
+    include("test_retina.jl")
 end
