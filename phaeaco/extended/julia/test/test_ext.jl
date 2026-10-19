@@ -9,7 +9,7 @@ function xlook(shapes; seed=1)
     return e, ws
 end
 xnode(e, t) = findfirst(c -> c.type == t, e.children) === nothing ? nothing : e.children[findfirst(c -> c.type == t, e.children)]
-xkinds(e, ws) = sort([it.kind for it in P._items(e, ws)])
+xkinds(e, ws) = sort([it.kind for it in P._items(e, ws, P.load_params())])
 
 tri(c, r; filled=false) = P.polygon([(c[1], c[2] - r), (c[1] + 0.87r, c[2] + r / 2), (c[1] - 0.87r, c[2] + r / 2)]; filled=filled)
 sq(c, r; filled=false) = P.polygon([(c[1] - r, c[2] - r), (c[1] + r, c[2] - r), (c[1] + r, c[2] + r), (c[1] - r, c[2] + r)]; filled=filled)
@@ -59,6 +59,42 @@ end
     @test e.feats[:identmin].mean == 1
     e, _ = xlook([tri((28.0, 40.0), 8), tri((68.0, 55.0), 20)])
     @test e.feats[:simmax].mean == 1 && e.feats[:identmin].mean == 0     # similar, not identical
+end
+
+function xcore(shapes)
+    ctx = P.Ctx(P.load_params(), 1)
+    ws = P.BoxWS(1, P.render(shapes), ctx; analytic=true)
+    P.look!(ws, ctx)
+    return [P.object_core(ws.retina, o, ctx.P) for o in ws.retina.objects]
+end
+
+@testset "ext: core extraction (X12)" begin
+    # the core ignores the ink: outlined and filled figures have the same core
+    for filled in (false, true)
+        @test xcore([tri((50.0, 55.0), 25; filled=filled)])[1].ends == 3
+        @test xcore([sq((50.0, 50.0), 20; filled=filled)])[1].ends == 4
+        @test xcore([P.circle((50.0, 50.0), 22; filled=filled)])[1].ends == 0
+    end
+    @test xcore([P.ellipse((50.0, 50.0), 30.0, 12.0; filled=true)])[1].ends == 2
+    c = xcore([P.polyline([(20.0, 50.0), (80.0, 50.0)]), P.polyline([(50.0, 20.0), (50.0, 80.0)])])[1]
+    @test c.ends == 4 && c.junctions == 1
+    c = xcore([P.polyline([(20.0, 25.0), (80.0, 25.0)]), P.polyline([(50.0, 25.0), (50.0, 85.0)])])[1]
+    @test c.ends == 3 && c.order == 1
+    # a trunk, a side branch, and a branch of that branch (BP #70)
+    c = xcore([P.polyline([(50.0, 95.0), (50.0, 5.0)]), P.polyline([(50.0, 60.0), (20.0, 45.0)]),
+               P.polyline([(35.0, 52.5), (33.0, 40.0)])])[1]
+    @test c.order == 2
+    c = xcore([P.polyline([(50.0, 95.0), (50.0, 5.0)]), P.polyline([(50.0, 60.0), (20.0, 45.0)])])[1]
+    @test c.order == 1
+    # a dumbbell has a neck; a disk and a stroke have none (BP #18)
+    db = [P.circle((25.0, 50.0), 15; filled=true), P.circle((75.0, 50.0), 15; filled=true),
+          P.polygon([(25.0, 47.0), (75.0, 47.0), (75.0, 53.0), (25.0, 53.0)]; filled=true)]
+    @test xcore(db)[1].neck < 0.4
+    @test xcore([P.circle((50.0, 50.0), 22; filled=true)])[1].neck == 1.0
+    @test xcore([P.segment((20.0, 20.0), (80.0, 70.0))])[1].neck == 1.0
+    # an outlined and a filled triangle are similar; a triangle and a square less so
+    t1, t2, s1 = xcore([tri((50.0, 55.0), 25)])[1], xcore([tri((50.0, 55.0), 25; filled=true)])[1], xcore([sq((50.0, 50.0), 20)])[1]
+    @test P.core_distance(t1, t2) < 0.2 < P.core_distance(t1, s1)
 end
 
 @testset "ext: off means PhaeacoJL" begin

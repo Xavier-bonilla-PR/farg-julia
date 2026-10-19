@@ -154,7 +154,12 @@ const _XROOT = Dict(:depth => ("figures nested less deeply", "figures nested mor
                     :bcorners => ("the whole drawing has fewer corners", "the whole drawing has more corners"))
 const _XADJ = Dict(:vert => ("horizontal", "vertical"),
                    :endgap => ("ends close together", "ends far apart"),
-                   :endangle => ("ends parallel", "ends perpendicular"))
+                   :endangle => ("ends parallel", "ends perpendicular"),
+                   :cends => ("core with fewer ends", "core with more ends"),
+                   :cjunct => ("core with fewer branchings", "core with more branchings"),
+                   :corder => ("core without side branches of higher order", "core with side branches of higher order"),
+                   :neck => ("with a neck", "without a neck"),
+                   :neckvert => ("neck horizontal", "neck vertical"))
 
 """Phrases for PhaeacoX's extended percepts, or nothing."""
 function _xphrases(idea::Idea)

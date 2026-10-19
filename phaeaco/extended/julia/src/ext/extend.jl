@@ -21,12 +21,13 @@
 #                    gvert, gelong
 #   box            + depth (nesting of insides), simmin/simmax/identmin
 #                    (shape similarity of figures), nsame
+#   object         + cends, cjunct, corder, neck, neckvert: its core (core.jl, X12)
 
 
 """Features only the extension perceives."""
 const EXT_FEATURES = Set([:vert, :endgap, :endangle, :above, :larger, :inside, :diff,
                           :depth, :simmin, :simmax, :identmin, :nsame, :collinear, :tricol, :gvert, :gelong,
-                          :gcorners, :bcorners])
+                          :gcorners, :bcorners, :cends, :cjunct, :corder, :neck, :neckvert])
 
 """One figure as the extension sees it."""
 struct XItem
@@ -40,6 +41,7 @@ struct XItem
     missing::Float64
     holes::Int
     k::Int                  # corners of the simplified hull
+    core::FigCore           # its core (core.jl); POINT_CORE when core extraction is off
 end
 
 # --- shape kinds -------------------------------------------------------------------------
@@ -101,7 +103,7 @@ function _kind(r::Retina, o::RetObject)
     return :figure, k
 end
 
-function _items(e::RNode, ws::BoxWS)
+function _items(e::RNode, ws::BoxWS, P::Params)
     r = ws.retina
     byobj = Dict{Int,RNode}()
     for c in e.children
@@ -122,8 +124,9 @@ function _items(e::RNode, ws::BoxWS)
             w = o.bbox[2] - o.bbox[1] + 1; h = o.bbox[4] - o.bbox[3] + 1
             filled = isempty(o.holes) && o.ink / (w * h) > 0.68
         end
+        core = P[:ext_core] > 0 ? object_core(r, o, P) : POINT_CORE
         push!(items, XItem(o.id, byobj[o.id], kind, o.barycenter, o.area, filled, o.elongation,
-                           o.missing, length(o.holes), k))
+                           o.missing, length(o.holes), k, core))
     end
     return items
 end
@@ -163,6 +166,17 @@ function _figure_features!(it::XItem, r::Retina, P::Params)
         end
     end
     push!(n.children, RNode(Symbol("shape@", it.kind)))
+    P[:ext_core] > 0 && !o.isdot || return
+    c = it.core
+    n.feats[:cends] = Stats(Float64(c.ends))
+    # how the core branches describes stroke figures (trees, stars); in a
+    # closed figure its junctions only join the limbs that run into corners
+    if isempty(o.holes) && !o.filled
+        n.feats[:cjunct] = Stats(Float64(c.junctions))
+        n.feats[:corder] = Stats(Float64(c.order))
+    end
+    n.feats[:neck] = Stats(c.neck)
+    c.neck < P[:ext_core_neck] && (n.feats[:neckvert] = Stats(c.neckvert))
 end
 
 """
@@ -259,22 +273,24 @@ end
 
 _samekind(a::Symbol, b::Symbol) = a == b || (a in (:dot, :circle) && b in (:dot, :circle))
 
-function _shape_distance(a::XItem, b::XItem; size::Bool=false)
+function _shape_distance(a::XItem, b::XItem; size::Bool=false, wcore::Float64=0.0)
     d = (_samekind(a.kind, b.kind) ? 0.0 : 1.5) + (a.filled != b.filled ? 1.0 : 0.0) +
         (a.k >= 3 && b.k >= 3 ? 0.5 * abs(a.k - b.k) : 0.0) +
         ((a.holes > 0) != (b.holes > 0) ? 1.0 : 0.0) +
-        abs(a.elong - b.elong) / 0.15 + abs(a.missing - b.missing) / 0.08
+        abs(a.elong - b.elong) / 0.15 + abs(a.missing - b.missing) / 0.08 +
+        wcore * core_distance(a.core, b.core)
     size && (d += abs(log(max(a.area, 1.0) / max(b.area, 1.0))) / 0.25)
     return d
 end
 
-function _similarity!(e::RNode, items::Vector{XItem})
+function _similarity!(e::RNode, items::Vector{XItem}, P::Params)
     figs = filter(it -> it.kind != :dot, items)
     length(figs) >= 2 || return
+    w = P[:ext_core] > 0 ? P[:ext_core_sim] : 0.0
     sims = Float64[]; idents = Float64[]
     for i in eachindex(figs), j in i+1:length(figs)
-        push!(sims, exp(-_shape_distance(figs[i], figs[j])))
-        push!(idents, exp(-_shape_distance(figs[i], figs[j]; size=true)))
+        push!(sims, exp(-_shape_distance(figs[i], figs[j]; wcore=w)))
+        push!(idents, exp(-_shape_distance(figs[i], figs[j]; size=true, wcore=w)))
     end
     # judged, not measured: are they similar (identical) or not?
     t = 0.5
@@ -284,7 +300,7 @@ function _similarity!(e::RNode, items::Vector{XItem})
     # the largest set of mutually identical figures (BP #91)
     best = 1
     for a in figs
-        best = max(best, count(b -> exp(-_shape_distance(a, b; size=true)) >= 0.5, figs))
+        best = max(best, count(b -> exp(-_shape_distance(a, b; size=true, wcore=w)) >= 0.5, figs))
     end
     e.feats[:nsame] = Stats(Float64(best))
 end
@@ -350,14 +366,14 @@ end
 function extend!(e::RNode, ws::BoxWS, ctx::Ctx)
     r = ws.retina
     before = nnodes(e)
-    items = _items(e, ws)
+    items = _items(e, ws, ctx.P)
     for it in items
         it.rnode === nothing || _figure_features!(it, r, ctx.P)
     end
     _relations!(e, items, r)
     d = _depth(items, r)
     length(items) >= 2 && (e.feats[:depth] = Stats(Float64(d)))
-    _similarity!(e, items)
+    _similarity!(e, items, ctx.P)
     _groups!(e, items, r)
     # a box drawn in many parts (hatching, dots) may make one figure: the
     # corners of the outline of all its ink (BP #96)

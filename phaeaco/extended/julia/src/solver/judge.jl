@@ -7,6 +7,7 @@ _feat(idea, path, what) = idea.kind == :feature && idea.path == path && idea.wha
 _count(idea, what; paths=nothing) = idea.kind == :count && idea.what == what &&
                                     (paths === nothing || idea.path in paths)
 _exists(idea, what; tag=nothing) = idea.kind == :exists && idea.what == what && (tag === nothing || idea.tag == tag)
+_xfeat(i, node, f) = i.kind == :feature && !isempty(i.path) && i.path[end] == node && i.what == f
 
 const SYNTH_RULES = Dict{Symbol,Function}(
     :existence => i -> ((_exists(i, :object) || _exists(i, :thing)) && !i.leftlow) || (_count(i, :object) && i.leftlow),
@@ -43,7 +44,8 @@ end
 """
 Rules for the fifteen BPs Phaeaco solved (Appendix A), with the
 descriptions that express them. BP #6 accepts "three sides vs four" (13 of
-26 subjects; footnote 19); BP #1 accepts any "nothing vs something".
+26 subjects; footnote 19); BP #1 accepts any "nothing vs something". BPs #5
+and #6 accept a count of core ends, one per corner (X12).
 """
 const REAL_RULES = Dict{Int,Function}(
     1 => i -> (_exists(i, :thing) || _exists(i, :object)) && !i.leftlow || (_count(i, :object) && i.leftlow),
@@ -52,9 +54,11 @@ const REAL_RULES = Dict{Int,Function}(
     4 => i -> (_feat(i, [:object], :missing) && i.leftlow) || (_exists(i, :interior; tag=:concavity) && !i.leftlow),
     5 => i -> any(t -> _exists(i, t) && !i.leftlow, (:circle, :ellipse, :curve)) ||
               any(t -> _count(i, t) && i.leftlow, (:circle, :ellipse, :curve)) ||
-              ((_count(i, :line) || _exists(i, :line)) && !i.leftlow) || (_exists(i, :line) && i.leftlow),
+              ((_count(i, :line) || _exists(i, :line)) && !i.leftlow) || (_exists(i, :line) && i.leftlow) ||
+              (_xfeat(i, :object, :cends) && !i.leftlow),         # a core end per corner (X12)
     6 => i -> ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
-              (_exists(i, :category; tag=:triangle) && i.leftlow) || (_exists(i, :category; tag=:quadrilateral) && !i.leftlow),
+              (_exists(i, :category; tag=:triangle) && i.leftlow) || (_exists(i, :category; tag=:quadrilateral) && !i.leftlow) ||
+              (_xfeat(i, :object, :cends) && i.leftlow),
     8 => i -> _feat(i, [:object, :barycenter], :x) && !i.leftlow,
     11 => i -> _feat(i, [:object], :elongation) && !i.leftlow,
     15 => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow) ||
@@ -84,17 +88,19 @@ const APPENDIX_A = Dict{Int,Tuple{Int,Int,Int,Float64}}(
 # A pair's features name its kinds in alphabetical order: in
 # `pair@circle_triangle`, above > 0 means the circle is higher.
 
-_xfeat(i, node, f) = i.kind == :feature && !isempty(i.path) && i.path[end] == node && i.what == f
 _xexists(i, t) = i.kind == :exists && (i.what == t || i.what == Symbol("shape@", t))
 _tri_quad(i) = ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
                (_xexists(i, :triangle) && i.leftlow) || (_xexists(i, :quadrangle) && !i.leftlow) ||
-               (i.kind == :feature && i.what in (:gcorners, :bcorners) && i.leftlow)
-_parts(i) = (_count(i, :object) || _count(i, :line) || _count(i, :curve)) && i.leftlow
+               (i.kind == :feature && i.what in (:gcorners, :bcorners) && i.leftlow) ||
+               (_xfeat(i, :object, :cends) && i.leftlow)
+_parts(i) = (_count(i, :object) || _count(i, :line) || _count(i, :curve) || _xfeat(i, :object, :cends)) && i.leftlow
 
 const SURVEY_RULES = Dict{Int,Function}(
     7 => i -> _xfeat(i, :object, :vert) && !i.leftlow,
     10 => _tri_quad,
     12 => i -> _feat(i, [:object], :elongation) && !i.leftlow,
+    18 => i -> _xfeat(i, :object, :neck) && i.leftlow,
+    19 => i -> _xfeat(i, :object, :neckvert) && i.leftlow,
     24 => i -> ((_xexists(i, :circle) || _xexists(i, :curve)) && i.leftlow) || (_count(i, :circle) && !i.leftlow),
     27 => i -> _xfeat(i, Symbol("contrast@filled_outlined"), :diff) && !i.leftlow,
     28 => i -> _xfeat(i, Symbol("contrast@filledcircle_outlinedcircle"), :diff) && !i.leftlow,
@@ -115,13 +121,15 @@ const SURVEY_RULES = Dict{Int,Function}(
     62 => i -> _xfeat(i, :object, :endgap) && !i.leftlow,
     65 => i -> _xfeat(i, Symbol("group@triangle"), :gvert) && i.leftlow,
     66 => i -> _xfeat(i, Symbol("group@circle"), :gvert) && i.leftlow,
+    70 => i -> _xfeat(i, :object, :corder) && i.leftlow,
     71 => i -> i.kind == :feature && isempty(i.path) && i.what == :depth && !i.leftlow,
     72 => i -> _xfeat(i, :object, :endangle) && i.leftlow,
     86 => _parts, 87 => _parts, 88 => _parts, 89 => _parts, 90 => _parts,
     91 => i -> i.kind == :feature && isempty(i.path) && i.what == :nsame && i.leftlow,
+    92 => i -> (_xfeat(i, :object, :cjunct) || _xfeat(i, :object, :corder)) && i.leftlow,
     96 => _tri_quad,
     97 => i -> (_xexists(i, :triangle) && i.leftlow) || (_xexists(i, :circle) && !i.leftlow) ||
-               (_count(i, :circle) && i.leftlow),
+               (_count(i, :circle) && i.leftlow) || (_xfeat(i, :object, :cends) && !i.leftlow),
     98 => _tri_quad,
 )
 

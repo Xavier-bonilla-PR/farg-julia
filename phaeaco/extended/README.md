@@ -16,18 +16,26 @@ What it adds (`julia/src/ext/extend.jl`, decisions in `DECISIONS.md`):
 - nesting depth (#71), shape similarity and identity (#57, #59, #60)
 - groups of like figures: on a line, horizontal or vertical row, outline (#40, #41, #65, #66, #96)
 - orientation (#7), self-crossing strokes (#30), curve ends (#62, #72)
+- the core of a figure (`julia/src/ext/core.jl`, X12), after Foundalis's
+  2013 report on core extraction: the figure thinned to the pixels
+  farthest from its border and parsed as a graph — its free ends (one per
+  limb or corner), junctions, side branches, and necks (#19, #86)
 
 ## Results
 
 On Bongard's 85 problems outside Appendix A (`results/survey_scored.md`,
-20 runs each), PhaeacoX solves 19, 12 of them in at least 15 of 20 runs.
+20 runs each), PhaeacoX solves 21, 14 of them in at least 15 of 20 runs.
 Scored the same way, PhaeacoJL solves 6 (3 reliably). New among the
-reliable ones: #7, #10, #27, #36, #37, #48, #60, #66, #71.
+reliable ones: #7, #10, #19, #27, #36, #37, #48, #60, #66, #71, #86. Core
+extraction accounts for #19 and #86; with `ext_core = 0` the count is 19
+(12 reliably).
 
 On the fifteen of Appendix A (`results/real_20.txt`) it gives no new wrong
 answers. On the slow synthetic problems it loses some success, because the
 extra hypotheses compete for the same patience (`results/synth_30.txt`;
-same size 25 → 17 of 30).
+same size 25 → 18 of 30). The core finds an unintended rule on the
+synthetic closed/open problem (interior 27 → 19 of 30; see
+`results/survey_scored.md`).
 
 ```bash
 julia --project=phaeaco/extended/julia phaeaco/extended/julia/test/runtests.jl

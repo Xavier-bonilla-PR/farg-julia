@@ -1,212 +1,214 @@
 Survey: 20 runs per BP. answered = runs ending in a verified idea.
 
-BP #7  (Figures elongated vertically | Figures elongated horizontally)  answered 20/20  0.50 s/run
+BP #7  (Figures elongated vertically | Figures elongated horizontally)  answered 20/20  0.89 s/run
     ×20  ✓ "object vertical" vs "object horizontal"
-BP #9  (Smooth contour figures | Twisting contour figures)  answered 4/20  0.23 s/run
-    ×16  —
-    ×2   "no self-crossing line" vs "some self-crossing line"
-    ×1   "≤ 9 lines per object" vs "> 9 lines per object"
-    ×1   "no object's line has short length" vs "some object's line has short length"
-BP #10  (Triangles | Quadrangles)  answered 20/20  0.08 s/run
+BP #9  (Smooth contour figures | Twisting contour figures)  answered 20/20  1.19 s/run
+    ×20  "object core with fewer ends" vs "object core with more ends"
+BP #10  (Triangles | Quadrangles)  answered 20/20  0.29 s/run
     ×12  ✓ "some triangle" vs "no triangle"
     ×8   ✓ "no quadrangle" vs "some quadrangle"
-BP #12  (Convex hull of figure elongated | Convex hull of figure compact)  answered 20/20  0.11 s/run
+BP #12  (Convex hull of figure elongated | Convex hull of figure compact)  answered 20/20  0.28 s/run
     ×20  ✓ "object has elongated elongation" vs "object has compact elongation"
-BP #13  (Vertical rectangles or horizontal ellipses | Vertical ellipses or horizontal rectangles)  answered 0/20  0.10 s/run
+BP #13  (Vertical rectangles or horizontal ellipses | Vertical ellipses or horizontal rectangles)  answered 0/20  0.28 s/run
     ×20  —
-BP #14  (Large total line length | Small total line length)  answered 0/20  0.24 s/run
+BP #14  (Large total line length | Small total line length)  answered 0/20  0.62 s/run
     ×20  —
-BP #16  (Spiral curls counterclockwise | Spiral curls clockwise)  answered 0/20  0.14 s/run
+BP #16  (Spiral curls counterclockwise | Spiral curls clockwise)  answered 0/20  0.31 s/run
     ×20  —
-BP #17  (An acute angle directed inward | No angle directed inward)  answered 0/20  0.17 s/run
+BP #17  (An acute angle directed inward | No angle directed inward)  answered 0/20  0.50 s/run
     ×20  —
-BP #18  (A neck | No neck)  answered 0/20  0.17 s/run
+BP #18  (A neck | No neck)  answered 0/20  0.50 s/run
     ×20  —
-BP #19  (Neck horizontal | Neck vertical)  answered 0/20  0.21 s/run
+BP #19  (Neck horizontal | Neck vertical)  answered 20/20  0.47 s/run
+    ×20  ✓ "object neck horizontal" vs "object neck vertical"
+BP #20  (Points located on one side of the neck | Points located on both sides of the neck)  answered 0/20  0.64 s/run
     ×20  —
-BP #20  (Points located on one side of the neck | Points located on both sides of the neck)  answered 1/20  0.20 s/run
-    ×19  —
-    ×1   "some object's vertex has wide angle" vs "no object's vertex has wide angle"
-BP #24  (A circle | No circle)  answered 7/20  0.21 s/run
-    ×13  —
-    ×4   ✓ "some curve" vs "no curve"
-    ×3   ✓ "> 0 circles in box" vs "≤ 0 circles in box"
-BP #25  (Black figure is a triangle | Black figure is a circle)  answered 10/20  0.30 s/run
-    ×10  —
-    ×5   "some object has small area" vs "no object has small area"
-    ×5   "the filled figures smaller than the outlined figures" vs "the filled figures larger than the outlined figures"
-BP #26  (Solid black triangle | No solid black triangle)  answered 8/20  0.27 s/run
+BP #24  (A circle | No circle)  answered 5/20  0.33 s/run
+    ×15  —
+    ×3   ✓ "some curve" vs "no curve"
+    ×2   ✓ "> 0 circles in box" vs "≤ 0 circles in box"
+BP #25  (Black figure is a triangle | Black figure is a circle)  answered 12/20  0.52 s/run
+    ×8   —
+    ×7   "some object has small area" vs "no object has small area"
+    ×4   "the filled figures smaller than the outlined figures" vs "the filled figures larger than the outlined figures"
+    ×1   "not every object has similar area" vs "every object has similar area"
+BP #26  (Solid black triangle | No solid black triangle)  answered 8/20  0.53 s/run
     ×12  —
     ×6   "some object has small area" vs "no object has small area"
     ×2   "more filled triangles than outlined triangles" vs "fewer filled triangles than outlined triangles"
-BP #27  (More solid black figures | More outline figures)  answered 18/20  0.34 s/run
-    ×17  ✓ "more filled figures than outlined figures" vs "fewer filled figures than outlined figures"
+BP #27  (More solid black figures | More outline figures)  answered 18/20  0.68 s/run
+    ×16  ✓ "more filled figures than outlined figures" vs "fewer filled figures than outlined figures"
     ×2   —
-    ×1   ✗ "more filled circles than outlined circles" vs "fewer filled circles than outlined circles"
-BP #28  (More solid black circles | More outline circles)  answered 20/20  0.37 s/run
-    ×10  ✓ "more filled circles than outlined circles" vs "fewer filled circles than outlined circles"
-    ×10  ✗ "the filled figures larger than the outlined figures" vs "the filled figures smaller than the outlined figures"
-BP #29  (There are more small circles inside the figure outline than outside | There are fewer small circles inside the figure outline than outside)  answered 2/20  0.46 s/run
+    ×2   ✗ "more filled circles than outlined circles" vs "fewer filled circles than outlined circles"
+BP #28  (More solid black circles | More outline circles)  answered 19/20  0.60 s/run
+    ×11  ✗ "the filled figures larger than the outlined figures" vs "the filled figures smaller than the outlined figures"
+    ×8   ✓ "more filled circles than outlined circles" vs "fewer filled circles than outlined circles"
+    ×1   —
+BP #29  (There are more small circles inside the figure outline than outside | There are fewer small circles inside the figure outline than outside)  answered 2/20  0.81 s/run
     ×18  —
     ×2   ✗ "no object has small area" vs "some object has small area"
-BP #30  (A line with a self-crossing | A line without a self-crossing)  answered 4/20  0.17 s/run
+BP #30  (A line with a self-crossing | A line without a self-crossing)  answered 4/20  0.52 s/run
     ×16  —
     ×4   ✓ "some self-crossing line" vs "no self-crossing line"
-BP #31  (One line | Two lines)  answered 0/20  0.15 s/run
+BP #31  (One line | Two lines)  answered 0/20  0.43 s/run
     ×20  —
-BP #32  (A sharp projection | No sharp projection)  answered 0/20  0.19 s/run
+BP #32  (A sharp projection | No sharp projection)  answered 0/20  0.61 s/run
     ×20  —
-BP #33  (Acute angle | No acute angle)  answered 1/20  0.16 s/run
+BP #33  (Acute angle | No acute angle)  answered 1/20  0.55 s/run
     ×19  —
     ×1   ✓ "some object's vertex has acute angle" vs "no object's vertex has acute angle"
-BP #34  (A large hole | A small hole)  answered 20/20  0.06 s/run
+BP #34  (A large hole | A small hole)  answered 20/20  0.23 s/run
     ×20  ✓ "outlined texture" vs "filled texture"
-BP #35  (The axis of the hole is parallel to the figure axis | The axis of the hole is perpendicular to the figure axis)  answered 0/20  0.31 s/run
+BP #35  (The axis of the hole is parallel to the figure axis | The axis of the hole is perpendicular to the figure axis)  answered 0/20  0.90 s/run
     ×20  —
-BP #36  (Triangle above circle | Circle above triangle)  answered 20/20  0.07 s/run
+BP #36  (Triangle above circle | Circle above triangle)  answered 20/20  0.19 s/run
     ×20  ✓ "the circle lower than the triangle" vs "the circle higher than the triangle"
-BP #37  (Triangle above circle | Circle above triangle)  answered 19/20  0.16 s/run
+BP #37  (Triangle above circle | Circle above triangle)  answered 19/20  0.27 s/run
     ×19  ✓ "the circle lower than the triangle" vs "the circle higher than the triangle"
     ×1   —
-BP #38  (Triangle larger than circle | Triangle smaller than circle)  answered 0/20  0.13 s/run
+BP #38  (Triangle larger than circle | Triangle smaller than circle)  answered 0/20  0.44 s/run
     ×20  —
-BP #40  (Three points on a straight line | No three points on a straight line)  answered 0/20  0.23 s/run
+BP #40  (Three points on a straight line | No three points on a straight line)  answered 0/20  0.29 s/run
     ×20  —
-BP #41  (Outline circles on one straight line | Outline circles not on one straight line)  answered 0/20  0.26 s/run
+BP #41  (Outline circles on one straight line | Outline circles not on one straight line)  answered 0/20  0.37 s/run
     ×20  —
-BP #42  (Points inside the figure outline are on a straight line | Points inside the figure outline are not on a straight line)  answered 0/20  0.28 s/run
+BP #42  (Points inside the figure outline are on a straight line | Points inside the figure outline are not on a straight line)  answered 0/20  0.65 s/run
     ×20  —
-BP #43  (The vibration amplitude increases from left to right | The vibration amplitude decreases from left to right)  answered 20/20  0.10 s/run
+BP #43  (The vibration amplitude increases from left to right | The vibration amplitude decreases from left to right)  answered 20/20  0.23 s/run
     ×20  "object's center has right x" vs "object's center has left x"
-BP #44  (Small circles on different arcs | Small circles on one arc)  answered 0/20  0.10 s/run
+BP #44  (Small circles on different arcs | Small circles on one arc)  answered 20/20  0.13 s/run
+    ×20  "object core with more ends" vs "object core with fewer ends"
+BP #45  (Outline figure on top of solid black figure | Black figure on top of outline figure)  answered 0/20  0.57 s/run
     ×20  —
-BP #45  (Outline figure on top of solid black figure | Black figure on top of outline figure)  answered 0/20  0.18 s/run
+BP #46  (Triangle on top of the circle | Circle on top of the triangle)  answered 0/20  0.81 s/run
     ×20  —
-BP #46  (Triangle on top of the circle | Circle on top of the triangle)  answered 0/20  0.25 s/run
+BP #47  (Triangle inside of the circle | Circle inside of the triangle)  answered 0/20  0.48 s/run
     ×20  —
-BP #47  (Triangle inside of the circle | Circle inside of the triangle)  answered 0/20  0.21 s/run
-    ×20  —
-BP #48  (Solid dark figures above the outline figures | Outline figures above the solid dark figures)  answered 20/20  0.31 s/run
+BP #48  (Solid dark figures above the outline figures | Outline figures above the solid dark figures)  answered 20/20  0.56 s/run
     ×20  ✓ "the filled figures higher than the outlined figures" vs "the filled figures lower than the outlined figures"
-BP #49  (Points inside the figure outline are grouped more densely than outside the contour | Points outside the figure contour are grouped more densely than inside the contour)  answered 0/20  0.26 s/run
+BP #49  (Points inside the figure outline are grouped more densely than outside the contour | Points outside the figure contour are grouped more densely than inside the contour)  answered 1/20  0.60 s/run
+    ×19  —
+    ×1   "≤ 9 vertexs in box" vs "> 9 vertexs in box"
+BP #50  (Axes of symmetry | No axes of symmetry)  answered 0/20  0.41 s/run
     ×20  —
-BP #50  (Axes of symmetry | No axes of symmetry)  answered 0/20  0.21 s/run
+BP #51  (Two circles close to each other | No two circles close to each other)  answered 0/20  0.35 s/run
     ×20  —
-BP #51  (Two circles close to each other | No two circles close to each other)  answered 0/20  0.26 s/run
+BP #52  (Arrows pointing in different directions | Arrows pointing in the same direction)  answered 0/20  0.33 s/run
     ×20  —
-BP #52  (Arrows pointing in different directions | Arrows pointing in the same direction)  answered 0/20  0.16 s/run
+BP #53  (Inside figure has fewer angles than outside figure | Inside figure has more angles than outside figure)  answered 0/20  0.60 s/run
     ×20  —
-BP #53  (Inside figure has fewer angles than outside figure | Inside figure has more angles than outside figure)  answered 0/20  0.18 s/run
+BP #54  (A cross, circle, and triangle arranged counterclockwise | A cross, circle, and triangle arranged clockwise)  answered 0/20  0.28 s/run
     ×20  —
-BP #54  (A cross, circle, and triangle arranged counterclockwise | A cross, circle, and triangle arranged clockwise)  answered 0/20  0.17 s/run
+BP #55  (A circle is at the left of the cavity if you look from inside the figure | A circle is at the right of the cavity if you look from inside the figure)  answered 0/20  0.60 s/run
     ×20  —
-BP #55  (A circle is at the left of the cavity if you look from inside the figure | A circle is at the right of the cavity if you look from inside the figure)  answered 0/20  0.21 s/run
-    ×20  —
-BP #57  (Identical figures | Figures not identical)  answered 10/20  0.13 s/run
-    ×10  —
+BP #57  (Identical figures | Figures not identical)  answered 13/20  0.30 s/run
     ×9   ✓ "all figures identical" vs "not all figures identical"
-    ×1   ✗ "more identical figures" vs "fewer identical figures"
-BP #58  (Solid dark quadrangles are identical | Solid dark quadrangles are different)  answered 0/20  0.67 s/run
+    ×7   —
+    ×4   ✗ "more identical figures" vs "fewer identical figures"
+BP #58  (Solid dark quadrangles are identical | Solid dark quadrangles are different)  answered 0/20  0.41 s/run
     ×20  —
-BP #59  (Figures are similar | Figures are not similar)  answered 0/20  0.22 s/run
+BP #59  (Figures are similar | Figures are not similar)  answered 0/20  0.49 s/run
     ×20  —
-BP #60  (Some similar figures | No similar figures)  answered 20/20  0.14 s/run
+BP #60  (Some similar figures | No similar figures)  answered 20/20  0.35 s/run
     ×20  ✓ "some two figures similar" vs "no two figures similar"
-BP #61  (A line separates the crosses in half | A line does not separate the crosses in half)  answered 0/20  0.24 s/run
+BP #61  (A line separates the crosses in half | A line does not separate the crosses in half)  answered 0/20  0.38 s/run
     ×20  —
-BP #62  (Ends of the curve are far apart | Ends of the curve are close together)  answered 0/20  0.14 s/run
+BP #62  (Ends of the curve are far apart | Ends of the curve are close together)  answered 0/20  0.37 s/run
     ×20  —
-BP #63  (Shading thicker on the right side | Shading thicker on the left side)  answered 20/20  0.10 s/run
+BP #63  (Shading thicker on the right side | Shading thicker on the left side)  answered 20/20  0.37 s/run
     ×20  "object's center has right x" vs "object's center has left x"
-BP #64  (A cross is located on the extension of the ellipse axis | A circle is located on the extension of the ellipse axis)  answered 3/20  0.17 s/run
+BP #64  (A cross is located on the extension of the ellipse axis | A circle is located on the extension of the ellipse axis)  answered 3/20  0.32 s/run
     ×17  —
     ×3   "no object has small area" vs "some object has small area"
-BP #65  (A set of triangles elongated horizontally | A set of triangles elongated vertically)  answered 0/20  0.45 s/run
-    ×20  —
-BP #66  (Unconnected circles on a horizontal line | Unconnected circles on a vertical line)  answered 19/20  0.33 s/run
-    ×19  ✓ "the circles in a horizontal row" vs "the circles in a vertical row"
-    ×1   —
-BP #67  (The right branch begins at a higher point than the left branch | The right branch begins at a lower point than the left branch)  answered 0/20  0.09 s/run
-    ×20  —
-BP #68  (The end of the right branch is higher than that of the left branch | The end of the right branch is lower than that of the left branch)  answered 0/20  0.10 s/run
-    ×20  —
-BP #69  (Large black dot on the main branch | Large black dot on a side branch)  answered 0/20  0.13 s/run
-    ×20  —
-BP #70  (There are no side branches of the second order | There are side branches of the second order)  answered 0/20  0.12 s/run
-    ×20  —
-BP #71  (There are inside figures of the second order | There are no inside figures of the second order)  answered 18/20  0.26 s/run
-    ×18  ✓ "figures nested more deeply" vs "figures nested less deeply"
-    ×2   —
-BP #72  (Ends of the curve are parallel | Ends of the curve are perpendicular)  answered 1/20  0.15 s/run
+BP #65  (A set of triangles elongated horizontally | A set of triangles elongated vertically)  answered 1/20  0.75 s/run
     ×19  —
-    ×1   ✓ "object ends parallel" vs "object ends perpendicular"
-BP #73  (The long axes of the ellipse and rectangle are perpendicular | The long axes of the ellipse and rectangle are parallel)  answered 10/20  0.18 s/run
+    ×1   ✗ "no object has small area" vs "some object has small area"
+BP #66  (Unconnected circles on a horizontal line | Unconnected circles on a vertical line)  answered 19/20  0.62 s/run
+    ×17  ✓ "the circles in a horizontal row" vs "the circles in a vertical row"
+    ×1   —
+    ×1   ✗ "not every center has similar x" vs "every center has similar x"
+    ×1   ✗ "no object's center has high y" vs "some object's center has high y"
+BP #67  (The right branch begins at a higher point than the left branch | The right branch begins at a lower point than the left branch)  answered 0/20  0.20 s/run
+    ×20  —
+BP #68  (The end of the right branch is higher than that of the left branch | The end of the right branch is lower than that of the left branch)  answered 1/20  0.21 s/run
+    ×19  —
+    ×1   "≤ 0 touchs per object" vs "> 0 touchs per object"
+BP #69  (Large black dot on the main branch | Large black dot on a side branch)  answered 0/20  0.28 s/run
+    ×20  —
+BP #70  (There are no side branches of the second order | There are side branches of the second order)  answered 0/20  0.32 s/run
+    ×20  —
+BP #71  (There are inside figures of the second order | There are no inside figures of the second order)  answered 17/20  0.70 s/run
+    ×17  ✓ "figures nested more deeply" vs "figures nested less deeply"
+    ×3   —
+BP #72  (Ends of the curve are parallel | Ends of the curve are perpendicular)  answered 4/20  0.32 s/run
+    ×16  —
+    ×4   ✓ "object ends parallel" vs "object ends perpendicular"
+BP #73  (The long axes of the ellipse and rectangle are perpendicular | The long axes of the ellipse and rectangle are parallel)  answered 10/20  0.35 s/run
     ×10  —
     ×9   "no object has large area" vs "some object has large area"
     ×1   "≤ 0 curves in box" vs "> 0 curves in box"
-BP #74  (A tail grows from the obtuse end | A tail grows from the acute end)  answered 0/20  0.12 s/run
+BP #74  (A tail grows from the obtuse end | A tail grows from the acute end)  answered 0/20  0.31 s/run
     ×20  —
-BP #75  (Triangle located at the concave side of an arc | Triangle located at the convex side of an arc)  answered 0/20  0.12 s/run
+BP #75  (Triangle located at the concave side of an arc | Triangle located at the convex side of an arc)  answered 0/20  0.22 s/run
     ×20  —
-BP #76  (Long sides concave | Long sides convex)  answered 19/20  0.14 s/run
-    ×19  "object has elongated elongation" vs "object has compact elongation"
-    ×1   —
-BP #77  (Angle divided in half | Angle not divided in half)  answered 1/20  0.13 s/run
-    ×19  —
-    ×1   "some object's line has short length" vs "no object's line has short length"
-BP #78  (Extensions of segments cross at one point | Extensions of segments do not cross at one point)  answered 0/20  0.13 s/run
+BP #76  (Long sides concave | Long sides convex)  answered 20/20  0.25 s/run
+    ×19  "object with a neck" vs "object without a neck"
+    ×1   "object has elongated elongation" vs "object has compact elongation"
+BP #77  (Angle divided in half | Angle not divided in half)  answered 0/20  0.24 s/run
     ×20  —
-BP #79  (A dark circle is closer to the outline circle than to the triangle | A dark circle is closer to the triangle than to the outline circle)  answered 0/20  0.18 s/run
+BP #78  (Extensions of segments cross at one point | Extensions of segments do not cross at one point)  answered 0/20  0.26 s/run
     ×20  —
-BP #80  (Points located at the same distances from a cross | Points located at different distances from a cross)  answered 0/20  0.18 s/run
+BP #79  (A dark circle is closer to the outline circle than to the triangle | A dark circle is closer to the triangle than to the outline circle)  answered 0/20  0.32 s/run
     ×20  —
-BP #81  (Dark figures can be divided from outline figures by a straight linealternatively: Convex hulls of filled and outline figures are disjoint | Dark figures are impossible to separate from the outline onesalternatively: Convex hulls of filled and outline figures overlap)  answered 7/20  0.32 s/run
+BP #80  (Points located at the same distances from a cross | Points located at different distances from a cross)  answered 0/20  0.28 s/run
+    ×20  —
+BP #81  (Dark figures can be divided from outline figures by a straight linealternatively: Convex hulls of filled and outline figures are disjoint | Dark figures are impossible to separate from the outline onesalternatively: Convex hulls of filled and outline figures overlap)  answered 7/20  0.61 s/run
     ×13  —
     ×7   "no object has small area" vs "some object has small area"
-BP #82  (The convex hull of the crosses forms an equilateral triangle | The convex hull of the crosses does not form an equilateral triangle)  answered 0/20  0.28 s/run
+BP #82  (The convex hull of the crosses forms an equilateral triangle | The convex hull of the crosses does not form an equilateral triangle)  answered 0/20  0.36 s/run
     ×20  —
-BP #83  (A circle is inside of a figure made by crosses | A circle is outside of a figure made by crosses)  answered 2/20  0.30 s/run
+BP #83  (A circle is inside of a figure made by crosses | A circle is outside of a figure made by crosses)  answered 2/20  0.41 s/run
     ×18  —
     ×1   "the circle smaller than the cross" vs "the circle larger than the cross"
     ×1   "no object's cross has acute angle" vs "some object's cross has acute angle"
-BP #84  (A quadrangle is outside of a figure made by circles | A quadrangle is inside of a figure made by circles)  answered 0/20  0.64 s/run
+BP #84  (A quadrangle is outside of a figure made by circles | A quadrangle is inside of a figure made by circles)  answered 0/20  1.00 s/run
     ×20  —
-BP #86  (Three parts | Five parts)  answered 2/20  0.12 s/run
-    ×18  —
-    ×2   ✗ "no self-crossing line" vs "some self-crossing line"
-BP #87  (Four parts | Five parts)  answered 0/20  0.19 s/run
+BP #86  (Three parts | Five parts)  answered 20/20  0.16 s/run
+    ×19  ✓ "object core with fewer ends" vs "object core with more ends"
+    ×1   ✗ "no self-crossing line" vs "some self-crossing line"
+BP #87  (Four parts | Five parts)  answered 0/20  0.43 s/run
     ×20  —
-BP #88  (Three parts | Five parts)  answered 1/20  0.18 s/run
+BP #88  (Three parts | Five parts)  answered 1/20  0.31 s/run
     ×19  —
     ×1   ✓ "≤ 10 lines in box" vs "> 10 lines in box"
-BP #89  (Three parts | Five parts)  answered 20/20  0.19 s/run
+BP #89  (Three parts | Five parts)  answered 20/20  0.45 s/run
     ×14  ✓ "≤ 4 objects per box" vs "> 4 objects per box"
     ×4   ✓ "≤ 4 objects in box" vs "> 4 objects in box"
     ×1   ✓ "≤ 3 objects in box" vs "> 3 objects in box"
     ×1   ✗ "≤ 11 vertexs in box" vs "> 11 vertexs in box"
-BP #90  (Three parts | Four parts)  answered 0/20  0.19 s/run
+BP #90  (Three parts | Four parts)  answered 0/20  0.59 s/run
     ×20  —
-BP #91  (Three identical elements | Four identical elements)  answered 0/20  0.17 s/run
+BP #91  (Three identical elements | Four identical elements)  answered 0/20  0.42 s/run
     ×20  —
-BP #92  (The chain does not branch | The chain branches)  answered 1/20  0.60 s/run
+BP #92  (The chain does not branch | The chain branches)  answered 1/20  0.89 s/run
     ×19  —
-    ×1   "no object has small area" vs "some object has small area"
-BP #93  (Branches at outlined circle | Branches at solid dark circle)  answered 0/20  0.59 s/run
+    ×1   ✗ "no object has small area" vs "some object has small area"
+BP #93  (Branches at outlined circle | Branches at solid dark circle)  answered 0/20  0.75 s/run
     ×20  —
-BP #94  (Solid dark circle not at end | Solid dark circle at end)  answered 0/20  0.21 s/run
+BP #94  (Solid dark circle not at end | Solid dark circle at end)  answered 0/20  0.43 s/run
     ×20  —
-BP #95  (Vertical hatched lines | Horizontal hatched lines)  answered 2/20  0.25 s/run
-    ×18  —
-    ×2   "no object's line has steep slope" vs "some object's line has steep slope"
-BP #96  (Triangles | Quadrangles)  answered 0/20  0.55 s/run
+BP #95  (Vertical hatched lines | Horizontal hatched lines)  answered 3/20  0.96 s/run
+    ×17  —
+    ×3   "no object's line has steep slope" vs "some object's line has steep slope"
+BP #96  (Triangles | Quadrangles)  answered 0/20  0.86 s/run
     ×20  —
-BP #97  (Triangles | Circles)  answered 0/20  0.46 s/run
+BP #97  (Triangles | Circles)  answered 0/20  0.90 s/run
     ×20  —
-BP #98  (Triangles | Quadrangles)  answered 0/20  0.80 s/run
+BP #98  (Triangles | Quadrangles)  answered 0/20  2.52 s/run
     ×20  —
-BP #99  (Outlines made by triangles and circles intersect | Outlines made by triangles and circles do not intersect)  answered 0/20  0.82 s/run
+BP #99  (Outlines made by triangles and circles intersect | Outlines made by triangles and circles do not intersect)  answered 0/20  1.33 s/run
     ×20  —
-BP #100  (The letter А | The letter Б)  answered 19/20  0.11 s/run
+BP #100  (The letter А | The letter Б)  answered 19/20  0.32 s/run
     ×18  "no object's center has left x" vs "some object's center has left x"
     ×1   —
     ×1   "no object's vertex has wide angle" vs "some object's vertex has wide angle"

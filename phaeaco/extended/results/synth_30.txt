@@ -1,16 +1,16 @@
 synthetic BP     correct    wrong     none mean ticks   s/run   stages / commonest answers
-convexity              7        2       21      12977    0.25   none=21 analytic=9  "object has convex missing" vs "object has concave missing" ×6; "no object's interior has high openness" vs "some object's interior has high openness" ×1
-count_objects         30        0        0       9524    0.09   holistic=30  "≤ 2 objects per box" vs "> 2 objects per box" ×15; "≤ 2 objects in box" vs "> 2 objects in box" ×15
-curves                25        5        0       8559    0.07   analytic=14 holistic=16  "> 1 lines per object" vs "≤ 1 lines per object" ×7; "> 2 lines per object" vs "≤ 2 lines per object" ×5
-elongation            26        0        4      10621    0.08   none=4 analytic=26  "object has elongated elongation" vs "object has compact elongation" ×26
-existence             30        0        0       2943    0.02   hardwired=30  "no thing" vs "some thing" ×30
-interior              27        3        0       9099    0.06   analytic=21 holistic=9  "some closed interior" vs "no closed interior" ×9; "> 0 interiors in box" vs "≤ 0 interiors in box" ×9
-line_count            29        0        1       7499    0.06   none=1 analytic=7 holistic=22  "≤ 3 lines in box" vs "> 3 lines in box" ×29
-parallel_lines        30        0        0       7199    0.08   analytic=30  "every line has similar slope" vs "not every line has similar slope" ×30
-position              30        0        0       6568    0.05   analytic=30  "object's center has right x" vs "object's center has left x" ×30
-same_size             17        0       13      17592    0.20   none=13 analytic=17  "every object has similar area" vs "not every object has similar area" ×17
-same_texture          18        0       12      17966    0.18   none=12 analytic=18  "every object has similar texture" vs "not every object has similar texture" ×18
-size                  30        0        0       5753    0.07   holistic=30  "object has large area" vs "object has small area" ×30
-small_present         25        0        5      10448    0.12   none=5 analytic=25  "some object has small area" vs "no object has small area" ×25
-texture               30        0        0       3450    0.03   hardwired=30  "outlined texture" vs "filled texture" ×30
-tri_vs_quad           27        3        0       6710    0.04   analytic=7 holistic=23  "≤ 3 lines per object" vs "> 3 lines per object" ×13; "≤ 3 lines in box" vs "> 3 lines in box" ×10
+convexity              2        3       25       8476    0.73   none=25 analytic=5  "no object's line has short length" vs "some object's line has short length" ×2; "object has convex missing" vs "object has concave missing" ×1
+count_objects         30        0        0       9764    0.17   holistic=30  "≤ 2 objects per box" vs "> 2 objects per box" ×15; "≤ 2 objects in box" vs "> 2 objects in box" ×15
+curves                25        5        0       8864    0.19   analytic=14 holistic=16  "> 1 lines per object" vs "≤ 1 lines per object" ×7; "no curve" vs "some curve" ×4
+elongation            25        0        5      10065    0.19   none=5 analytic=25  "object has elongated elongation" vs "object has compact elongation" ×25
+existence             30        0        0       2999    0.06   hardwired=30  "no thing" vs "some thing" ×30
+interior              19       11        0       8014    0.13   analytic=21 holistic=9  "some box: object core with more ends" vs "no box: object core with more ends" ×10; "some closed interior" vs "no closed interior" ×7
+line_count            29        0        1       7497    0.17   none=1 analytic=7 holistic=22  "≤ 3 lines in box" vs "> 3 lines in box" ×29
+parallel_lines        30        0        0       7200    0.16   analytic=30  "every line has similar slope" vs "not every line has similar slope" ×30
+position              30        0        0       6844    0.11   analytic=30  "object's center has right x" vs "object's center has left x" ×30
+same_size             18        0       12      16468    0.33   none=12 analytic=18  "every object has similar area" vs "not every object has similar area" ×18
+same_texture          15        0       15      17765    0.30   none=15 analytic=15  "every object has similar texture" vs "not every object has similar texture" ×15
+size                  30        0        0       5849    0.23   holistic=30  "object has large area" vs "object has small area" ×30
+small_present         27        0        3      10812    0.34   none=3 analytic=27  "some object has small area" vs "no object has small area" ×27
+texture               30        0        0       3518    0.07   hardwired=30  "outlined texture" vs "filled texture" ×30
+tri_vs_quad           25        5        0       6774    0.13   analytic=7 holistic=23  "≤ 3 lines per object" vs "> 3 lines per object" ×13; "≤ 3 lines in box" vs "> 3 lines in box" ×10

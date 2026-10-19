@@ -107,3 +107,7 @@ tick_cost = 2                 # ticks charged per extended node
 vert_min_elong = 0.25         # a figure has an orientation once it is this elongated
 holistic = 1                  # also in the holistic look (0: analytic and verification looks only)
 pick_prob = 0.5               # chance that an analytic pick attends to an extended percept
+core = 1                      # core extraction (X12); 0 leaves it out
+core_prune = 0.2              # a spur extending less than this × the thickness where it joins is pruned (X12)
+core_sim = 0.0                # weight of the cores' difference in X6's shape distance (0: unused; X12)
+core_neck = 0.75              # a core narrower than this × its thick parts has a neck, and a neck has a direction

@@ -202,6 +202,8 @@ function build_primitives(P::Params; now::Int=0)
     feat(:nsame, F(10.0, 0.5; discrete=true))
     feat(:collinear, F(1.0, 0.03)); feat(:tricol, F(1.0, 0.03)); feat(:gvert, F(1.0, 0.1)); feat(:gelong, F(1.0, 0.06))
     feat(:gcorners, F(10.0, 0.5; discrete=true)); feat(:bcorners, F(10.0, 0.5; discrete=true))
+    feat(:cends, F(10.0, 0.5; discrete=true)); feat(:cjunct, F(10.0, 0.5; discrete=true))
+    feat(:corder, F(5.0, 0.5; discrete=true)); feat(:neck, F(1.0, 0.1)); feat(:neckvert, F(1.0, 0.1))
     # relations, quantifiers, and abstract notions
     for n in (:inside, :contains, :outside, :equality)
         add_concept!(m, n, :relation; depth=50, now=now, P=P)
@@ -249,7 +251,8 @@ function build_primitives(P::Params; now::Int=0)
     for (n, s) in ((:shape, 30), (:mark, 40), (:pair, 40), (:contrast, 35), (:group, 35), (:vert, 35),
                    (:endgap, 30), (:endangle, 30), (:above, 40), (:larger, 35), (:inside, 45),
                    (:diff, 35), (:depth, 30), (:simmin, 35), (:simmax, 35), (:identmin, 35), (:nsame, 30),
-                   (:collinear, 35), (:tricol, 30), (:gvert, 35), (:gelong, 25), (:gcorners, 35), (:bcorners, 35))
+                   (:collinear, 35), (:tricol, 30), (:gvert, 35), (:gelong, 25), (:gcorners, 35), (:bcorners, 35),
+                   (:cends, 35), (:cjunct, 30), (:corder, 30), (:neck, 35), (:neckvert, 30))
         m[n].w.sig.pos = s
     end
     return m
