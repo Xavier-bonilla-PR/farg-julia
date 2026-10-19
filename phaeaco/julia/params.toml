@@ -1,0 +1,4 @@
+# PhaeacoJL parameters. A table {mu, sigma} is a decision threshold sampled
+# at every decision (§7.4.1); a bare number is a plain parameter.
+# Every value here that the thesis does not state is a choice recorded in
+# ../DECISIONS.md.
