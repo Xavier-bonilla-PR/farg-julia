@@ -44,7 +44,7 @@ the synthetic analogues (`results/synth_30.txt`), 13 of 15 are solved
 
 After a lesson on triangles and quadrilaterals, BP #6 is sometimes solved
 in those terms ("some triangle" vs "no triangle", "no quadrilateral" vs
-"some quadrilateral"). Untaught, it is always solved by counting lines
+"some quadrilateral"). Untaught, it is solved by counting lines or vertices
 (`results/mentor_20.txt`).
 
 Get the real images: see `bench/fetch/screenshot_to_bp.py` and
