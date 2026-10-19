@@ -16,7 +16,9 @@ const SYNTH_RULES = Dict{Symbol,Function}(
     :curves => i -> any(t -> _exists(i, t) && !i.leftlow, (:circle, :ellipse, :curve)) ||
                     ((_count(i, :line) || _exists(i, :line)) && !i.leftlow) ||
                     (_exists(i, :line) && i.leftlow),       # "some lines" vs "no lines": the same rule
-    :tri_vs_quad => i -> (_count(i, :line) || _count(i, :vertex)) && i.leftlow,
+    :tri_vs_quad => i -> ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
+                         (_exists(i, :category; tag=:triangle) && i.leftlow) ||
+                         (_exists(i, :category; tag=:quadrilateral) && !i.leftlow),
     :position => i -> _feat(i, [:object, :barycenter], :x) && !i.leftlow,
     :elongation => i -> _feat(i, [:object], :elongation) && !i.leftlow,
     :interior => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow),
@@ -48,7 +50,8 @@ const REAL_RULES = Dict{Int,Function}(
     4 => i -> (_feat(i, [:object], :missing) && i.leftlow) || (_exists(i, :interior; tag=:concavity) && !i.leftlow),
     5 => i -> any(t -> _exists(i, t) && !i.leftlow, (:circle, :ellipse, :curve)) ||
               ((_count(i, :line) || _exists(i, :line)) && !i.leftlow) || (_exists(i, :line) && i.leftlow),
-    6 => i -> (_count(i, :line) || _count(i, :vertex)) && i.leftlow,
+    6 => i -> ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
+              (_exists(i, :category; tag=:triangle) && i.leftlow) || (_exists(i, :category; tag=:quadrilateral) && !i.leftlow),
     8 => i -> _feat(i, [:object, :barycenter], :x) && !i.leftlow,
     11 => i -> _feat(i, [:object], :elongation) && !i.leftlow,
     15 => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow),

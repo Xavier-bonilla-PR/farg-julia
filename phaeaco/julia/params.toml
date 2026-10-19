@@ -53,6 +53,10 @@ act_steps = 20
 act_period = 30              # ticks per mark at depth 0; deeper concepts decay more slowly
 sig_steps = 200
 sig_period = 5000
+learn_marks = 10             # a learned concept's activation boost each time it is learned from
+learn_sig_marks = 12         # ... and its significance boost (D41)
+category_margin = 0.08       # the best concept must beat the next by this much (D41)
+relation_marks = 3           # significance marks at which an association becomes a relation (§9.3.2)
 
 [ws]
 act_steps = 20               # Workspace node activation: marks ...
@@ -72,6 +76,7 @@ numerosity_sigma0 = 0.1      # σ₀ of the accumulator (§7.3.2)
 box_done = {mu = 0.15, sigma = 0.02}   # box node activation below which the box is seen
 many = {mu = 5.0, sigma = 0.7}         # count at which process Q notices "many"
 clustering = {mu = 0.83, sigma = 0.01}  # similarity above which exemplars group (§8.3.2, Table 8.1)
+category_match = {mu = 0.60, sigma = 0.01}  # similarity at which an object is seen as an instance of a learned concept (D41)
 
 [match]
 damping = 0.5                # weight factor per level down a structure (§8.2.4)

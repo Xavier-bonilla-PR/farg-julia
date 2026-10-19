@@ -148,6 +148,9 @@ function describe(idea::Idea)
         t, f = split_forall(idea.tag)
         s, n = "every $(get(_NOUN, t, string(t))) has similar $f", "not every $(get(_NOUN, t, string(t))) has similar $f"
         return idea.leftlow ? (s, n) : (n, s)
+    elseif idea.kind == :exists && idea.what == :category
+        has, hasnt = "some $(idea.tag)", "no $(idea.tag)"
+        return idea.leftlow ? (has, hasnt) : (hasnt, has)
     elseif idea.kind == :exists
         thing = idea.tag in (:any, :none) ? get(_NOUN, idea.what, w) : "$(idea.tag) $(get(_NOUN, idea.what, w))"
         has, hasnt = "some $thing", "no $thing"

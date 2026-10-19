@@ -48,12 +48,26 @@ mutable struct Concept
     feature::Union{Nothing,FeatureInfo}
 end
 
+"""
+A concept learned from what was seen (§9.2): its core structure is a visual
+pattern, and its indexical keys — copies of its numerosity and relational
+nodes — let a new representation find it without matching every concept in
+turn (§9.4.1).
+"""
+mutable struct LearnedConcept
+    id::Int                     # its Concept (name, weight, links) in the network
+    core::RNode                 # the core structure: a pattern of object exemplars
+    keys::Vector{Tuple{Symbol,Int}}
+end
+
 mutable struct LTM
     concepts::Vector{Concept}
     byname::Dict{Symbol,Int}
+    learned::Vector{LearnedConcept}
+    assoc::Dict{Tuple{Int,Int},Weight}      # anonymous associations between concepts (§9.3.2)
 end
 
-LTM() = LTM(Concept[], Dict{Symbol,Int}())
+LTM() = LTM(Concept[], Dict{Symbol,Int}(), LearnedConcept[], Dict{Tuple{Int,Int},Weight}())
 
 Base.getindex(m::LTM, name::Symbol) = m.concepts[m.byname[name]]
 Base.getindex(m::LTM, id::Int) = m.concepts[id]
@@ -197,6 +211,8 @@ function build_primitives(P::Params; now::Int=0)
     link!(m, :object, :feature, :texture, 80); link!(m, :object, :feature, :numerosity, 60)
     link!(m, :object, :feature, :area, 55); link!(m, :object, :feature, :barycenter, 35)
     link!(m, :object, :feature, :elongation, 25); link!(m, :object, :feature, :convex_hull, 10)
+    add_concept!(m, :category, :abstract; depth=30, now=now, P=P)   # "this is a kind of …" (ch. 9)
+    link!(m, :object, :feature, :category, 45)
     link!(m, :convex_hull, :feature, :missing, 70)
     link!(m, :curve, :feature, :numerosity, 50)
     link!(m, :line_string, :feature, :sides, 60)

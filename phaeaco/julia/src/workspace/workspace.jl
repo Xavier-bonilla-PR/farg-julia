@@ -70,6 +70,7 @@ mutable struct BoxWS
     ticks::Int
     done::Bool
     analytic::Bool              # looked at in the analytic stage: equality can be noticed (§7.4.10)
+    retries::Dict{Tuple{Int,Symbol},Int}        # codelets that re-posted themselves, and how often
 end
 
 # --- building nodes ---------------------------------------------------------------
@@ -264,7 +265,8 @@ _isfeature(ws::BoxWS, k::Int) = ws.nodes[k].stats.n > 0 && ws.nodes[k].type != :
 function BoxWS(index::Int, img::AbstractMatrix{Bool}, ctx::Ctx; analytic::Bool=false)
     r = Retina(img, ctx.P, Xoshiro(rand(ctx.rng, UInt64)); tracer=ctx.tracer)
     ws = BoxWS(index, BitMatrix(img), r, WNode[], 0, Codelet[], Tuple{Symbol,Int}[], Set{Int}(),
-               Dict{Tuple{Symbol,Int},Int}(), Set{Tuple{Int,Symbol}}(), 0, false, analytic)
+               Dict{Tuple{Symbol,Int},Int}(), Set{Tuple{Int,Symbol}}(), 0, false, analytic,
+               Dict{Tuple{Int,Symbol},Int}())
     ws.root = _newnode!(ws, ctx, :box, 0).id
     return ws
 end

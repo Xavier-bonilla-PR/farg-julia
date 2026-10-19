@@ -150,6 +150,8 @@ function attend!(ws::BoxWS, ctx::Ctx, idea::Idea)
         for n in collect(ws.nodes)
             (n.alive && n.type == f) && cod_equality!(ws, ctx, n.id)
         end
+    elseif idea.kind == :exists && idea.what == :category
+        foreach(o -> cod_category!(ws, ctx, o), nodes_at([:object]))
     elseif idea.kind == :exists && idea.tag == :concavity
         for o in nodes_at([:object])
             cod_convex_hull!(ws, ctx, o)
@@ -288,6 +290,14 @@ function pattern_candidates(s::Solver; some::Bool=false)
         has(b) = any(n -> iskind(n.type, t) && n.tag == tag, _alldesc(b))
         fl = count(has, s.boxpat[1:6]) / 6
         fr = count(has, s.boxpat[7:12]) / 6
+        if t == :category
+            # categorising is a codelet, so a concept is seen in only some
+            # boxes on one look; seen on one side only, it is worth verifying,
+            # weighted by how significant the concept is (D41)
+            (min(fl, fr) == 0 && max(fl, fr) >= 0.5) || continue
+            push!(out, (Idea(:exists, Symbol[], t, tag, :all, 0.0, fl > fr), mweight(M, tag) * max(fl, fr), false))
+            continue
+        end
         abs(fl - fr) >= 0.99 || continue
         push!(out, (Idea(:exists, Symbol[], t, tag, :all, 0.0, fl > fr), mweight(M, t), false))
     end

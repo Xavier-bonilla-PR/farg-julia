@@ -12,11 +12,13 @@ using Random
 using LinearAlgebra
 using Printf
 using TOML
+using Serialization
 
 include("core/params.jl")
 include("core/activation.jl")
 include("core/stats.jl")
 include("core/trace.jl")
+include("core/rnode.jl")
 
 include("input/image.jl")
 include("input/synth.jl")
@@ -40,6 +42,8 @@ include("patterns/rep.jl")
 include("patterns/match.jl")
 include("patterns/group.jl")
 include("patterns/numerosity.jl")
+
+include("ltm/learned.jl")
 
 include("solver/ideas.jl")
 include("solver/solver.jl")

@@ -11,4 +11,5 @@ const P = PhaeacoJL
     include("test_workspace.jl")
     include("test_patterns.jl")
     include("test_solver.jl")
+    include("test_ltm.jl")
 end

@@ -341,3 +341,49 @@ frames, takes their 98 × 98 interiors, pads them with one white pixel to
 100 × 100, and orders them I-A..I-F, II-A..II-F. The PBM stacks live in
 `data/` and are not committed: the problems are from Bongard's book and the
 web copies state no licence.
+
+## Learning (ch. 9, §5.2)
+
+**D41. The Mentor, categorisation and association.** The thesis's Mentor
+pairs drawings with phrases; that linguistic part was unfinished and
+unpublished, so here a lesson is a set of drawings with one label, and the
+largest object of each is learned under it (`mentor!`, `lesson`). A learned
+concept is a pattern (its *core*) plus index keys, linked is-a `object`.
+
+- *Weight.* Being taught is significant in itself: each example primes the
+  concept and also boosts its significance directly (`ltm_learn_sig_marks`),
+  instead of waiting for the activation to max out by chance.
+- *Categorisation* is a codelet posted for every object. It waits (reposting
+  itself up to three times) until the object's lines and vertices are
+  counted, since a sparse early representation can resemble the wrong
+  concept. It attaches a category node only for a clear best match: the
+  similarity must pass `category_match` (0.60) and beat the runner-up by
+  `ltm_category_margin` (0.08). Precision is good; recall depends on the
+  lesson (about 30% of objects in BP #6 after a three-sides lesson).
+- *Ideas.* Because categorisation is a codelet, one look sees a concept in
+  only some boxes. A concept seen on one side only, in at least half its
+  boxes, is a candidate existence idea weighted by the concept's weight;
+  verification decides.
+- *Associations* (§9.3.2). Two concepts categorised in the same box prime
+  their anonymous association by 8 marks. Its activation fades ten times
+  more slowly than a concept's priming, since it is long-term learning; once
+  its significance has grown through `ltm_relation_marks` (3) peaks, it is
+  reified as a relation concept `with_A_B`, linked to both.
+- *Persistence.* `save_ltm`/`load_ltm!` serialise the LTM; concepts whose
+  weight has decayed to the floor are forgotten on saving.
+
+## Counts against patterns
+
+**D42. A count differs from a pattern's by a weighted prediction test.** Eq.
+8.4 compares two single counts by their accumulator noise. Against a pattern
+(a sample of counts) the standard error of the pattern's mean is the wrong
+spread: a concept learned from outlined and filled examples has 0 or 1
+interiors, and an example with either belongs to it. So the single count is
+tested against the population, with a prediction interval
+`√(σ0²·x + s²·(1 + 1/n))`, as for features. And, as D27 found for features,
+a bare probability averages 0.5 for a genuine member, so it is weighted by
+the difference in counts capped at one: a whole item more or fewer stays
+decisive (a pentagon is not an odd quadrilateral), while a fractional mean
+(3.4 lines) does not set every triangle apart. A version weighted by the
+relative difference was tried and dropped: it let pentagons pass as
+quadrilaterals.

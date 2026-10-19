@@ -8,26 +8,6 @@
 # of its link: serifs present on some A's and not others are in the pattern
 # "yes and no", weakly (§8.3.3).
 
-mutable struct RNode
-    type::Symbol
-    tag::Symbol
-    feats::Dict{Symbol,Stats}
-    nums::Dict{Symbol,Stats}
-    children::Vector{RNode}
-    support::Int
-    origin::Int                 # the Workspace node an exemplar came from (0 in patterns)
-end
-
-RNode(type::Symbol; tag=:none) =
-    RNode(type, tag, Dict{Symbol,Stats}(), Dict{Symbol,Stats}(), RNode[], 1, 0)
-
-function Base.copy(r::RNode)
-    RNode(r.type, r.tag, Dict(k => copy(v) for (k, v) in r.feats), Dict(k => copy(v) for (k, v) in r.nums),
-          [copy(c) for c in r.children], r.support, r.origin)
-end
-
-strength(child::RNode, parent::RNode) = child.support / max(parent.support, 1)
-
 """The exemplar a box's Workspace represents, from node `id` (default: the box) down."""
 function exemplar(ws::BoxWS, id::Int=ws.root)
     n = ws.nodes[id]

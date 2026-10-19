@@ -78,15 +78,26 @@ function numerosity_difference(M::Matcher, a::Stats, b::Stats)
     if a.n == 1 && b.n == 1
         den = σ0 * sqrt(max(L, 0.0) + max(S, 0.0))
     elseif a.n == 1 || b.n == 1
+        # does the single count belong to the sample's population? Use the
+        # population's spread (a prediction interval, as for features), not
+        # the standard error of its mean: a concept learned from outlined and
+        # filled examples has 0 or 1 interiors, and either fits it (D42)
         x, s = a.n == 1 ? (a, b) : (b, a)
-        den = sqrt(σ0^2 * max(x.mean, 0.0) + variance(s) / s.n)
+        den = sqrt(σ0^2 * max(x.mean, 0.0) + variance(s) * (1 + 1 / s.n))
         L, S = x.mean, s.mean
     else
         den = sqrt(variance(a) / a.n + variance(b) / b.n + σ0^2 * (max(L, 0.0) / a.n + max(S, 0.0) / b.n))
     end
     Δ = abs(L - S)
-    den == 0 && return Δ < 0.5 ? 0.0 : 1.0
-    return normal_two_sided(Δ / den)
+    p = den == 0 ? (Δ < 0.5 ? 0.0 : 1.0) : normal_two_sided(Δ / den)
+    # With a sample involved, a pure probability has D27's flaw (for a
+    # genuine member it averages 0.5), so weight it by the difference in
+    # counts, capped at one: a whole item more or fewer stays decisive (a
+    # pentagon is not a slightly odd quadrilateral), while a pattern's
+    # fractional mean (3.4 lines) does not make every triangle different.
+    # Two single counts keep Eq. 8.4. (D42)
+    (a.n == 1 && b.n == 1) || M.literal || (p *= min(1.0, Δ))
+    return p
 end
 
 """
@@ -179,6 +190,40 @@ function correspond(M::Matcher, xs::Vector{RNode}, ys::Vector{RNode}, depth::Int
         (i in usedx || j in usedy) && continue
         push!(usedx, i); push!(usedy, j)
         push!(out, (i, j))
+    end
+    return out
+end
+
+"""
+The top-level terms of a difference, for debugging: `(what, weight,
+difference)` for each feature, count and kind of part, the parts' own
+differences being recursive.
+"""
+function difference_terms(M::Matcher, a::RNode, b::RNode)
+    out = Tuple{String,Float64,Float64}[]
+    for (f, s1) in a.feats
+        haskey(b.feats, f) || continue
+        info = haskey(M.ltm, f) ? M.ltm[f].feature : nothing
+        info === nothing && continue
+        push!(out, ("feature $f", mweight(M, f), feature_difference(M, s1, b.feats[f], info)))
+    end
+    for t in union(keys(a.nums), keys(b.nums))
+        s1, s2 = count_of(a, t), count_of(b, t)
+        (s1 === nothing || s2 === nothing) && continue
+        push!(out, ("count $t", mweight(M, :numerosity) * sqrt(mweight(M, t)), numerosity_difference(M, s1, s2)))
+    end
+    for t in union(Set(c.type for c in a.children), Set(c.type for c in b.children))
+        ca = [c for c in a.children if c.type == t]
+        cb = [c for c in b.children if c.type == t]
+        w = mweight(M, t) * M.damping
+        if isempty(ca) || isempty(cb)
+            present, parent = isempty(ca) ? (cb, b) : (ca, a)
+            s = maximum(strength(c, parent) for c in present)
+            push!(out, ("only one side has $t", w * s, 1.0))
+        else
+            small, large = length(ca) <= length(cb) ? (ca, cb) : (cb, ca)
+            push!(out, ("parts $t", w, sum(minimum(_diff(M, c, o, 1) for o in large) for c in small) / length(small)))
+        end
     end
     return out
 end
