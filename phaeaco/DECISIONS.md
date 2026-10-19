@@ -167,3 +167,57 @@ there are damped, except their counting.
 feature node (practically equal values, §7.1), each parent also records its
 own exact value on the link, so matching (§8.2) compares exact values while
 the shared node still shows the equality.
+
+## Matching and patterns (ch. 8)
+
+**D25. The accumulator and Welford's formula pull apart (§7.3.2).** The
+thesis claims both that counts up to five are reported "almost always"
+exactly and that its sequential comparison yields Welford-like reaction
+times. With accumulator noise σ₀√n, a σ₀ small enough for the first claim
+(0.1) makes comparisons of everyday quantities instantly confident: 26 vs 25
+is resolved within the initial m = 12 samples. Reaction time does grow with
+L/(L − S), as Welford says, but only for large, close quantities (200 vs 198,
+300 vs 299). We keep σ₀ = 0.1 and record the tension (`compare_counts`,
+tested in `test_patterns.jl`) rather than tune it away. It does not touch
+the target BPs, which compare small counts.
+
+**D26. Variance floors.** When comparing with a sample whose values are all
+equal, its standard deviation is floored at 1% of the feature's range, so no
+other value is infinitely improbable. Discrete features (texture) have no
+floor, which is what lets two zero-variance samples of different textures
+differ with certainty (BP #3, §11.1.1). Two-sample count comparisons keep
+the accumulator's own spread for the same reason.
+
+**D27. A feature difference is distance weighted by improbability.** Read
+literally, Eq. 8.2 makes the difference between an exemplar and a sample the
+probability that it comes from a different population. For a genuine member
+that probability is uniformly distributed on [0, 1], so at the thesis's
+clustering threshold (similarity 0.83, d < 0.19) about one member in five
+would be admitted, and the Patterns algorithm could not score anything like
+Table 8.1's 98.5. Measured: the literal reading scores 64. We use the scaled
+difference of Eq. 8.1 weighted by that probability. It equals Eq. 8.1 when
+neither side is a sample, and discounts deviations the sample's spread
+accounts for. With it, Patterns scores 99.6 ± 2 with its best threshold at
+0.85 (tolerance 0.80–0.89), against the thesis's 98.5 ± 7 at 0.83
+(0.78–0.88) (`results/clustering.txt`). The thesis's benchmark cases and
+performance index are unpublished, so ours are an approximation (Rand index
+on 1-D groups). On them leader and Lu & Fu do about as well as Patterns,
+unlike the thesis's 92.9 and 78.8. That part is not reproduced, and is
+reported as such. `match.literal = 1` restores the literal reading. The
+probabilities themselves are still what the solver uses to notice that two
+sides differ (§11.1.2).
+
+In Fig. 8.6, when the pattern a new exemplar would form with its closest
+kept exemplar resembles an existing pattern, the thesis discards the new
+pattern without saying what becomes of the exemplar. We keep it, on its own.
+
+**D28. Counts and parts in structural matching.** A count enters matching as
+the integer the accumulator reports. A count missing from one side is
+compared as zero if that side has no parts of the type, and ignored if it
+has some that were not counted on that look, as a missing feature is
+(§8.2.3). Parts are matched type by type, each part of the side with fewer
+to its best counterpart. A type of part present on one side only counts as
+wholly different, weighted by its link strength. Each level down is damped
+by 0.5, and recursion stops after three levels (§8.2.4: "two or three
+recursive steps"). A count's weight is the LTM weight of numerosity times
+the square root of that of the counted type.

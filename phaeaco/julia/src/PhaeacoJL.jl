@@ -35,4 +35,10 @@ include("workspace/perceive.jl")
 include("workspace/codelets.jl")
 include("workspace/look.jl")
 
+include("patterns/distributions.jl")
+include("patterns/rep.jl")
+include("patterns/match.jl")
+include("patterns/group.jl")
+include("patterns/numerosity.jl")
+
 end

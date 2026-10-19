@@ -68,3 +68,12 @@ min_ticks = 20
 numerosity_sigma0 = 0.1      # σ₀ of the accumulator (§7.3.2)
 box_done = {mu = 0.15, sigma = 0.02}   # box node activation below which the box is seen
 many = {mu = 5.0, sigma = 0.7}         # count at which process Q notices "many"
+clustering = {mu = 0.83, sigma = 0.01}  # similarity above which exemplars group (§8.3.2, Table 8.1)
+
+[match]
+damping = 0.5                # weight factor per level down a structure (§8.2.4)
+maxdepth = 3                 # levels of recursion ("two or three recursive steps")
+sfloor = 0.01                # minimum standard deviation, fraction of a feature's range (D26)
+literal = 0                  # 1: feature difference = P(different) alone, as Eq. 8.2 reads (D27)
+
+
