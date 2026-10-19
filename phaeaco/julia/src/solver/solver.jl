@@ -489,7 +489,13 @@ function solve(bp::BP, ctx::Ctx)
         u = rand(ctx.rng) * sum(w)
         i = findfirst(k -> (u -= w[k]) <= 0, 1:12)
         e = look_box!(s, i === nothing ? 12 : i)
-        ideas = box_ideas(s, e)
+        # a look is costly; if the node attended to suggests nothing new,
+        # attention moves to another part of the same look (D43)
+        ideas = Idea[]
+        for _ in 1:Int(P[:solve_picks_per_look])
+            ideas = box_ideas(s, e)
+            any(idea -> !any(f -> same_idea(f, idea), s.failed), ideas) && break
+        end
         if rand(ctx.rng) < P[:solve_pattern_prob]
             c = _pick(ctx.rng, pattern_candidates(s; some=true), P[:solve_idea_gamma])
             c === nothing || push!(ideas, c[1])

@@ -218,8 +218,8 @@ function random_concave(rng, c, r; filled=false, width=1.6)
         a, b = r * (0.9 + 0.2rand(rng)), r * (0.45 + 0.15rand(rng))
         raw = [(-a, -a), (-a + b, -a), (-a + b, a - b), (a, a - b), (a, a), (-a, a)]
         pts = [(c[1] + dx, c[2] + dy) for (dx, dy) in (_rot(x, y, t0) for (x, y) in raw)]
-    else                                       # square with a notch
-        a, d = r * 0.8, r * (0.35 + 0.2rand(rng))
+    else                                       # square with a notch deep enough to see
+        a, d = r * 0.8, r * (0.65 + 0.25rand(rng))
         raw = [(-a, -a), (-d / 2, -a), (0.0, -a + d), (d / 2, -a), (a, -a), (a, a), (-a, a)]
         pts = [(c[1] + dx, c[2] + dy) for (dx, dy) in (_rot(x, y, t0) for (x, y) in raw)]
     end

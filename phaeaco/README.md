@@ -34,13 +34,17 @@ analytic solver, sameness and for-all, and the Mentor with learned concepts,
 categorisation and associations (phase 7, D41).
 
 On the fifteen real BPs Phaeaco solved (`results/real_20.txt`, 20 runs
-each), PhaeacoJL solves 14. Examples: BP #3 by the zero-variance shortcut
-(100%; thesis 99%), BP #85 (100%; 94%), BP #5 (75 / 0 / 25 against the
-thesis's 60 / 18 / 22), BP #4 (10%; 20%) and BP #56 (20%; 19%). It never
-solves BP #22 (thesis 13%). It solves some easy problems much more often
-than Phaeaco did (BP #8: 100% vs 23%); calibration is still to come. On
-the synthetic analogues (`results/synth_30.txt`), 13 of 15 are solved
-77–100% of the time.
+each), PhaeacoJL now solves all fifteen at least some of the time. Examples:
+BP #3 by the zero-variance shortcut (100%; thesis 99%), BP #4 (25%; 20%),
+BP #22 (55%; 13%) and BP #56 (70%; 19%). It solves several problems much
+more often than Phaeaco did (BP #8: 100% vs 23%); calibration is still to
+come.
+
+The synthetic analogues were developed on one drawn instance each. On two
+fresh instances (`results/synth_heldout_30.txt`) the results hold: 13 of 15
+are solved 70–100% of the time, same texture about 55%, and convexity
+17–20%, like BP #4 in the thesis. What the fresh instances exposed, and what
+was changed, is in `DECISIONS.md` D43.
 
 After a lesson on triangles and quadrilaterals, BP #6 is sometimes solved
 in those terms ("some triangle" vs "no triangle", "no quadrilateral" vs
@@ -52,7 +56,7 @@ Get the real images: see `bench/fetch/screenshot_to_bp.py` and
 
 ```bash
 julia --project=phaeaco/julia phaeaco/bench/run_real.jl 20      # real BPs vs Appendix A
-julia --project=phaeaco/julia phaeaco/bench/run_synth.jl 30     # synthetic analogues
+julia --project=phaeaco/julia phaeaco/bench/run_synth.jl 30     # synthetic analogues (add bpseed=2 for a held-out instance)
 julia --project=phaeaco/julia phaeaco/bench/run_mentor.jl 20    # BP #6 before and after a lesson
 julia --project=phaeaco/julia phaeaco/bench/retina_score.jl 100 # retina vs ground truth
 julia --project=phaeaco/julia phaeaco/bench/clustering.jl 400   # Table 8.1

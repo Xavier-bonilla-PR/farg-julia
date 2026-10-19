@@ -10,10 +10,15 @@ const _MAX_TRIES = 50
 
 _tex(rng) = rand(rng, Bool)
 
-function _any_shape(rng, c, r; filled=_tex(rng), width=1.6)
-    k = rand(rng, 1:4)
-    k == 1 && return circle(c, r; filled=filled, width=width)
-    k == 2 && return ellipse(c, r, r * (0.45 + 0.35rand(rng)), π * rand(rng); filled=filled, width=width)
+# `curved` fixes whether the figure is round (circle, ellipse) or a polygon.
+# Generators of one-figure boxes alternate it by box, so that no side is all
+# polygons or all curves by chance — on a single drawn instance that would be
+# a true, unintended rule ("lines per object").
+function _any_shape(rng, c, r; filled=_tex(rng), width=1.6, curved=rand(rng, Bool))
+    if curved
+        rand(rng, Bool) && return circle(c, r; filled=filled, width=width)
+        return ellipse(c, r, r * (0.45 + 0.35rand(rng)), π * rand(rng); filled=filled, width=width)
+    end
     return random_polygon(rng, rand(rng, 3:5), c, r; filled=filled, width=width)
 end
 
@@ -61,8 +66,8 @@ synthbp!(:existence, "no object", "some object", (rng, side) ->
     place(rng, [_maker((r, c) -> _any_shape(r, c, 8 + 14rand(r))) for _ in 1:rand(rng, 1:3)]))
 
 # BP #2 — large vs. small.
-synthbp!(:size, "large figure", "small figure", (rng, side) ->
-    place(rng, [_maker((r, c) -> _any_shape(r, c, side == :left ? 28 + 12rand(r) : 7 + 4rand(r)))]))
+synthbp!(:size, "large figure", "small figure", (rng, side, i) ->
+    place(rng, [_maker((r, c) -> _any_shape(r, c, side == :left ? 28 + 12rand(r) : 7 + 4rand(r); curved=isodd(i)))]))
 
 # BP #3 — outlined vs. filled.
 synthbp!(:texture, "outlined figures", "filled figures", (rng, side) ->
@@ -77,12 +82,13 @@ synthbp!(:convexity, "convex figure", "concave figure", (rng, side) ->
                          _convex_polygon(r, rand(r, 4:7), c, 25 + 10rand(r); filled=_tex(r))) :
         random_concave(r, c, 25 + 10rand(r); filled=_tex(r)))]))
 
-# BP #5 — no curves vs. curves.
-synthbp!(:curves, "straight lines only", "some curve", (rng, side) ->
+# BP #5 — no curves vs. curves. Two right boxes hold only (clearly
+# elongated) ellipses, so "some circle" is not a rule by accident.
+synthbp!(:curves, "straight lines only", "some curve", (rng, side, i) ->
     place(rng, [_maker((r, c) -> side == :left ?
         random_polygon(r, rand(r, 3:5), c, 12 + 14rand(r); filled=_tex(r)) :
-        (rand(r) < 0.5 ? circle(c, 10 + 14rand(r); filled=_tex(r)) :
-                         ellipse(c, 14 + 12rand(r), 8 + 6rand(r), π * rand(r); filled=_tex(r))))
+        (i > 8 && rand(r) < 0.5 ? circle(c, 10 + 14rand(r); filled=_tex(r)) :
+                                  (a = 14 + 12rand(r); ellipse(c, a, a * (0.35 + 0.3rand(r)), π * rand(r); filled=_tex(r)))))
         for _ in 1:rand(rng, 1:2)]))
 
 # BP #6 — triangles vs. quadrilaterals.
@@ -90,8 +96,8 @@ synthbp!(:tri_vs_quad, "triangles", "quadrilaterals", (rng, side) ->
     place(rng, [_maker((r, c) -> random_polygon(r, side == :left ? 3 : 4, c, 15 + 20rand(r); irreg=0.3))]))
 
 # BP #8 — figure toward the right of the box vs. toward the left.
-synthbp!(:position, "figure on the right", "figure on the left", (rng, side) ->
-    place(rng, [_maker((r, c) -> _any_shape(r, c, 8 + 8rand(r)))];
+synthbp!(:position, "figure on the right", "figure on the left", (rng, side, i) ->
+    place(rng, [_maker((r, c) -> _any_shape(r, c, 8 + 8rand(r); curved=isodd(i)))];
           region=side == :left ? (55.0, 100.0, 1.0, 100.0) : (1.0, 45.0, 1.0, 100.0), margin=4.0))
 
 # BP #11-like — elongated vs. compact figures. Both sides mix kinds (thin
@@ -138,7 +144,9 @@ synthbp!(:small_present, "a small figure present", "no small figure", (rng, side
 
 # BP #22 — figures of equal size vs. unequal. On the left each box's figures
 # share a size, but the size varies from box to box (small in some, large in
-# others), so no absolute size separates the sides.
+# others), so no absolute size separates the sides: the small left boxes are
+# smaller than any right figure, the large ones larger than most, so neither
+# "some small figure" nor "some large figure" is a rule.
 synthbp!(:same_size, "figures of the same size", "figures of different sizes", (rng, side, i) ->
     begin
         # one kind of figure per box, so "same size" means the same area
@@ -149,11 +157,11 @@ synthbp!(:same_size, "figures of the same size", "figures of different sizes", (
                                               (c[1] + rad, c[2] + rad), (c[1] - rad, c[2] + rad)]; filled=_tex(r)) :
                                      random_polygon(r, 3, c, rad * 1.3; irreg=0.0, filled=_tex(r))
         if side == :left
-            r0 = isodd(i) ? 6 + 3rand(rng) : 11 + 4rand(rng)
+            r0 = isodd(i) ? 4 + 1.5rand(rng) : 12 + 4rand(rng)
             sizes = fill(r0, n)
         else
-            r0 = 5 + 2rand(rng)
-            sizes = shuffle(rng, [r0 * f for f in (1.0, 1.8, 2.5)][1:n])
+            r0 = 5.5 + 1.5rand(rng)
+            sizes = shuffle(rng, [r0 * f for f in (1.0, 1.6, 2.2)][1:n])
         end
         place(rng, [_maker((r, c) -> fig(r, c, s)) for s in sizes])
     end)

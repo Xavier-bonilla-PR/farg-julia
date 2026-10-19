@@ -387,3 +387,50 @@ decisive (a pentagon is not an odd quadrilateral), while a fractional mean
 (3.4 lines) does not set every triangle apart. A version weighted by the
 relative difference was tried and dropped: it let pentagons pass as
 quadrilaterals.
+
+## Held-out instances (phase 9)
+
+**D43. What fresh drawings exposed, and what was changed.** The synthetic
+BPs were developed on one drawn instance each (bpseed 1). Instances 2 and 3,
+never looked at during development, showed two kinds of failure.
+
+*Generator leaks.* Some answers judged wrong were true of the drawn instance:
+every left figure a polygon and every right one an ellipse (`size`, so "lines
+per object" separates the sides); a true circle in every right box
+(`curves`); the right side always holding a figure smaller than any left one
+(`same_size`). The generators now alternate round and straight figures by
+box, give `curves` two ellipse-only boxes with clearly elongated ellipses,
+and set `same_size`'s ranges so that neither "some small" nor "some large"
+is a rule. The notched square of `random_concave` lost only 2–6% of its hull,
+below what the retina reports as concave; its notch is now deeper. The judge
+also accepts descriptions equivalent by construction: "≤ 0 curves" for "no
+curve"; "> 0 interiors" for outlined (D37); and, for closed vs open, an open
+figure's concavity interior (§7.4.7, Fig. 7.38: a bay is an open interior).
+
+*Solver faults.*
+- Filled triangles of radius 9–12 px have a thick-ink fraction of 0.26–0.32,
+  straddling the filled threshold N(0.3, 0.03), so one look in three called
+  them outlined and "all the same texture" failed verification. Outlined
+  figures measure ≈ 0, and D37's interior rule separates outlines anyway, so
+  the threshold is now N(0.15, 0.02). Verifying the texture for-all went
+  from 4–19 of 20 to 20 of 20 on all three instances.
+- "Same size" compares areas (§5.1: in BP #22 "it is the area of objects
+  (approximately equal, of course)"). A circle, square and triangle of one
+  extent differ by up to ~30% in area, beyond the old tolerance (0.12,
+  widened ×2 by D34). Area's "same" tolerance is now 0.18; the right side of
+  BP #22 differs by factors of 4–10. BP #22 went from 0% to 55%.
+- An analytic look is costly, but only one of its ~30 nodes was attended to
+  before the next look. If that node suggests nothing untried, attention
+  now moves to another node of the same look, up to three
+  (`solve_picks_per_look`). Give-up time is unchanged (D33).
+
+*Tried and reverted.* Making the convex-hull codelet's urgency grow with the
+retina's measured concavity took convexity from 0–4 to 25–27 of 30, but it
+contradicts the thesis (the hull is "one of the last perceptual elements",
+Fig. 7.8) and the test that encodes it. Without it, the fixes above bring
+convexity to 5–6 of 30 on every instance, and BP #4 to 25%, close to the
+thesis's 20%.
+
+The rates of BP #22 (55%) and #56 (70%) are now well above Phaeaco's (13%,
+19%). Lowering them toward Appendix A is phase 9's calibration question.
+

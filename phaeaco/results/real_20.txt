@@ -3,15 +3,15 @@ BP     PhaeacoJL              Phaeaco (App. A)       rel. time      commonest an
 #1     100 /   0 /   0        100 /   0 /   0         0.96 vs  2.18  ✓ "no thing" vs "some thing" ×20
 #2     100 /   0 /   0         82 /  18 /   0         1.97 vs  3.00  ✓ "object has large area" vs "object has small area" ×20
 #3     100 /   0 /   0         99 /   1 /   0         1.00 vs  1.00  ✓ "outlined texture" vs "filled texture" ×20
-#4      10 /   0 /  90         20 /   3 /  77         4.52 vs  2.27  — ×18; ✓ "no concavity interior" vs "some concavity interior" ×1
-#5      75 /   0 /  25         60 /  18 /  22         3.39 vs  3.07  ✓ "no curve" vs "some curve" ×15; — ×5
-#6      95 /   0 /   5         70 /  11 /  19         2.64 vs  1.47  ✓ "≤ 3 lines in box" vs "> 3 lines in box" ×9; ✓ "≤ 3 lines per object" vs "> 3 lines per object" ×7
-#8     100 /   0 /   0         23 /   4 /  73         2.38 vs  2.63  ✓ "object's center has right x" vs "object's center has left x" ×20
-#11     90 /   0 /  10         83 /   4 /  13         2.59 vs  5.40  ✓ "object has elongated elongation" vs "object has compact elongation" ×18; — ×2
-#15    100 /   0 /   0         99 /   0 /   1         2.55 vs  2.17  ✓ "some closed interior" vs "no closed interior" ×15; ✓ "> 0 interiors per object" vs "≤ 0 interiors per object" ×3
-#21     95 /   0 /   5         34 /  20 /  46         3.98 vs  5.30  ✓ "some object has small area" vs "no object has small area" ×19; — ×1
-#22      0 /   0 / 100         13 /   6 /  81          NaN vs 10.07  — ×20
-#23     90 /  10 /   0         83 /   4 /  13         2.47 vs  2.57  ✓ "≤ 1 objects per box" vs "> 1 objects per box" ×11; ✓ "≤ 1 objects in box" vs "> 1 objects in box" ×7
-#39    100 /   0 /   0         65 /  29 /   6         2.31 vs  1.23  ✓ "every line has similar slope" vs "not every line has similar slope" ×20
-#56     20 /   0 /  80         19 /  17 /  64         4.90 vs 11.20  — ×16; ✓ "every object has similar texture" vs "not every object has similar texture" ×4
-#85    100 /   0 /   0         94 /   0 /   6         3.14 vs  3.53  ✓ "≤ 4 lines in box" vs "> 4 lines in box" ×14; ✓ "≤ 3 lines in box" vs "> 3 lines in box" ×6
+#4      25 /   0 /  75         20 /   3 /  77         3.63 vs  2.27  — ×15; ✓ "object has convex missing" vs "object has concave missing" ×3
+#5      85 /   0 /  15         60 /  18 /  22         4.11 vs  3.07  ✓ "no curve" vs "some curve" ×17; — ×3
+#6      95 /   0 /   5         70 /  11 /  19         2.95 vs  1.47  ✓ "≤ 3 lines in box" vs "> 3 lines in box" ×10; ✓ "≤ 3 lines per object" vs "> 3 lines per object" ×7
+#8     100 /   0 /   0         23 /   4 /  73         2.32 vs  2.63  ✓ "object's center has right x" vs "object's center has left x" ×20
+#11     90 /   5 /   5         83 /   4 /  13         2.83 vs  5.40  ✓ "object has elongated elongation" vs "object has compact elongation" ×18; — ×1
+#15     95 /   5 /   0         99 /   0 /   1         2.56 vs  2.17  ✓ "some closed interior" vs "no closed interior" ×17; ✓ "> 0 interiors in box" vs "≤ 0 interiors in box" ×1
+#21     80 /  15 /   5         34 /  20 /  46         4.19 vs  5.30  ✓ "some object has small area" vs "no object has small area" ×16; ✗ "some object's line has short length" vs "no object's line has short length" ×2
+#22     55 /   5 /  40         13 /   6 /  81         5.50 vs 10.07  ✓ "every object has similar area" vs "not every object has similar area" ×11; — ×8
+#23     90 /  10 /   0         83 /   4 /  13         2.45 vs  2.57  ✓ "≤ 1 objects per box" vs "> 1 objects per box" ×11; ✓ "≤ 1 objects in box" vs "> 1 objects in box" ×7
+#39    100 /   0 /   0         65 /  29 /   6         1.86 vs  1.23  ✓ "every line has similar slope" vs "not every line has similar slope" ×20
+#56     70 /   5 /  25         19 /  17 /  64         4.98 vs 11.20  ✓ "every object has similar texture" vs "not every object has similar texture" ×14; — ×5
+#85    100 /   0 /   0         94 /   0 /   6         3.07 vs  3.53  ✓ "≤ 4 lines in box" vs "> 4 lines in box" ×13; ✓ "≤ 3 lines in box" vs "> 3 lines in box" ×7

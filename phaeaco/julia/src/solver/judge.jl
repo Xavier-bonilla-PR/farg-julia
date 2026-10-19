@@ -11,9 +11,10 @@ _exists(idea, what; tag=nothing) = idea.kind == :exists && idea.what == what && 
 const SYNTH_RULES = Dict{Symbol,Function}(
     :existence => i -> ((_exists(i, :object) || _exists(i, :thing)) && !i.leftlow) || (_count(i, :object) && i.leftlow),
     :size => i -> _feat(i, [:object], :area) && !i.leftlow,
-    :texture => i -> _feat(i, [:object], :texture) && i.leftlow,
+    :texture => i -> (_feat(i, [:object], :texture) && i.leftlow) || (_count(i, :interior) && !i.leftlow),   # outlined = encloses white (D37)
     :convexity => i -> (_feat(i, [:object], :missing) && i.leftlow) || _exists(i, :interior; tag=:concavity),
     :curves => i -> any(t -> _exists(i, t) && !i.leftlow, (:circle, :ellipse, :curve)) ||
+                    any(t -> _count(i, t) && i.leftlow, (:circle, :ellipse, :curve)) ||   # "≤ 0 curves" is "no curve"
                     ((_count(i, :line) || _exists(i, :line)) && !i.leftlow) ||
                     (_exists(i, :line) && i.leftlow),       # "some lines" vs "no lines": the same rule
     :tri_vs_quad => i -> ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
@@ -21,7 +22,8 @@ const SYNTH_RULES = Dict{Symbol,Function}(
                          (_exists(i, :category; tag=:quadrilateral) && !i.leftlow),
     :position => i -> _feat(i, [:object, :barycenter], :x) && !i.leftlow,
     :elongation => i -> _feat(i, [:object], :elongation) && !i.leftlow,
-    :interior => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow),
+    :interior => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow) ||
+                     (_exists(i, :interior; tag=:concavity) && !i.leftlow),    # an open figure's interior is open (Fig. 7.38)
     :small_present => i -> _feat(i, [:object], :area) && i.quant == :some && i.tag == :left && i.leftlow,
     :same_size => i -> _exists(i, :forall; tag=:object_area) && i.leftlow,
     :count_objects => i -> _count(i, :object) && i.leftlow,
@@ -46,15 +48,17 @@ descriptions that express them. BP #6 accepts "three sides vs four" (13 of
 const REAL_RULES = Dict{Int,Function}(
     1 => i -> (_exists(i, :thing) || _exists(i, :object)) && !i.leftlow || (_count(i, :object) && i.leftlow),
     2 => i -> _feat(i, [:object], :area) && !i.leftlow,
-    3 => i -> _feat(i, [:object], :texture) && i.leftlow,
+    3 => i -> (_feat(i, [:object], :texture) && i.leftlow) || (_count(i, :interior) && !i.leftlow),
     4 => i -> (_feat(i, [:object], :missing) && i.leftlow) || (_exists(i, :interior; tag=:concavity) && !i.leftlow),
     5 => i -> any(t -> _exists(i, t) && !i.leftlow, (:circle, :ellipse, :curve)) ||
+              any(t -> _count(i, t) && i.leftlow, (:circle, :ellipse, :curve)) ||
               ((_count(i, :line) || _exists(i, :line)) && !i.leftlow) || (_exists(i, :line) && i.leftlow),
     6 => i -> ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
               (_exists(i, :category; tag=:triangle) && i.leftlow) || (_exists(i, :category; tag=:quadrilateral) && !i.leftlow),
     8 => i -> _feat(i, [:object, :barycenter], :x) && !i.leftlow,
     11 => i -> _feat(i, [:object], :elongation) && !i.leftlow,
-    15 => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow),
+    15 => i -> (_exists(i, :interior; tag=:closed) && i.leftlow) || (_count(i, :interior) && !i.leftlow) ||
+               (_exists(i, :interior; tag=:concavity) && !i.leftlow),
     21 => i -> _feat(i, [:object], :area) && i.quant == :some && i.tag == :left && i.leftlow,
     22 => i -> _exists(i, :forall; tag=:object_area) && i.leftlow,
     23 => i -> _count(i, :object) && i.leftlow,
