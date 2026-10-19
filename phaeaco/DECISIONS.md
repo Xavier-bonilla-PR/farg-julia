@@ -291,3 +291,53 @@ area. The solver found those rules and verified them, which is correct
 behaviour, so the generators were fixed so that only the intended rule
 separates the sides. The judge accepts equivalent descriptions that hold by
 construction ("three lines" for "triangles").
+
+## First contact with the real BPs
+
+These came from running the fifteen real target BPs (`bench/run_real.jl`,
+`results/real_20.txt`). Each fixes a failure that only real drawings showed.
+
+**D36. Slope is circular.** Lines at 178° and 2° are parallel. Slope sharing,
+matching and pattern statistics use the short way round with period 180°
+(and its maximum for Eq. 8.1 is 90°). Values are unwrapped to stay within
+half a period of a node's mean, so means stay coherent. Without this, BP #39
+never found its parallel lines.
+
+**D37. A figure enclosing a meaningful interior is outlined.** Small outlined
+figures in BP #3, zoomed ×2, have outlines thick enough to pass the
+thick-fraction test for "filled", although they plainly enclose white. A
+figure is filled only if its thick fraction passes and its interiors are
+under 12% of its area. Zoomed objects take their sub-retina's verdict. With
+this, BP #3 is solved by the zero-variance shortcut, as in the thesis.
+
+**D38. An incomplete count is not a count.** If a count node has not yet
+reached every node of its type in its context (some counting codelets did
+not run), the exemplar leaves it out rather than passing on the smaller
+number. It is "not counted yet", which matching and ideas already treat like a
+missing feature.
+
+**D39. Hulls from pixel centres.** The convex hull is built from the centres
+of border pixels, not their corners. Corners add a half-pixel rim that made
+small convex figures read as 10% "missing" (concave). With centres, convex
+figures measure ≈ 0 at every size, and the concavity threshold drops to 4%.
+
+Also from the real BPs: process G's curve-joint rules were tightened
+(a gentle turn is ≤ 15°, a bow must be ≥ 0.5 px), because an obtuse polygon
+corner (BP #6, box II-C) was being taken for a curve. The sameness detector
+groups values within twice the "same" tolerance, the context-driven
+relaxation of §7.1, and is posted whenever a box holds two values of a
+feature (D34). Fragment absorption works at any junction, including the
+K-point at a thin triangle's tip. Existence ideas respect the is-a hierarchy
+(a circle is an ellipse is a curve). An entirely empty side is the hardwired
+"nothing vs something" of §11.1.1.
+
+## Real BP images
+
+**D40. Where the images come from.** Foundalis's site renders each BP's GIF
+at native size; this sandbox cannot reach it directly, so each page was
+captured as a lossless screenshot through a scraping service and converted by
+`bench/fetch/screenshot_to_bp.py`. That script finds the twelve 100 × 100
+frames, takes their 98 × 98 interiors, pads them with one white pixel to
+100 × 100, and orders them I-A..I-F, II-A..II-F. The PBM stacks live in
+`data/` and are not committed: the problems are from Bongard's book and the
+web copies state no licence.

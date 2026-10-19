@@ -33,16 +33,17 @@ collinear_angle = 20.0       # degrees: below this, lines meet only end to end
 junction_reach = 6.5         # px (sharp corners leave one side short; the ink test guards)
 junction_end = 7.0           # px
 kpoint_radius = 4.0          # px
-gentle_turn = 25.0           # degrees: joints turning less than this are curve joints
+gentle_turn = 15.0           # degrees: joints turning less than this are curve joints
 curve_turn = 60.0            # degrees: joints up to this are curve joints if the segments bow
-bow_min = 0.3                # px
+bow_min = 0.5                # px
 conic_rms = 0.5              # px: rms of the conic fit for an ellipse (D14)
 conic_coverage = 0.85        # fraction of the way round the points must go
 hole_min_area = 4            # px: enclosed regions smaller than this are not seen
 dot_size = 5                 # px: objects no larger are dots (§10.3.10)
 zoom_gray = 0.4              # gray level kept after fuzzy magnification
-concavity_min = 0.08         # missing fraction below which an object has no concavity (rasterising alone gives ≈ 0.04)
+concavity_min = 0.04         # missing fraction below which an object has no concavity (convex figures measure ≈ 0, D39)
 openness_samples = 12
+texture_hole_max = 0.12      # a figure whose interior is this much of its area is outlined (D37)
 circle_ecc = {mu = 0.45, sigma = 0.02}        # Appendix B
 zoom_size = {mu = 18.0, sigma = 2.0}          # px: objects smaller are magnified (§10.3.17)
 filled_fraction = {mu = 0.3, sigma = 0.03}    # thick fraction of ink above which a figure is filled
@@ -64,6 +65,7 @@ urgency_gamma = 2.0          # a drawn codelet runs with probability (u/100)^γ 
 retina_units_per_tick = 40
 min_ticks = 20
 equality_urgency = 40        # the sameness codelet, at full strength (§7.4.10)
+sameness_widening = 2.0      # the sameness codelet accepts values within this × the "same" tolerance (D34)
 
 [top]
 numerosity_sigma0 = 0.1      # σ₀ of the accumulator (§7.3.2)

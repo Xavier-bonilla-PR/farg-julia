@@ -227,25 +227,30 @@ function cod_openness!(ws::BoxWS, ctx::Ctx, id::Int)
 end
 
 """
-The sameness detector (§7.4.10, "Sam" in GEB): make the implicit equality of
-a shared feature node explicit, and if every node of that type in their
+The sameness detector (§7.4.10, "Sam" in GEB): make the equality of nearly
+equal feature values explicit, and if every node of that type in their
 context shares it, add the for-all quantifier: "all objects have similar
-texture" (Fig. 7.52). The for-all's tag names the quantified type and the
-feature (`:object_texture`); it points to the Platonic feature, not to the
-specific value.
+texture" (Fig. 7.52). Values within the widened sameness tolerance of this
+node's are grouped (see `near_nodes`). The for-all's tag names the
+quantified type and the feature (`:object_texture`); it points to the
+Platonic feature, not to the specific value.
 """
 function cod_equality!(ws::BoxWS, ctx::Ctx, fnode::Int)
     f = ws.nodes[fnode]
     ftype = f.type
-    for type in unique(ws.nodes[k].type for k in f.sharers)
-        members = [k for k in f.sharers if ws.nodes[k].type == type && ws.nodes[k].alive]
+    group = near_nodes(ws, ctx, ftype, f.stats.mean)
+    owners = unique(k for g in group for k in ws.nodes[g].sharers if ws.nodes[k].alive)
+    for type in unique(ws.nodes[k].type for k in owners)
+        members = sort([k for k in owners if ws.nodes[k].type == type])
         length(members) >= 2 || continue
         context = ws.nodes[members[1]].parent
         all(k -> ws.nodes[k].parent == context, members) || (context = ws.root)
         tag = Symbol(type, "_", ftype)
-        if !any(n -> n.alive && n.type == :equality && any(l -> l[1] == fnode, n.links), ws.nodes)
+        have = any(n -> n.alive && n.type == :equality && n.tag == tag &&
+                        sort([l[1] for l in n.links if l[2] == :member]) == members, ws.nodes)
+        if !have
             eq = _newnode!(ws, ctx, :equality, ws.root; tag=tag)
-            push!(eq.links, (fnode, :value, 1.0))
+            foreach(g -> push!(eq.links, (g, :value, 1.0)), group)
             foreach(k -> push!(eq.links, (k, :member, 1.0)), members)
         end
         # all of them? (the for-all codelet has high urgency once a group exists; run it at once)

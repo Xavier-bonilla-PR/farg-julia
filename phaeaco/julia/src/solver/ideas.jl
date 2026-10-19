@@ -42,6 +42,13 @@ same_idea(a::Idea, b::Idea) =
     a.kind == b.kind && a.path == b.path && a.what == b.what && a.tag == b.tag &&
     a.quant == b.quant && a.leftlow == b.leftlow
 
+"""
+Kinds of node an existence idea about `what` accepts: a circle is an ellipse
+is a curve (§7.4.5, the LTM is-a hierarchy).
+"""
+const KIND_OF = Dict(:curve => (:curve, :ellipse, :circle), :ellipse => (:ellipse, :circle))
+iskind(t::Symbol, what::Symbol) = t == what || t in get(KIND_OF, what, ())
+
 """Nodes reached from `r` by following `path` (child types)."""
 function instances(r::RNode, path::Vector{Symbol})
     cur = [r]
@@ -92,7 +99,8 @@ end
 """Does a box of the left (`left = true`) or right side satisfy the idea?"""
 function satisfies(idea::Idea, r::RNode, left::Bool)
     if idea.kind == :exists
-        has = any(n -> n.type == idea.what && (idea.tag == :any || n.tag == idea.tag), _alldesc(r))
+        has = idea.what == :thing ? !isempty(r.children) :
+              any(n -> iskind(n.type, idea.what) && (idea.tag in (:any, :none) || n.tag == idea.tag), _alldesc(r))
         return has == (left == idea.leftlow)
     elseif idea.kind == :same
         return same_value(idea, r) == (left == idea.leftlow)
@@ -124,7 +132,7 @@ end
 
 # --- describing ideas, as Phaeaco printed them ------------------------------------------
 
-const _NOUN = Dict(:object => "object", :line => "line", :dot => "dot", :circle => "circle",
+const _NOUN = Dict(:thing => "thing", :object => "object", :line => "line", :dot => "dot", :circle => "circle",
                    :ellipse => "ellipse", :curve => "curve", :interior => "interior", :vertex => "vertex",
                    :barycenter => "center", :deep => "box", :box => "box")
 

@@ -161,6 +161,7 @@ function zoom_object!(r::Retina, o::RetObject)
     if !isempty(sub.objects)
         ink = sum(so.ink for so in sub.objects)
         o.texture = sum(so.texture * so.ink for so in sub.objects) / max(ink, 1)
+        o.filled = sum((so.ink for so in sub.objects if so.filled); init=0) > ink / 2
     end
     trace(r.tracer, 3, r.now, "Z zoomed object", o.id, "lines", length(idmap))
     return idmap
@@ -254,38 +255,55 @@ function absorb_fragments!(r::Retina)
     while changed
         changed = false
         for (ji, jn) in enumerate(r.junctions)
-            (jn.kind == :V && length(jn.lines) == 2 && all(!=(0), jn.ends)) || continue
-            a, b = r.lines[jn.lines[1]], r.lines[jn.lines[2]]
-            ea, eb = jn.ends
-            if linelength(a) > linelength(b)
-                a, b, ea, eb = b, a, eb, ea
-            end
-            (a.alive && b.alive) || continue
-            (linelength(a) <= fraglen && line_angle(a.d, b.d) <= r.P[:retina_collinear_angle]) || continue
-            far = endpoint(a, 3 - ea)
-            for p in a.pts
-                push!(b.fit, p); push!(b.pts, p)
-            end
-            b.c, b.d, b.rms = linefit(b.fit)
-            eb == 1 ? (b.p1 = far) : (b.p2 = far)
-            a.alive = false
-            deleteat!(r.junctions, ji)
-            for other in r.junctions, k in eachindex(other.lines)
-                other.lines[k] == a.id || continue
-                other.lines[k] = b.id
-                other.ends[k] = other.ends[k] == 3 - ea ? eb : 0
-            end
-            # a junction may now list b twice; keep one entry
-            for other in r.junctions
-                if count(==(b.id), other.lines) > 1
-                    k = findlast(==(b.id), other.lines)
-                    deleteat!(other.lines, k); deleteat!(other.ends, k)
+            length(jn.lines) >= 2 || continue
+            # a short line meeting here with an end ...
+            for (ka, la) in enumerate(jn.lines)
+                a = r.lines[la]
+                (a.alive && jn.ends[ka] != 0 && linelength(a) <= fraglen) || continue
+                # ... nearly collinear with a longer line that also ends here
+                best, bestang = 0, Inf
+                for (kb, lb) in enumerate(jn.lines)
+                    kb == ka && continue
+                    b = r.lines[lb]
+                    (b.alive && jn.ends[kb] != 0 && linelength(b) > linelength(a)) || continue
+                    ang = line_angle(a.d, b.d)
+                    ang < bestang && (best = kb; bestang = ang)
                 end
+                (best != 0 && bestang <= r.P[:retina_collinear_angle]) || continue
+                b = r.lines[jn.lines[best]]
+                ea, eb = jn.ends[ka], jn.ends[best]
+                far = endpoint(a, 3 - ea)
+                for p in a.pts
+                    push!(b.fit, p); push!(b.pts, p)
+                end
+                b.c, b.d, b.rms = linefit(b.fit)
+                eb == 1 ? (b.p1 = far) : (b.p2 = far)
+                a.alive = false
+                # the fragment leaves this junction; its far end's junctions pass to b
+                deleteat!(jn.lines, ka); deleteat!(jn.ends, ka)
+                for other in r.junctions, k in eachindex(other.lines)
+                    other.lines[k] == a.id || continue
+                    other.lines[k] = b.id
+                    other.ends[k] = other.ends[k] == 3 - ea ? eb : 0
+                end
+                for other in r.junctions
+                    while count(==(b.id), other.lines) > 1
+                        k = findlast(==(b.id), other.lines)
+                        deleteat!(other.lines, k); deleteat!(other.ends, k)
+                    end
+                end
+                # b's end moved to the fragment's far end: it no longer ends at this junction
+                kb = findfirst(==(b.id), jn.lines)
+                kb === nothing || (deleteat!(jn.lines, kb); deleteat!(jn.ends, kb))
+                filter!(j -> length(j.lines) >= 2, r.junctions)
+                for j in r.junctions
+                    length(j.lines) == 2 && j.kind == :K && (j.kind = all(!=(0), j.ends) ? :V : any(!=(0), j.ends) ? :T : :X)
+                end
+                changed = true
+                trace(r.tracer, 3, r.now, "H absorb fragment", a.id, "into", b.id)
+                break
             end
-            filter!(j -> length(j.lines) >= 2, r.junctions)
-            changed = true
-            trace(r.tracer, 3, r.now, "H absorb fragment", a.id, "into", b.id)
-            break
+            changed && break
         end
     end
     for (i, jn) in enumerate(r.junctions)
@@ -607,13 +625,13 @@ function measure_objects!(r::Retina)
     for o in r.objects
         o.holes = get(holes_of, o.id, Hole[])
         o.area = o.ink + get(tiny_of, o.id, 0) + sum((hl.area for hl in o.holes); init=0)
-        # hull of pixel corners, from border pixels only
+        # hull of the border pixels' centres. Against the pixel count, a convex
+        # figure then comes out at (or a hair under) zero missing whatever its
+        # size; hulls of pixel corners add a half-pixel rim that made small
+        # convex figures look 10% concave (D39)
         for li in o.pixels
             x, y = _xy(r, li)
-            _isborder(r, x, y) || continue
-            for (cx, cy) in ((x - 0.5, y - 0.5), (x + 0.5, y - 0.5), (x - 0.5, y + 0.5), (x + 0.5, y + 0.5))
-                push!(o.hull, (cx, cy))
-            end
+            _isborder(r, x, y) && push!(o.hull, (Float64(x), Float64(y)))
         end
         o.hull_area = polygon_area(o.hull.v)
         o.missing = o.hull_area > 0 ? clamp((o.hull_area - o.area) / o.hull_area, 0.0, 1.0) : 0.0
@@ -621,7 +639,14 @@ function measure_objects!(r::Retina)
             nthick = count(li -> (xy = _xy(r, li); r.depth[xy[2], xy[1]] >= thickd), o.pixels)
             o.texture = nthick / o.ink
         end
-        o.filled = !o.isdot && exceeds(o.texture, thr(r.P, :retina_filled_fraction), r.rng)
+        # Filled: mostly thick ink, and not enclosing a meaningful interior. A
+        # small outlined figure zoomed ×2 has chunky outlines, but it plainly
+        # encloses white (D37). Zoomed objects were judged by their sub-retina.
+        holefrac = sum((hl.area for hl in o.holes); init=0) / max(o.area, 1.0)
+        if !o.zoomed
+            o.filled = !o.isdot && exceeds(o.texture, thr(r.P, :retina_filled_fraction), r.rng) &&
+                       holefrac < r.P[:retina_texture_hole_max]
+        end
         # second moments of the silhouette
         sx = sy = sxx = sxy = syy = 0.0
         n = 0

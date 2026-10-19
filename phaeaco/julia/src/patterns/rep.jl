@@ -36,10 +36,18 @@ function exemplar(ws::BoxWS, id::Int=ws.root)
     for (f, (_, v)) in n.feats
         r.feats[f] = Stats(v)
     end
-    # a count enters matching as the integer the accumulator reports: its
-    # noise shows as the occasional miscount, not as 1 ≠ 1 (§7.3.2)
+    # A count enters matching as the integer the accumulator reports: its
+    # noise shows as the occasional miscount, not as 1 ≠ 1 (§7.3.2). A count
+    # that has not yet reached every node of its type in this context (their
+    # counting codelets did not all run) is left out — not counted yet, like a
+    # missing feature — rather than passed on as a smaller number (D38).
     for (t, k) in n.nums
-        ws.nodes[k].alive && (r.nums[t] = Stats(Float64(reported(ws.nodes[k]))))
+        num = ws.nodes[k]
+        num.alive || continue
+        present = count(c -> ws.nodes[c].alive && ws.nodes[c].type == t, n.children)
+        counted_nodes = count(>(0), num.sharers)
+        counted_nodes < present && continue
+        r.nums[t] = Stats(Float64(reported(num)))
     end
     for c in parts(ws, id)
         push!(r.children, exemplar(ws, c))

@@ -19,6 +19,23 @@ struct FeatureInfo
     eqtol::Float64          # values closer than this share a Workspace node (§7.1, Fig. 7.7)
     relative::Bool          # eqtol is relative to the value, not absolute
     discrete::Bool
+    period::Float64         # > 0 for a circular feature: slope wraps at 180° (D36)
+end
+
+FeatureInfo(maxval, eqtol, relative, discrete) = FeatureInfo(maxval, eqtol, relative, discrete, 0.0)
+
+"""Distance between two values of a feature, the short way round if it is circular."""
+function fdist(info::FeatureInfo, a::Real, b::Real)
+    d = abs(a - b)
+    info.period > 0 && (d = mod(d, info.period); d = min(d, info.period - d))
+    return d
+end
+
+"""`v` moved by whole periods to lie within half a period of `ref` (so means stay coherent)."""
+function unwrap(info::FeatureInfo, v::Real, ref::Real)
+    info.period > 0 || return Float64(v)
+    p = info.period
+    return v + p * round((ref - v) / p)
 end
 
 mutable struct Concept
@@ -127,7 +144,7 @@ barycenter exists. Values not given by the thesis are DECISIONS D18.
 """
 function build_primitives(P::Params; now::Int=0)
     m = LTM()
-    F(maxval, eqtol; relative=false, discrete=false) = FeatureInfo(maxval, eqtol, relative, discrete)
+    F(maxval, eqtol; relative=false, discrete=false, period=0.0) = FeatureInfo(maxval, eqtol, relative, discrete, period)
     obj(n, d=20) = add_concept!(m, n, :object; depth=d, now=now, P=P)
     feat(n, info, d=15) = add_concept!(m, n, :feature; depth=d, feature=info, now=now, P=P)
     # objects and their hierarchy
@@ -145,7 +162,7 @@ function build_primitives(P::Params; now::Int=0)
     end
     link!(m, :circle, :isa, :ellipse); link!(m, :ellipse, :isa, :curve)
     # features (max value, "same" tolerance)
-    feat(:slope, F(180.0, 6.0))
+    feat(:slope, F(90.0, 6.0; period=180.0))      # lines at 178° and 2° are parallel
     feat(:length, F(141.4, 0.07; relative=true))
     feat(:width, F(10.0, 1.0))
     feat(:texture, F(1.0, 0.5; discrete=true), 25)

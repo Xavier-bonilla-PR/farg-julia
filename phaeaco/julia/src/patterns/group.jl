@@ -12,7 +12,12 @@ function update!(M::Matcher, p::RNode, e::RNode; depth::Int=0)
     oldsupport = p.support
     p.support += e.support
     for (f, s) in e.feats
-        merge!(get!(p.feats, f, Stats()), s)
+        ps = get!(p.feats, f, Stats())
+        info = haskey(M.ltm, f) ? M.ltm[f].feature : nothing
+        if info !== nothing && info.period > 0 && ps.n > 0 && s.n == 1
+            s = Stats(unwrap(info, s.mean, ps.mean))       # keep a circular mean coherent
+        end
+        merge!(ps, s)
     end
     for t in union(keys(p.nums), keys(e.nums))
         if !haskey(e.nums, t)

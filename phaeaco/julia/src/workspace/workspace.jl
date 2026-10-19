@@ -138,7 +138,7 @@ function add_feature!(ws::BoxWS, ctx::Ctx, owner::Int, ftype::Symbol, v::Float64
     for n in ws.nodes
         (n.alive && n.type == ftype && n.stats.n > 0) || continue
         tol = info.relative ? info.eqtol * max(abs(v), abs(n.stats.mean)) : info.eqtol
-        if info.discrete ? v == n.stats.mean : abs(v - n.stats.mean) <= tol
+        if info.discrete ? v == n.stats.mean : fdist(info, v, n.stats.mean) <= tol
             fnode = n.id
             break
         end
@@ -152,16 +152,39 @@ function add_feature!(ws::BoxWS, ctx::Ctx, owner::Int, ftype::Symbol, v::Float64
         prime!(ctx.ltm, ftype, ctx.now, ctx.rng)
     end
     f = ws.nodes[fnode]
+    f.stats.n > 0 && (v = unwrap(info, v, f.stats.mean))
     push!(f.stats, v)
     push!(f.sharers, owner)
     o.feats[ftype] = (fnode, v)
-    # a feature node linked from several nodes is a structural curiosity a
-    # sameness codelet may notice — the more links, the likelier (§7.4.10)
-    if ws.analytic && length(f.sharers) >= 2
-        post!(ws, ctx, :equality, fnode, ctx.P[:ws_equality_urgency] * min(1.0, (length(f.sharers) - 1) / 2))
+    # values that are the same, or nearly, are a structural curiosity a
+    # sameness codelet may notice — the more of them, the likelier (§7.4.10)
+    if ws.analytic
+        k = _near_owners(ws, ctx, ftype, f.stats.mean)
+        k >= 2 && post!(ws, ctx, :equality, fnode, ctx.P[:ws_equality_urgency] * min(1.0, (k - 1) / 2))
     end
     return fnode
 end
+
+"""
+Feature nodes of a type whose values are within the sameness tolerance of
+`v`: the feature's own tolerance widened by `ws_sameness_widening`. Under the
+pressure of looking for sameness, nearly equal values count as equal (§7.1:
+"lowering the threshold of acceptance of length equality").
+"""
+function near_nodes(ws::BoxWS, ctx::Ctx, ftype::Symbol, v::Float64)
+    info = ctx.ltm[ftype].feature
+    k = ctx.P[:ws_sameness_widening]
+    out = Int[]
+    for n in ws.nodes
+        (n.alive && n.type == ftype && n.stats.n > 0) || continue
+        tol = k * (info.relative ? info.eqtol * max(abs(v), abs(n.stats.mean)) : info.eqtol)
+        (info.discrete ? v == n.stats.mean : fdist(info, v, n.stats.mean) <= tol) && push!(out, n.id)
+    end
+    return out
+end
+
+_near_owners(ws::BoxWS, ctx::Ctx, ftype::Symbol, v::Float64) =
+    sum((length(ws.nodes[k].sharers) for k in near_nodes(ws, ctx, ftype, v)); init=0)
 
 """
 Count `item` in the numerosity node of `context` for its type: the

@@ -147,8 +147,8 @@ function attend!(ws::BoxWS, ctx::Ctx, idea::Idea)
         for n in descendants(ws, ws.root, type)
             haskey(ws.nodes[n].feats, f) || (haskey(CODELETS, f) && CODELETS[f](ws, ctx, n))
         end
-        for n in ws.nodes
-            (n.alive && n.type == f && length(n.sharers) >= 2) && cod_equality!(ws, ctx, n.id)
+        for n in collect(ws.nodes)
+            (n.alive && n.type == f) && cod_equality!(ws, ctx, n.id)
         end
     elseif idea.kind == :exists && idea.tag == :concavity
         for o in nodes_at([:object])
@@ -279,9 +279,13 @@ function pattern_candidates(s::Solver; some::Bool=false)
         p = numerosity_difference(M, sL, sR)
         push!(out, (idea, p * wn * sqrt(mweight(M, t)), false))
     end
-    for (t, tag) in kinds
+    # "nothing vs something" (§11.1.1): any thing at all in the box
+    let fl = count(b -> !isempty(b.children), s.boxpat[1:6]) / 6, fr = count(b -> !isempty(b.children), s.boxpat[7:12]) / 6
+        abs(fl - fr) >= 0.99 && push!(out, (Idea(:exists, Symbol[], :thing, :any, :all, 0.0, fl > fr), mweight(M, :object), false))
+    end
+    for (t, tag) in union(kinds, Set((g, :none) for g in keys(KIND_OF)))
         t in _NOT_EXISTENTIAL && continue
-        has(b) = any(n -> n.type == t && n.tag == tag, _alldesc(b))
+        has(b) = any(n -> iskind(n.type, t) && n.tag == tag, _alldesc(b))
         fl = count(has, s.boxpat[1:6]) / 6
         fr = count(has, s.boxpat[7:12]) / 6
         abs(fl - fr) >= 0.99 || continue
@@ -357,11 +361,15 @@ function box_ideas(s::Solver, e::RNode)
             idea === nothing || push!(out, idea)
         end
     else
-        # present here and in none of the other side's boxes seen so far
-        has(b) = any(n -> n.type == what && n.tag == r.tag, _alldesc(b))
-        fl, fr = count(has, s.boxpat[1:6]), count(has, s.boxpat[7:12])
-        if (fl >= 1 && fr == 0) || (fl == 0 && fr >= 1)
-            push!(out, Idea(:exists, Symbol[], what, r.tag, :all, 0.0, fl >= 1))
+        # present here and in none of the other side's boxes seen so far — as
+        # its own kind, then as the more general kinds it is a case of
+        # (a circle, then an ellipse, then a curve)
+        for k in (what, (g for (g, ks) in KIND_OF if what in ks && g != what)...)
+            has(b) = any(n -> iskind(n.type, k) && n.tag == r.tag, _alldesc(b))
+            fl, fr = count(has, s.boxpat[1:6]), count(has, s.boxpat[7:12])
+            if (fl >= 1 && fr == 0) || (fl == 0 && fr >= 1)
+                push!(out, Idea(:exists, Symbol[], k, r.tag, :all, 0.0, fl >= 1))
+            end
         end
     end
     return out
@@ -437,6 +445,14 @@ function solve(bp::BP, ctx::Ctx)
     P = ctx.P
     look_all!(s)
     _note(s, "holistic look done")
+    # --- hardwired: nothing vs something (BP #1, §11.1.1)
+    emptyL = all(b -> isempty(b.children), s.boxpat[1:6])
+    emptyR = all(b -> isempty(b.children), s.boxpat[7:12])
+    if emptyL != emptyR && all(b -> !isempty(b.children), emptyL ? s.boxpat[7:12] : s.boxpat[1:6])
+        idea = Idea(:exists, Symbol[], :thing, :any, :all, 0.0, emptyR)
+        _note(s, "one side empty: $idea")
+        return SolveResult(idea, :hardwired, s.ticks, 0, s.log)
+    end
     # --- holistic stage
     cands = pattern_candidates(s)
     for (idea, _, zerovar) in cands

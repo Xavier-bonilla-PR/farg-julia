@@ -38,7 +38,7 @@ improbable (D26); discrete features have no floor.
 """
 function feature_difference(M::Matcher, f1::Stats, f2::Stats, info::FeatureInfo)
     (f1.n == 0 || f2.n == 0) && return 0.0
-    scaled = clamp(abs(f1.mean - f2.mean) / info.maxval, 0.0, 1.0)
+    scaled = clamp(fdist(info, f1.mean, f2.mean) / info.maxval, 0.0, 1.0)
     (f1.n == 1 && f2.n == 1) && return scaled
     p = difference_probability(M, f1, f2, info)
     return M.literal ? p : scaled * p
@@ -47,7 +47,7 @@ end
 """Probability that two feature samples come from different populations (Eqs. 8.2–8.3)."""
 function difference_probability(M::Matcher, f1::Stats, f2::Stats, info::FeatureInfo)
     floor = info.discrete ? 0.0 : M.sfloor * info.maxval
-    Δ = abs(f1.mean - f2.mean)
+    Δ = fdist(info, f1.mean, f2.mean)
     if f1.n == 1 && f2.n == 1
         return Δ == 0 ? 0.0 : 1.0
     elseif f1.n == 1 || f2.n == 1

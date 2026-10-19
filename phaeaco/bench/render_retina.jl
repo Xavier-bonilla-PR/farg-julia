@@ -1,5 +1,5 @@
 # Overlay what the retina found on a BP's boxes, for looking at.
-#   julia --project=phaeaco/julia phaeaco/bench/render_retina.jl OUT.ppm synth_name [seed] [σ]
+#   julia --project=phaeaco/julia phaeaco/bench/render_retina.jl OUT.ppm (synth_name | bp.pbm) [seed] [σ]
 # grey = ink, red = lines, blue = junctions, green = ellipses, orange = dots
 using PhaeacoJL, Random
 const P = PhaeacoJL
@@ -64,8 +64,9 @@ function write_ppm(path, img)
     end
 end
 
-out, name = ARGS[1], Symbol(ARGS[2])
+out, name = ARGS[1], ARGS[2]
 seed = length(ARGS) >= 3 ? parse(Int, ARGS[3]) : 1
 σ = length(ARGS) >= 4 ? parse(Float64, ARGS[4]) : 0.0
-bp, _ = P.synth_bp(name; seed=seed, σ=σ)
+# a synthetic BP by name, or a PBM stack by path
+bp = endswith(name, ".pbm") ? P.load_bp(name) : first(P.synth_bp(Symbol(name); seed=seed, σ=σ))
 write_ppm(out, overlay(bp, P.load_params(); seed=seed))
