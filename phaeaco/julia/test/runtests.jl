@@ -8,4 +8,5 @@ const P = PhaeacoJL
     include("test_input.jl")
     include("test_geometry.jl")
     include("test_retina.jl")
+    include("test_workspace.jl")
 end

@@ -46,3 +46,25 @@ openness_samples = 12
 circle_ecc = {mu = 0.45, sigma = 0.02}        # Appendix B
 zoom_size = {mu = 18.0, sigma = 2.0}          # px: objects smaller are magnified (§10.3.17)
 filled_fraction = {mu = 0.3, sigma = 0.03}    # thick fraction of ink above which a figure is filled
+
+[ltm]
+act_steps = 20
+act_period = 30              # ticks per mark at depth 0; deeper concepts decay more slowly
+sig_steps = 200
+sig_period = 5000
+
+[ws]
+act_steps = 20               # Workspace node activation: marks ...
+act_period = 8               # ... and box ticks per mark of decay
+p_weight = 2.0               # process P's share of a box's time while detectors wait
+priming_gain = 1.0           # urgency × (1 + gain × LTM weight of the feature)
+many_damping = 0.05          # urgency factor for codelets of a type there are "many" of
+string_damping = 0.3         # a line string damps its lines' codelets (§7.4.4)
+urgency_gamma = 2.0          # a drawn codelet runs with probability (u/100)^γ (D19)
+retina_units_per_tick = 40
+min_ticks = 20
+
+[top]
+numerosity_sigma0 = 0.1      # σ₀ of the accumulator (§7.3.2)
+box_done = {mu = 0.15, sigma = 0.02}   # box node activation below which the box is seen
+many = {mu = 5.0, sigma = 0.7}         # count at which process Q notices "many"

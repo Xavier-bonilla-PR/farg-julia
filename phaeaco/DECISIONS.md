@@ -117,3 +117,53 @@ made of many short lines, §10.3.16) is not yet implemented; it matters for
 BP #7, which is outside the target set. Pipelining (Fig. 10.1) is at the
 level of the box: the cognitive level starts on a box once its retina has
 settled, rather than on individual detectors mid-stream.
+
+## Workspace and LTM primitives (ch. 7, ch. 9)
+
+**D18. Urgencies and built-in salience.** The thesis gives only the ordering
+of codelet urgencies (§7.1): a line segment's slope and length very high
+(90, 85), its count medium (50), its width very low (10, ends and middle are
+not implemented). Texture is high (80) and also has the highest built-in
+significance in LTM (§11.1.1). The convex hull is low (10) (Fig. 7.8 is
+"one of the last perceptual elements"), but once the hull exists its
+"missing quantity" codelet is high (70), as §7.1 says of hull area. A
+barycenter's coordinates are high (85: "almost always selected"). An
+intersection's coordinates are very low (8). The values live in
+`build_primitives`.
+
+**D19. How the coderack chooses (§7.2).** The thesis says activity ends while
+low-urgency codelets are still waiting. If the most urgent codelet always
+ran, the leftovers would eventually run too. So a codelet is drawn with
+probability ∝ urgency and then runs with probability (u/100)^γ, γ = 2;
+otherwise the tick passes. A codelet's urgency is its base urgency ×
+(1 + LTM weight of its feature concept), set when it is posted, so priming
+a concept makes its codelets likelier (§7.1).
+
+**D20. "Area" of an object.** For a closed or filled object, the area it
+covers (ink and enclosed interior). For an open figure (a Λ, a zig-zag), the
+area of its convex hull, which "gives a rough idea about how large an
+object these lines make" (§7.1).
+
+**D21. Identified shapes and their parts.** Lines that are only the retina's
+approximation of a circle, ellipse or curve are not perceived as line
+segments; the circle node stands for them. The object node is kept, with the
+circle as its child, rather than replaced by it. This keeps object-to-object
+matching uniform. A closed line string damps its lines' codelets (§7.4.4)
+but carries the count of its lines itself (Fig. 7.30).
+
+**D22. Clocks.** Workspace activations run on the box's own tick count, so
+a box decays at the same pace whether it is looked at alone or with eleven
+others; LTM runs on the global clock. A box's retinal work is charged to it
+at 40 retinal steps per tick. A box is seen when its node's activation drops
+below a sampled 0.15, once P has nothing left to perceive.
+
+**D23. Counting.** σ₀ = 0.1, so counts up to five are reported exactly about
+99% of the time, and larger counts drift (§7.3.2). Process Q watches the
+nodes process P builds; once a context holds "many" of a type (a sampled ≈ 5),
+further ones are only counted, and the per-item codelets of those already
+there are damped, except their counting.
+
+**D24. Shared feature nodes keep exact values.** When two objects share a
+feature node (practically equal values, §7.1), each parent also records its
+own exact value on the link, so matching (§8.2) compares exact values while
+the shared node still shows the equality.

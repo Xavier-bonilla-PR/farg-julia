@@ -28,4 +28,11 @@ include("retina/pixels.jl")
 include("retina/lines.jl")
 include("retina/structure.jl")
 
+include("ltm/concepts.jl")
+
+include("workspace/workspace.jl")
+include("workspace/perceive.jl")
+include("workspace/codelets.jl")
+include("workspace/look.jl")
+
 end

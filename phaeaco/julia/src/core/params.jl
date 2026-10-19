@@ -49,7 +49,8 @@ function load_params(path::AbstractString=DEFAULT_PARAMS_PATH; overrides...)
     num = Dict{Symbol,Float64}()
     function walk(d, prefix)
         for (k, v) in d
-            key = isempty(prefix) ? k : string(prefix, "_", k)
+            # keys under [top] are not prefixed
+            key = isempty(prefix) || prefix == "top" ? k : string(prefix, "_", k)
             if v isa AbstractDict && haskey(v, "mu")
                 thr[Symbol(key)] = Thr(Float64(v["mu"]), Float64(get(v, "sigma", 0.0)))
             elseif v isa AbstractDict
