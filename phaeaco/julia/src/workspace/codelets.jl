@@ -226,9 +226,43 @@ function cod_openness!(ws::BoxWS, ctx::Ctx, id::Int)
     end
 end
 
+"""
+The sameness detector (§7.4.10, "Sam" in GEB): make the implicit equality of
+a shared feature node explicit, and if every node of that type in their
+context shares it, add the for-all quantifier: "all objects have similar
+texture" (Fig. 7.52). The for-all's tag names the quantified type and the
+feature (`:object_texture`); it points to the Platonic feature, not to the
+specific value.
+"""
+function cod_equality!(ws::BoxWS, ctx::Ctx, fnode::Int)
+    f = ws.nodes[fnode]
+    ftype = f.type
+    for type in unique(ws.nodes[k].type for k in f.sharers)
+        members = [k for k in f.sharers if ws.nodes[k].type == type && ws.nodes[k].alive]
+        length(members) >= 2 || continue
+        context = ws.nodes[members[1]].parent
+        all(k -> ws.nodes[k].parent == context, members) || (context = ws.root)
+        tag = Symbol(type, "_", ftype)
+        if !any(n -> n.alive && n.type == :equality && any(l -> l[1] == fnode, n.links), ws.nodes)
+            eq = _newnode!(ws, ctx, :equality, ws.root; tag=tag)
+            push!(eq.links, (fnode, :value, 1.0))
+            foreach(k -> push!(eq.links, (k, :member, 1.0)), members)
+        end
+        # all of them? (the for-all codelet has high urgency once a group exists; run it at once)
+        everyone = context == ws.root ? descendants(ws, ws.root, type) :
+                   [c for c in ws.nodes[context].children if ws.nodes[c].type == type && ws.nodes[c].alive]
+        if length(everyone) == length(members) &&
+           !any(n -> n.alive && n.type == :forall && n.tag == tag, ws.nodes)
+            _newnode!(ws, ctx, :forall, ws.root; tag=tag)
+            prime!(ctx.ltm, :forall, ctx.now, ctx.rng)
+        end
+    end
+end
+
 const CODELETS = Dict{Symbol,Function}(
     :numerosity => cod_numerosity!, :slope => cod_slope!, :length => cod_length!,
     :width => cod_width!, :x => cod_x!, :y => cod_y!, :angle => cod_angle!, :size => cod_size!,
     :texture => cod_texture!, :area => cod_area!, :barycenter => cod_barycenter!,
     :elongation => cod_elongation!, :convex_hull => cod_convex_hull!, :missing => cod_missing!,
-    :eccentricity => cod_eccentricity!, :openness => cod_openness!, :sides => cod_sides!)
+    :eccentricity => cod_eccentricity!, :openness => cod_openness!, :sides => cod_sides!,
+    :equality => cod_equality!)

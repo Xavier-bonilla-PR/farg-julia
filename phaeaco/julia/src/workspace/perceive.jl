@@ -86,7 +86,12 @@ function process_P!(ws::BoxWS, ctx::Ctx)
     isempty(ws.pending) && return false
     w = [_salience(ws, d) for d in ws.pending]
     tot = sum(w)
-    tot <= 0 && return false
+    if tot <= 0
+        # everything left waits on something P will never build (an inside
+        # relation of an isolated line, say): nothing more can be perceived
+        empty!(ws.pending)
+        return false
+    end
     u = rand(ctx.rng) * tot
     k = 1
     while u > w[k]

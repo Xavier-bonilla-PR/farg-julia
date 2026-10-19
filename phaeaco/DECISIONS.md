@@ -221,3 +221,73 @@ wholly different, weighted by its link strength. Each level down is damped
 by 0.5, and recursion stops after three levels (§8.2.4: "two or three
 recursive steps"). A count's weight is the LTM weight of numerosity times
 the square root of that of the counted type.
+
+## The solver (ch. 11) and sameness (§7.4.10)
+
+**D29. What an idea is.** An idea compares one thing across the sides. That
+thing is a feature at a place in the representation (every object's area,
+the x of every object's barycenter), a count (lines per object, or lines
+anywhere in the box), the existence of a kind of node (a closed interior, a
+circle), or the existence of a for-all node (§7.4.10). The idea also carries
+a split point and a direction. An "all" idea requires every instance on
+each side to fall on its side of the split. A "some" idea requires every
+box of one side to have an instance beyond the split, and no box of the
+other side to have one (BP #21). The thesis's own idea types
+(feature-value difference, existence, structural difference) map onto
+these. Structural difference appears as counts ("three lines" vs "four")
+until LTM concepts exist (phase 7).
+
+**D30. Holistic ideas.** After the parallel look, every feature, count and
+kind found in the box patterns is compared across sides. A feature's
+salience is the probability that the two sides' distributions differ times
+the feature's LTM weight (§11.1.2, footnote 85); counts are treated likewise
+with Eqs. 8.4–8.6, and an existence difference has salience equal to the
+kind's LTM weight. An idea needs five of six boxes per side to show the
+thing, and a salience above 0.15. One is picked with probability ∝
+salience², and if it fails verification the analytic stage begins, as in
+§11.1.2. A discrete feature with zero variance on both sides and different
+values ends the run without verification (§11.1.1).
+
+**D31. Verification.** Each box is looked at again with the idea in focus:
+its concepts are primed, and anything the idea needs that the look missed is
+perceived top-down (the convex hull and its missing area, a count, the
+sameness of a shared feature). This follows "verifies this idea by quickly
+looking at each box" (§5.1.1). The new look is merged into that box's
+pattern of looks (§11.1.2). Verification stops at the third failing box. If
+one or two boxes failed, each gets two more looks (§11.1.3, BP #192).
+
+**D32. Analytic ideas.** Each analytic iteration re-looks one box, chosen
+with probability ∝ 1/(size of its representation) (§11.1.3: simpler boxes
+more often). An idea comes from one node of that box, chosen by its type's
+LTM weight (so a for-all node, a "structural curiosity", is noticed sooner
+than a line), and from one of its features, counts or its existence. It is
+formed if the boxes seen so far do not contradict it: one box per side with
+data is enough, and verification looks at them all. A count idea is tried
+at its own place first, then box-wide ("counting lines?" before "counting
+things"). With probability 0.3 per iteration the side patterns are also
+compared again, now allowing "some" ideas. Failed ideas are recognised
+regardless of split point.
+
+**D33. Motivation.** The master node of failed ideas has an activation of 20
+marks, decaying one mark per 500 ticks; each new idea adds 5. Phaeaco gives
+up below a sampled 0.15. The decay was set so that giving up takes about
+five times as long as solving BP #3, which is the ratio of no-answer times
+to BP #3's time in Appendix A (BP #4: 23.8 s, BP #22: 23.3 s, vs 4.3 s).
+
+**D34. Sameness and for-all.** Only in analytic looks (§7.4.10: "cannot happen
+during the holistic stage"), a feature node that gains a second sharer
+posts the sameness codelet, with urgency 40 × min(1, (sharers − 1)/2). It
+builds an equality node. If every node of that type in the context shares
+the value, it builds a for-all node whose tag names the type and feature
+(`:object_texture`), meaning "all objects have similar texture" (Fig. 7.52).
+The slope "same" tolerance is 6°, so that "almost parallel" (BP #39) counts
+as the same slope.
+
+**D35. Synthetic BPs must not leak.** Several first-draft generators gave the
+solver accidental rules that held on all twelve boxes: every elongated
+figure was an ellipse, compact figures were larger, only concave shapes had
+short sides, "same size" boxes mixed shapes of equal radius but unequal
+area. The solver found those rules and verified them, which is correct
+behaviour, so the generators were fixed so that only the intended rule
+separates the sides. The judge accepts equivalent descriptions that hold by
+construction ("three lines" for "triangles").

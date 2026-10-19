@@ -42,8 +42,8 @@ function look!(ws::BoxWS, ctx::Ctx; maxticks::Int=100_000)
 end
 
 """Build and look at the representation of a single image."""
-function represent(img::AbstractMatrix{Bool}, ctx::Ctx; index::Int=1)
-    ws = BoxWS(index, img, ctx)
+function represent(img::AbstractMatrix{Bool}, ctx::Ctx; index::Int=1, analytic::Bool=false)
+    ws = BoxWS(index, img, ctx; analytic=analytic)
     look!(ws, ctx)
     return ws
 end

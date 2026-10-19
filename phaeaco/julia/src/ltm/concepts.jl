@@ -145,7 +145,7 @@ function build_primitives(P::Params; now::Int=0)
     end
     link!(m, :circle, :isa, :ellipse); link!(m, :ellipse, :isa, :curve)
     # features (max value, "same" tolerance)
-    feat(:slope, F(180.0, 4.0))
+    feat(:slope, F(180.0, 6.0))
     feat(:length, F(141.4, 0.07; relative=true))
     feat(:width, F(10.0, 1.0))
     feat(:texture, F(1.0, 0.5; discrete=true), 25)
@@ -165,6 +165,7 @@ function build_primitives(P::Params; now::Int=0)
     end
     add_concept!(m, :forall, :quantifier; depth=70, now=now, P=P)
     add_concept!(m, :sides, :abstract; depth=30, now=now, P=P)      # a string's count of its lines
+    link2!(m, :convex_hull, :similar, :missing)
     for n in (:similar, :opposite, :small, :large, :many, :few)
         add_concept!(m, n, :abstract; depth=60, now=now, P=P)
     end
@@ -196,7 +197,8 @@ function build_primitives(P::Params; now::Int=0)
     # coordinates of barycenters late
     for (n, s) in ((:texture, 120), (:numerosity, 80), (:area, 70), (:slope, 60), (:length, 50),
                    (:line, 50), (:curve, 50), (:object, 60), (:interior, 50), (:dot, 50),
-                   (:circle, 40), (:missing, 15), (:x, 20), (:y, 20), (:elongation, 25))
+                   (:circle, 40), (:missing, 35), (:x, 20), (:y, 20), (:elongation, 25),
+                   (:forall, 40), (:equality, 30))
         m[n].w.sig.pos = s
     end
     return m

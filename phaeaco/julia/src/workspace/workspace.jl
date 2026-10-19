@@ -69,6 +69,7 @@ mutable struct BoxWS
     suppressed::Set{Tuple{Int,Symbol}}          # process Q: (context node, type) seen "many" times
     ticks::Int
     done::Bool
+    analytic::Bool              # looked at in the analytic stage: equality can be noticed (§7.4.10)
 end
 
 # --- building nodes ---------------------------------------------------------------
@@ -154,6 +155,11 @@ function add_feature!(ws::BoxWS, ctx::Ctx, owner::Int, ftype::Symbol, v::Float64
     push!(f.stats, v)
     push!(f.sharers, owner)
     o.feats[ftype] = (fnode, v)
+    # a feature node linked from several nodes is a structural curiosity a
+    # sameness codelet may notice — the more links, the likelier (§7.4.10)
+    if ws.analytic && length(f.sharers) >= 2
+        post!(ws, ctx, :equality, fnode, ctx.P[:ws_equality_urgency] * min(1.0, (length(f.sharers) - 1) / 2))
+    end
     return fnode
 end
 
@@ -232,10 +238,10 @@ end
 
 _isfeature(ws::BoxWS, k::Int) = ws.nodes[k].stats.n > 0 && ws.nodes[k].type != :numerosity
 
-function BoxWS(index::Int, img::AbstractMatrix{Bool}, ctx::Ctx)
+function BoxWS(index::Int, img::AbstractMatrix{Bool}, ctx::Ctx; analytic::Bool=false)
     r = Retina(img, ctx.P, Xoshiro(rand(ctx.rng, UInt64)); tracer=ctx.tracer)
     ws = BoxWS(index, BitMatrix(img), r, WNode[], 0, Codelet[], Tuple{Symbol,Int}[], Set{Int}(),
-               Dict{Tuple{Symbol,Int},Int}(), Set{Tuple{Int,Symbol}}(), 0, false)
+               Dict{Tuple{Symbol,Int},Int}(), Set{Tuple{Int,Symbol}}(), 0, false, analytic)
     ws.root = _newnode!(ws, ctx, :box, 0).id
     return ws
 end

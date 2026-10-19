@@ -19,6 +19,15 @@ end
 
 _maker(f) = (rng, c) -> f(rng, c)
 
+"""An irregular polygon that is convex (irregular polygons can come out concave)."""
+function _convex_polygon(rng, n, c, r; filled=false)
+    for _ in 1:200
+        p = random_polygon(rng, n, c, r; irreg=0.5, filled=filled)
+        isconvex(p) && return p
+    end
+    return random_polygon(rng, n, c, r; irreg=0.0, filled=filled)
+end
+
 """Build a BP from a per-box generator `gen(rng, side) -> Vector{Shape}`."""
 function _bp(name, left, right, gen; seed, σ=0.0)
     rng = Xoshiro(seed)
@@ -29,7 +38,7 @@ function _bp(name, left, right, gen; seed, σ=0.0)
         shapes = Shape[]
         for _ in 1:_MAX_TRIES
             try
-                shapes = gen(rng, side)
+                shapes = applicable(gen, rng, side, i) ? gen(rng, side, i) : gen(rng, side)
                 break
             catch e
                 e isa ErrorException || rethrow()
@@ -60,11 +69,12 @@ synthbp!(:texture, "outlined figures", "filled figures", (rng, side) ->
     place(rng, [_maker((r, c) -> _any_shape(r, c, 6 + 16rand(r); filled=side == :right))
                 for _ in 1:rand(rng, 1:3)]))
 
-# BP #4 — convex vs. concave.
+# BP #4 — convex vs. concave. The convex polygons are irregular, with short
+# sides as well as long ones, as the concave shapes have.
 synthbp!(:convexity, "convex figure", "concave figure", (rng, side) ->
     place(rng, [_maker((r, c) -> side == :left ?
         (rand(r) < 0.25 ? ellipse(c, 25 + 10rand(r), 15 + 10rand(r), π * rand(r); filled=_tex(r)) :
-                         random_polygon(r, rand(r, 3:6), c, 25 + 10rand(r); irreg=0.2, filled=_tex(r))) :
+                         _convex_polygon(r, rand(r, 4:7), c, 25 + 10rand(r); filled=_tex(r))) :
         random_concave(r, c, 25 + 10rand(r); filled=_tex(r)))]))
 
 # BP #5 — no curves vs. curves.
@@ -84,13 +94,26 @@ synthbp!(:position, "figure on the right", "figure on the left", (rng, side) ->
     place(rng, [_maker((r, c) -> _any_shape(r, c, 8 + 8rand(r)))];
           region=side == :left ? (55.0, 100.0, 1.0, 100.0) : (1.0, 45.0, 1.0, 100.0), margin=4.0))
 
-# BP #11-like — elongated vs. compact figures.
+# BP #11-like — elongated vs. compact figures. Both sides mix kinds (thin
+# rectangles and triangles as well as ellipses on the left; circles, regular
+# polygons and fat ellipses on the right), so only elongation separates them.
 synthbp!(:elongation, "elongated figure", "compact figure", (rng, side) ->
     place(rng, [_maker((r, c) -> begin
         L = 22 + 12rand(r)
-        side == :left ? ellipse(c, L, L * (0.18 + 0.12rand(r)), π * rand(r); filled=_tex(r)) :
-                        (rand(r) < 0.5 ? circle(c, 14 + 10rand(r); filled=_tex(r)) :
-                                         random_polygon(r, rand(r, 4:6), c, 16 + 10rand(r); irreg=0.1, filled=_tex(r)))
+        θ = π * rand(r)
+        if side == :left
+            k = rand(r, 1:3)
+            k == 1 && return ellipse(c, L, L * (0.18 + 0.12rand(r)), θ; filled=_tex(r))
+            w = L * (0.15 + 0.12rand(r))
+            pts = k == 2 ? [(-L, -w), (L, -w), (L, w), (-L, w)] : [(-L, -w), (L, 0.0), (-L, w)]
+            return polygon([(c[1] + dx, c[2] + dy) for (dx, dy) in (_rot(x, y, θ) for (x, y) in pts)]; filled=_tex(r))
+        else
+            k = rand(r, 1:3)
+            # sizes chosen so that areas overlap the left side's: area does not separate them
+            k == 1 && return circle(c, 9 + 6rand(r); filled=_tex(r))
+            k == 2 && (a = 10 + 6rand(r); return ellipse(c, a, a * 0.8, θ; filled=_tex(r)))
+            return random_polygon(r, rand(r, 4:6), c, 11 + 7rand(r); irreg=0.1, filled=_tex(r))
+        end
     end)]))
 
 # BP #15 — closed figures vs. open figures.
@@ -100,22 +123,39 @@ synthbp!(:interior, "closed figure", "open figure", (rng, side) ->
         side == :left ? p : polyline(p.pts)           # same outline, one side missing
     end) for _ in 1:rand(rng, 1:2)]))
 
-# BP #21 — a small figure present vs. none.
+# BP #21 — a small figure present vs. none. Circles turn up among the big
+# figures on both sides, so a small round figure is not given away by its
+# roundness.
 synthbp!(:small_present, "a small figure present", "no small figure", (rng, side) ->
     begin
         n = rand(rng, 1:2)
-        big = [_maker((r, c) -> _any_shape(r, c, 14 + 10rand(r))) for _ in 1:n]
-        side == :left ? place(rng, vcat(big, [_maker((r, c) -> _any_shape(r, c, 3.5 + 1.5rand(r); filled=true))])) :
-                        place(rng, big)
+        big = [_maker((r, c) -> rand(r) < 0.4 ? circle(c, 14 + 10rand(r); filled=_tex(r)) :
+                                                 _any_shape(r, c, 14 + 10rand(r))) for _ in 1:n]
+        small = _maker((r, c) -> rand(r) < 0.5 ? circle(c, 3.5 + 1.5rand(r); filled=true) :
+                                                  random_polygon(r, rand(r, 3:4), c, 4.5 + 1.5rand(r); filled=true))
+        side == :left ? place(rng, vcat(big, [small])) : place(rng, big)
     end)
 
-# BP #22 — figures of equal size vs. unequal.
-synthbp!(:same_size, "figures of the same size", "figures of different sizes", (rng, side) ->
+# BP #22 — figures of equal size vs. unequal. On the left each box's figures
+# share a size, but the size varies from box to box (small in some, large in
+# others), so no absolute size separates the sides.
+synthbp!(:same_size, "figures of the same size", "figures of different sizes", (rng, side, i) ->
     begin
+        # one kind of figure per box, so "same size" means the same area
         n = rand(rng, 2:3)
-        r0 = 9 + 6rand(rng)
-        sizes = side == :left ? fill(r0, n) : shuffle(rng, [r0 * f for f in (1.0, 1.8, 2.4)][1:n])
-        place(rng, [_maker((r, c) -> _any_shape(r, c, s)) for s in sizes])
+        kind = rand(rng, 1:3)
+        fig(r, c, rad) = kind == 1 ? circle(c, rad; filled=_tex(r)) :
+                         kind == 2 ? polygon([(c[1] - rad, c[2] - rad), (c[1] + rad, c[2] - rad),
+                                              (c[1] + rad, c[2] + rad), (c[1] - rad, c[2] + rad)]; filled=_tex(r)) :
+                                     random_polygon(r, 3, c, rad * 1.3; irreg=0.0, filled=_tex(r))
+        if side == :left
+            r0 = isodd(i) ? 6 + 3rand(rng) : 11 + 4rand(rng)
+            sizes = fill(r0, n)
+        else
+            r0 = 5 + 2rand(rng)
+            sizes = shuffle(rng, [r0 * f for f in (1.0, 1.8, 2.5)][1:n])
+        end
+        place(rng, [_maker((r, c) -> fig(r, c, s)) for s in sizes])
     end)
 
 # BP #23 — two figures vs. three. (The real BP's counts are not given in the
@@ -128,8 +168,8 @@ synthbp!(:parallel_lines, "all lines almost parallel", "lines not all parallel",
     begin
         n = rand(rng, 3:5)
         θ0 = π * rand(rng)
-        angles = side == :left ? [θ0 + 0.05randn(rng) for _ in 1:n] :
-                                 [θ0 + (k == 1 ? π / 2 * (0.6 + 0.4rand(rng)) : 0.05randn(rng)) for k in 1:n]
+        angles = side == :left ? [θ0 + 0.025randn(rng) for _ in 1:n] :
+                                 [θ0 + (k == 1 ? π / 2 * (0.6 + 0.4rand(rng)) : 0.025randn(rng)) for k in 1:n]
         place(rng, [_maker((r, c) -> begin
             L = 12 + 8rand(r)
             dx, dy = L * cos(θ), -L * sin(θ)
@@ -137,12 +177,12 @@ synthbp!(:parallel_lines, "all lines almost parallel", "lines not all parallel",
         end) for θ in shuffle(rng, angles)]; gap=3.0)
     end)
 
-# BP #56 — all figures of one texture vs. mixed.
-synthbp!(:same_texture, "every figure has the same texture", "textures differ", (rng, side) ->
+# BP #56 — all figures of one texture vs. mixed. Half the left boxes are all
+# outlined and half all filled, so neither texture alone separates the sides.
+synthbp!(:same_texture, "every figure has the same texture", "textures differ", (rng, side, i) ->
     begin
-        n = rand(rng, 3:4)
-        t = _tex(rng)
-        texs = side == :left ? fill(t, n) : shuffle(rng, vcat([true, false], [_tex(rng) for _ in 3:n]))
+        n = rand(rng, 2:4)
+        texs = side == :left ? fill(isodd(i), n) : shuffle(rng, vcat([true, false], [_tex(rng) for _ in 3:n]))
         place(rng, [_maker((r, c) -> _any_shape(r, c, 7 + 5rand(r); filled=f)) for f in texs])
     end)
 

@@ -41,7 +41,7 @@ conic_coverage = 0.85        # fraction of the way round the points must go
 hole_min_area = 4            # px: enclosed regions smaller than this are not seen
 dot_size = 5                 # px: objects no larger are dots (§10.3.10)
 zoom_gray = 0.4              # gray level kept after fuzzy magnification
-concavity_min = 0.04         # missing fraction below which an object has no concavity
+concavity_min = 0.08         # missing fraction below which an object has no concavity (rasterising alone gives ≈ 0.04)
 openness_samples = 12
 circle_ecc = {mu = 0.45, sigma = 0.02}        # Appendix B
 zoom_size = {mu = 18.0, sigma = 2.0}          # px: objects smaller are magnified (§10.3.17)
@@ -63,6 +63,7 @@ string_damping = 0.3         # a line string damps its lines' codelets (§7.4.4)
 urgency_gamma = 2.0          # a drawn codelet runs with probability (u/100)^γ (D19)
 retina_units_per_tick = 40
 min_ticks = 20
+equality_urgency = 40        # the sameness codelet, at full strength (§7.4.10)
 
 [top]
 numerosity_sigma0 = 0.1      # σ₀ of the accumulator (§7.3.2)
@@ -77,3 +78,16 @@ sfloor = 0.01                # minimum standard deviation, fraction of a feature
 literal = 0                  # 1: feature difference = P(different) alone, as Eq. 8.2 reads (D27)
 
 
+
+[solve]
+holistic_min = 0.15          # salience an idea needs to be tried in the holistic stage
+holistic_boxes = 5           # boxes per side that must show the compared thing, holistic stage
+idea_gamma = 2.0             # ideas are picked with probability ∝ salience^γ
+max_failing = 2              # verification stops at more failing boxes than this ...
+persistence = 2              # ... and gives the failing boxes this many more looks each
+pattern_prob = 0.3           # in the analytic stage, chance per look of also comparing the side patterns
+new_idea_marks = 5           # a new idea's boost to the master node's activation (§11.1.3)
+motivation_steps = 20
+motivation_period = 500      # ticks per mark of decay of the master node (give-up time ≈ 5× BP #3, as Appendix A)
+max_ticks = 120000
+bored = {mu = 0.15, sigma = 0.02}   # master-node activation below which Phaeaco gives up

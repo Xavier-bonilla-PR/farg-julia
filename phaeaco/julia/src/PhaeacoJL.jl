@@ -41,4 +41,8 @@ include("patterns/match.jl")
 include("patterns/group.jl")
 include("patterns/numerosity.jl")
 
+include("solver/ideas.jl")
+include("solver/solver.jl")
+include("solver/judge.jl")
+
 end
