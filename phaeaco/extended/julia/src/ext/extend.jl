@@ -25,7 +25,8 @@
 
 """Features only the extension perceives."""
 const EXT_FEATURES = Set([:vert, :endgap, :endangle, :above, :larger, :inside, :diff,
-                          :depth, :simmin, :simmax, :identmin, :nsame, :collinear, :tricol, :gvert, :gelong])
+                          :depth, :simmin, :simmax, :identmin, :nsame, :collinear, :tricol, :gvert, :gelong,
+                          :gcorners, :bcorners])
 
 """One figure as the extension sees it."""
 struct XItem
@@ -62,24 +63,35 @@ function _corners(v::Vector{Pt}, tol::Float64)
 end
 
 function _kind(r::Retina, o::RetObject)
-    o.isdot && return (isempty(o.holes) ? :dot : :circle), 0     # a ring too small to be given a shape
+    if o.isdot                     # a ring too small to be given a shape is a small circle
+        w = o.bbox[2] - o.bbox[1] + 1; h = o.bbox[4] - o.bbox[3] + 1
+        return (!isempty(o.holes) || o.ink / (w * h) <= 0.68 ? :circle : :dot), 0
+    end
     alive = [l for l in o.lines if r.lines[l].alive]
     if !isempty(o.ellipses)
         e = r.ellipses[o.ellipses[1]]
-        length(setdiff(alive, e.lines)) <= 1 && return (e.circle ? :circle : :ellipse), 0
+        length(setdiff(alive, e.lines)) <= 1 && return (e.circle || o.elongation < 0.12 ? :circle : :ellipse), 0
     end
     if isempty(o.holes) && !o.filled &&
        any(j -> r.junctions[j].kind == :X, o.junctions) && length(alive) <= 4
         return :cross, 0
     end
     diam = max(o.bbox[2] - o.bbox[1], o.bbox[4] - o.bbox[3], 1)
-    k = length(o.hull.v) >= 3 ? _corners(o.hull.v, 0.15 * diam) : 0
+    k = length(o.hull.v) >= 3 ? _corners(o.hull.v, max(0.18 * diam, 1.5)) : 0
     closed = !isempty(o.holes) || o.filled
-    # a round closed figure the retina did not fit as an ellipse
-    if closed && o.missing < 0.06 && (k >= 7 || !isempty(o.curves))
+    # a round closed figure the retina did not fit as an ellipse; small ones
+    # (a few pixels across) show fewer hull corners
+    if closed && o.missing < 0.06 && (k >= 7 || !isempty(o.curves) || (diam < 20 && k >= 5))
         return (o.elongation < 0.15 ? :circle : :ellipse), k
     end
-    if closed && isempty(o.curves)
+    # small rings show few hull corners: a circle fills the ellipse inscribed in
+    # its bounding box (ratio ≈ 1), a square overfills it (1.27), a diamond does not (0.64)
+    if closed && diam < 20 && k >= 4
+        w = o.bbox[2] - o.bbox[1] + 1; h = o.bbox[4] - o.bbox[3] + 1
+        ratio = o.hull_area / (π / 4 * w * h)
+        0.85 <= ratio <= 1.12 && return (o.elongation < 0.15 ? :circle : :ellipse), k
+    end
+    if closed                       # wavy or curved sides do not change the corners (BP #10)
         k == 3 && return :triangle, k
         k == 4 && return :quadrangle, k
         return :polygon, k
@@ -97,12 +109,20 @@ function _items(e::RNode, ws::BoxWS)
         det = ws.nodes[c.origin].ret
         det[1] == :object && (byobj[det[2]] = c)
         det[1] == :dot && (byobj[r.dots[det[2]].comp] = c)
+        # an isolated line is perceived as a line, not an object; here it is a figure too
+        det[1] == :line && c.type == :line && (byobj[r.lines[det[2]].comp] = c)
     end
     items = XItem[]
     for o in r.objects
         haskey(byobj, o.id) || continue            # only what this look perceived
         kind, k = _kind(r, o)
-        push!(items, XItem(o.id, byobj[o.id], kind, o.barycenter, o.area, o.filled, o.elongation,
+        filled = o.filled
+        if o.isdot
+            # a solid dot is filled, a ring outlined: holes, or how much of its box the ink covers
+            w = o.bbox[2] - o.bbox[1] + 1; h = o.bbox[4] - o.bbox[3] + 1
+            filled = isempty(o.holes) && o.ink / (w * h) > 0.68
+        end
+        push!(items, XItem(o.id, byobj[o.id], kind, o.barycenter, o.area, filled, o.elongation,
                            o.missing, length(o.holes), k))
     end
     return items
@@ -271,10 +291,18 @@ end
 
 # --- groups of like figures (Gestalt grouping, §11.2.6) ----------------------------------------------
 
-function _groups!(e::RNode, items::Vector{XItem})
+function _groups!(e::RNode, items::Vector{XItem}, r::Retina)
     bykind = Dict{Symbol,Vector{XItem}}()
     for it in items
         push!(get!(bykind, it.kind, XItem[]), it)
+    end
+    # a kind of both textures also groups by texture (BP #41: the outlined circles)
+    for k in collect(keys(bykind))
+        F = filter(it -> it.filled, bykind[k]); O = filter(it -> !it.filled, bykind[k])
+        if !isempty(F) && !isempty(O)
+            length(F) >= 3 && (bykind[Symbol("filled", k)] = F)
+            length(O) >= 3 && (bykind[Symbol("outlined", k)] = O)
+        end
     end
     for (k, its) in bykind
         length(its) >= 3 || continue
@@ -305,6 +333,15 @@ function _groups!(e::RNode, items::Vector{XItem})
             best = min(best, dd / L)
         end
         isfinite(best) && (g.feats[:tricol] = Stats(best))
+        # the outline of the group as a whole (BP #96: hatching that makes a triangle)
+        h = Hull()
+        for it in its, p in r.objects[it.obj].hull.v
+            push!(h, p)
+        end
+        if length(h.v) >= 3
+            xs = [p[1] for p in h.v]; ys = [p[2] for p in h.v]
+            g.feats[:gcorners] = Stats(Float64(_corners(h.v, 0.15 * max(maximum(xs) - minimum(xs), maximum(ys) - minimum(ys)))))
+        end
         push!(e.children, g)
     end
 end
@@ -321,6 +358,18 @@ function extend!(e::RNode, ws::BoxWS, ctx::Ctx)
     d = _depth(items, r)
     length(items) >= 2 && (e.feats[:depth] = Stats(Float64(d)))
     _similarity!(e, items)
-    _groups!(e, items)
+    _groups!(e, items, r)
+    # a box drawn in many parts (hatching, dots) may make one figure: the
+    # corners of the outline of all its ink (BP #96)
+    if length(items) >= 4
+        h = Hull()
+        for it in items, p in r.objects[it.obj].hull.v
+            push!(h, p)
+        end
+        if length(h.v) >= 3
+            xs = [p[1] for p in h.v]; ys = [p[2] for p in h.v]
+            e.feats[:bcorners] = Stats(Float64(_corners(h.v, 0.18 * max(maximum(xs) - minimum(xs), maximum(ys) - minimum(ys)))))
+        end
+    end
     return nnodes(e) - before
 end

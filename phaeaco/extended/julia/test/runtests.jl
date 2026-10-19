@@ -12,4 +12,5 @@ const P = PhaeacoX
     include("test_patterns.jl")
     include("test_solver.jl")
     include("test_ltm.jl")
+    include("test_ext.jl")
 end

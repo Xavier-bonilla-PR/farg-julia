@@ -150,7 +150,8 @@ const _XROOT = Dict(:depth => ("figures nested less deeply", "figures nested mor
                     :simmin => ("some figures unlike the others", "all figures similar"),
                     :simmax => ("no two figures similar", "some two figures similar"),
                     :identmin => ("not all figures identical", "all figures identical"),
-                    :nsame => ("fewer identical figures", "more identical figures"))
+                    :nsame => ("fewer identical figures", "more identical figures"),
+                    :bcorners => ("the whole drawing has fewer corners", "the whole drawing has more corners"))
 const _XADJ = Dict(:vert => ("horizontal", "vertical"),
                    :endgap => ("ends close together", "ends far apart"),
                    :endangle => ("ends parallel", "ends perpendicular"))
@@ -178,6 +179,7 @@ function _xphrases(idea::Idea)
         f == :tricol && return ("some three $k on a line", "no three $k on a line")
         f == :gvert && return ("the $k in a horizontal row", "the $k in a vertical row")
         f == :gelong && return ("the $k in a compact cluster", "the $k in an elongated cluster")
+        f == :gcorners && return ("the $k outline fewer corners", "the $k outline more corners")
     elseif haskey(_XADJ, f)
         a, c = _XADJ[f]
         return ("$(_where(idea.path)) $a", "$(_where(idea.path)) $c")

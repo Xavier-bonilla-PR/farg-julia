@@ -23,12 +23,22 @@ keeps different relations apart; their LTM weight is the base concept's
 **X2. Shape kinds.** A figure's kind comes from the retina: an ellipse
 detector covering it (circle or ellipse); an X junction in an open figure
 with at most four lines (cross); otherwise the corners of its convex hull,
-after removing vertices that deviate less than 15% of the figure's diameter
-from their chord: 3 triangle, 4 quadrangle, more polygon. A closed, nearly
-convex figure with seven or more corners or with curves is round (circle or
-ellipse by elongation); a dot with a hole is a small circle. Kinds are
-noisy, so they may suggest ideas only in the holistic comparison of all
-twelve boxes, never from one analytic look.
+after removing vertices that deviate less than 18% of the figure's diameter
+from their chord: 3 triangle, 4 quadrangle, more polygon. Wavy or curved
+sides do not change the corners (BP #10's jagged triangles). A closed,
+nearly convex figure with seven or more corners, with curves, or small
+(under 20 px) with five or more is round, circle or ellipse by elongation;
+an ellipse fit on a figure of elongation under 0.12 is a circle. A small
+closed figure whose hull fills the ellipse inscribed in its bounding box
+(ratio 0.85–1.12; a square gives 1.27, a diamond 0.64) is round too. A dot
+is a small circle if it is a ring (a hole, or ink covering at most 68% of
+its box), and is filled otherwise. An isolated line, which PhaeacoJL
+perceives as a line and not an object, is a segment.
+
+Kinds are noisy, so they never suggest ideas from one analytic look. In the
+holistic comparison, a kind seen on one side only, in at least half its
+boxes, is a candidate weighted by its concept and verified, as learned
+categories are (D41).
 
 **X3. Relations between figures (§11.2.1–2).** Every two kinds present in a
 box form a `pair@A_B` with `above` (mean height of A minus B's), `larger`
@@ -55,7 +65,11 @@ let any threshold pass for "identical" (BP #22).
 
 **X7. Groups (§11.2.6).** Three or more figures of one kind form a
 `group@K`, with how collinear their centres are, whether some three are on
-a line, their spread's elongation and its verticality.
+a line, their spread's elongation and verticality, and the corners of the
+group's outline. A kind present in both textures also groups by texture
+(`group@outlinedcircle`, BP #41). A box drawn in four or more parts records
+the corners of the outline of all its ink (`bcorners`): hatching or dots
+may make one figure (BP #96).
 
 **X8. Contours.** A figure's long axis gives `vert` (|sin|) once its
 elongation passes 0.25. A stroke crosses itself when two of its lines that
@@ -75,3 +89,11 @@ never picks an extended node or feature. In addition, with probability
 Sharing one pool of picks halved the ordinary search and cut BP #22 and
 #56 in half. The hardwired zero-variance shortcut of BP #3 applies only to
 built-in features.
+
+**X11. Limits met.** Figures that touch are one object to the retina, so a
+circle touching the triangle it sits in has no "inside" relation to
+perceive (BP #47, boxes I-E, II-B, II-E). Separating them is the parsing
+problem of §11.2.4 (Ockham's razor) and is not attempted. Nor is
+figure–ground separation of a patterned background (BP #98), or
+"three-ness" across unrelated shapes (BP #91).
+

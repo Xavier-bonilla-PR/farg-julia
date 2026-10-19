@@ -300,7 +300,7 @@ function pattern_candidates(s::Solver; some::Bool=false)
         has(b) = any(n -> iskind(n.type, t) && n.tag == tag, _alldesc(b))
         fl = count(has, s.boxpat[1:6]) / 6
         fr = count(has, s.boxpat[7:12]) / 6
-        if t == :category
+        if t == :category || basetype(t) == :shape
             # categorising is a codelet, so a concept is seen in only some
             # boxes on one look; seen on one side only, it is worth verifying,
             # weighted by how significant the concept is (D41)

@@ -87,14 +87,15 @@ const APPENDIX_A = Dict{Int,Tuple{Int,Int,Int,Float64}}(
 _xfeat(i, node, f) = i.kind == :feature && !isempty(i.path) && i.path[end] == node && i.what == f
 _xexists(i, t) = i.kind == :exists && (i.what == t || i.what == Symbol("shape@", t))
 _tri_quad(i) = ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
-               (_xexists(i, :triangle) && i.leftlow) || (_xexists(i, :quadrangle) && !i.leftlow)
+               (_xexists(i, :triangle) && i.leftlow) || (_xexists(i, :quadrangle) && !i.leftlow) ||
+               (i.kind == :feature && i.what in (:gcorners, :bcorners) && i.leftlow)
 _parts(i) = (_count(i, :object) || _count(i, :line) || _count(i, :curve)) && i.leftlow
 
 const SURVEY_RULES = Dict{Int,Function}(
     7 => i -> _xfeat(i, :object, :vert) && !i.leftlow,
     10 => _tri_quad,
     12 => i -> _feat(i, [:object], :elongation) && !i.leftlow,
-    24 => i -> (_xexists(i, :circle) && i.leftlow) || (_count(i, :circle) && !i.leftlow),
+    24 => i -> ((_xexists(i, :circle) || _xexists(i, :curve)) && i.leftlow) || (_count(i, :circle) && !i.leftlow),
     27 => i -> _xfeat(i, Symbol("contrast@filled_outlined"), :diff) && !i.leftlow,
     28 => i -> _xfeat(i, Symbol("contrast@filledcircle_outlinedcircle"), :diff) && !i.leftlow,
     29 => i -> _xfeat(i, Symbol("contrast@inside_outside"), :diff) && !i.leftlow,
@@ -105,7 +106,7 @@ const SURVEY_RULES = Dict{Int,Function}(
     37 => i -> _xfeat(i, Symbol("pair@circle_triangle"), :above) && i.leftlow,
     38 => i -> _xfeat(i, Symbol("pair@circle_triangle"), :larger) && i.leftlow,
     40 => i -> i.kind == :feature && !isempty(i.path) && basetype(i.path[end]) == :group && i.what == :tricol && i.leftlow,
-    41 => i -> _xfeat(i, Symbol("group@circle"), :collinear) && i.leftlow,
+    41 => i -> (_xfeat(i, Symbol("group@outlinedcircle"), :collinear) || _xfeat(i, Symbol("group@circle"), :collinear)) && i.leftlow,
     47 => i -> _xfeat(i, Symbol("pair@circle_triangle"), :inside) && i.leftlow,
     48 => i -> _xfeat(i, Symbol("pair@filled_outlined"), :above) && !i.leftlow,
     57 => i -> i.kind == :feature && isempty(i.path) && i.what == :identmin && !i.leftlow,
