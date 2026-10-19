@@ -51,6 +51,10 @@ Beyond the fifteen: on Bongard's other 85 problems
 occasionally (#24, #33), and on 9 more it finds a rule that separates the
 boxes but is not Bongard's.
 
+An extension that adds the abilities §11.2 lists as missing lives
+separately in [`extended/`](extended/README.md) (PhaeacoX); it solves 19
+of the 85, 12 of them reliably.
+
 After a lesson on triangles and quadrilaterals, BP #6 is sometimes solved
 in those terms ("some triangle" vs "no triangle", "no quadrilateral" vs
 "some quadrilateral"). Untaught, it is solved by counting lines or vertices

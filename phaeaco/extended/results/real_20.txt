@@ -1,0 +1,17 @@
+Real BPs, 20 runs each. Percentages: correct / wrong / none. Relative time: mean ticks to a correct answer ÷ BP #3's.
+BP     PhaeacoX               Phaeaco (App. A)       rel. time      commonest answers
+#1     100 /   0 /   0        100 /   0 /   0         0.99 vs  2.18  ✓ "no thing" vs "some thing" ×20
+#2     100 /   0 /   0         82 /  18 /   0         1.97 vs  3.00  ✓ "object has large area" vs "object has small area" ×20
+#3     100 /   0 /   0         99 /   1 /   0         1.00 vs  1.00  ✓ "outlined texture" vs "filled texture" ×20
+#4      20 /   0 /  80         20 /   3 /  77         5.69 vs  2.27  — ×16; ✓ "object has convex missing" vs "object has concave missing" ×3
+#5      70 /   0 /  30         60 /  18 /  22         4.13 vs  3.07  ✓ "no curve" vs "some curve" ×14; — ×6
+#6      95 /   0 /   5         70 /  11 /  19         3.18 vs  1.47  ✓ "≤ 3 lines in box" vs "> 3 lines in box" ×11; ✓ "≤ 3 lines per object" vs "> 3 lines per object" ×7
+#8     100 /   0 /   0         23 /   4 /  73         2.39 vs  2.63  ✓ "object's center has right x" vs "object's center has left x" ×20
+#11     90 /   0 /  10         83 /   4 /  13         3.54 vs  5.40  ✓ "object has elongated elongation" vs "object has compact elongation" ×18; — ×2
+#15    100 /   0 /   0         99 /   0 /   1         2.43 vs  2.17  ✓ "some closed interior" vs "no closed interior" ×17; ✓ "> 0 interiors in box" vs "≤ 0 interiors in box" ×2
+#21     85 /   5 /  10         34 /  20 /  46         4.21 vs  5.30  ✓ "some object has small area" vs "no object has small area" ×17; — ×2
+#22     60 /   0 /  40         13 /   6 /  81         6.35 vs 10.07  ✓ "every object has similar area" vs "not every object has similar area" ×12; — ×8
+#23     90 /  10 /   0         83 /   4 /  13         2.51 vs  2.57  ✓ "≤ 1 objects per box" vs "> 1 objects per box" ×11; ✓ "≤ 1 objects in box" vs "> 1 objects in box" ×7
+#39    100 /   0 /   0         65 /  29 /   6         2.09 vs  1.23  ✓ "every line has similar slope" vs "not every line has similar slope" ×20
+#56     65 /   0 /  35         19 /  17 /  64         4.66 vs 11.20  ✓ "every object has similar texture" vs "not every object has similar texture" ×13; — ×7
+#85    100 /   0 /   0         94 /   0 /   6         3.13 vs  3.53  ✓ "≤ 4 lines in box" vs "> 4 lines in box" ×16; ✓ "≤ 3 lines in box" vs "> 3 lines in box" ×4
