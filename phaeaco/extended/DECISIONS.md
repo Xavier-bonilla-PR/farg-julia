@@ -163,3 +163,100 @@ fewer ends"); no other problem moves by more than 3 runs. #18 and #70 stay
 at 0 in 20 runs: one box per side that the core gets wrong is enough to
 fail an "all" idea. Costs on
 Appendix A and the synthetic set are in `results/survey_scored.md`.
+
+**X13. Categorisation by the Generalized Context Model.** Foundalis's 2013
+report takes categorisation to be Nosofsky's GCM: a weighted distance
+between exemplars, a similarity `s = e^{−(c·d)^q}`, and the probability of
+category J, `P(J|i) = Σ_{j∈J} s_ij / Σ_K Σ_{k∈K} s_ik`. It also proposes a
+hybrid: exemplars kept one by one until a category's sample is large, then
+its mean and spread. A learned concept here is already such a hybrid (its
+core is a pattern, §8.3), and its similarity to an object is
+`exp(−difference)` (Eq. 8.8), the GCM form with q = 1. So
+`gcm_choice` (src/ltm/learned.jl) only adds the choice rule. Each retrieved
+concept's similarity is raised to `ltm_gcm_c` (the sensitivity c; 8), and
+the best concept is taken when `s_J / (β + Σ_K s_K)` passes a draw of
+`category_p` (N(0.5, 0.03)). That one decision replaces D41's threshold
+and margin. β = `ltm_gcm_base`^c (0.6) is the similarity of a concept the
+object is not an instance of: without it a lone concept would win every
+object, and the report's rule for forming a new category (the best P too
+low) would never fire. Two equally good concepts give P just under ½, so a
+tie is rarely decided; a weak lone match gives P ≈ 0.33 at s = 0.55.
+
+Measured on BP #6 after the Mentor's lessons (`bench/run_mentor.jl`,
+`results/mentor_20.txt`; 20 runs, one look at each box, 240 figures). Each
+row gives the figures categorised correctly, precision, and recall.
+
+| lessons | D41 | GCM |
+|---|---|---|
+| triangle, quadrilateral | 193, 0.92, 0.80 | 204, 0.91, 0.85 |
+| + pentagon, circle | 161, 0.88, 0.67 | 175, 0.89, 0.73 |
+
+BP #6 itself is solved 19–20 of 20 either way. With four concepts, c = 4
+gives precision 0.93 but recall 0.47, and c = 16 gives 0.82 and 0.78; the
+defaults were set before these runs and not tuned to them. `ltm_gcm = 0`
+restores D41.
+
+**X14. A memory of solved problems, and spontaneous analogy.** The report's
+account of analogy (Fig. 9) is that a situation is stored as its core, "the
+most abstract and generalized parts" of it. A later situation's core is
+categorised among the stored ones, and one that lands near an old core
+activates it: the analogy is spotted without being looked for.
+`src/solver/memory.jl` does this across Bongard problems.
+
+- *Episode.* When a problem is solved, its core and its answer are kept in
+  the LTM (`ltm.episodes`).
+- *The core of a problem.* After the holistic look, each feature at a
+  place and each kind of node in the box patterns gives one dimension: the
+  fraction of the twelve boxes that show it, weighted by its concept's LTM
+  weight (the report's w_k). Values are dropped (the attrition of detail),
+  and so are counts: whether a count is there records whether the counting
+  codelets finished on that look (D38), and it made the same problem's
+  cores differ by up to 0.2 from look to look. Without counts, the same
+  pair (#36 → #37) measures 0.036–0.084 over six seeds.
+- *Distance.* Weighted mean of the absolute differences of the fractions; a
+  dimension one core lacks counts as 0. Over all pairs of the 100 problems
+  the nearest neighbours are thematic: #36/#37/#38/#47 (circles and
+  triangles placed), #25–#28/#48/#81 (filled and outlined), #52/#67–#69
+  (branches), #84/#92/#93 (chains), #19/#20 (necks).
+- *Reminding* is GCM (X13) over episodes, with the episodes that share an
+  answer (whatever its split and sides) as one category. The similarity is
+  `exp(−ext_memory_c × d)` (60), and β is the similarity at
+  `ext_memory_base` (0.06). The report says the new core activates the old
+  ones "the nearer, the higher", and the nearest solved problem is often
+  not the analogous one, so up to `ext_memory_recall` (3) categories whose P
+  passes a draw of `ext_memory_p` (N(0.2, 0.02)) come to mind, best first.
+- *Transfer, with slippage.* A remembered idea is refitted to the new boxes.
+  Its place may slip to any place whose node types differ only in their
+  tags (`contrast@filled_outlined` → `contrast@filledcircle_outlinedcircle`,
+  `pair@circle_triangle` → `pair@filled_outlined`). Its split is recomputed,
+  or its sides chosen for existence and sameness ideas. The candidate the
+  boxes bear out in most boxes is kept if that is at least `ext_memory_fit`
+  (10) of twelve. Only then are its concepts primed (`ext_memory_marks` × P)
+  and the idea verified, before the holistic stage. A result found this way
+  has stage `:analogy`. Priming every recalled answer, borne out or not, was
+  tried first: it steered later problems' attention (BP #27 17 → 8 correct,
+  in runs where #27 itself recalled nothing useful).
+
+Measured (`results/pairs_20.txt`, `bench/run_pairs.jl`): solving A then B
+in one context, 20 runs.
+
+- #36 → #37: B is solved by analogy in 16 of 20 runs (18 → 19 correct,
+  mean ticks −5%).
+- #27 → #28: 5 runs by analogy; correct 7 → 9, wrong 9 → 6.
+- #37 → #48: one run by analogy (already 19/20 without memory).
+- Pairs that only look alike (#36 → #38, #19 → #20, #2 → #3): no analogy
+  verified, no wrong answers, ticks within 3%.
+
+Over Bongard's 100 problems in order, one context carried through, 20
+seeds (`results/sequence_20.txt`, `bench/run_sequence.jl`): correct
+539 → 544, wrong 46 → 38, mean ticks +1.5%. 19 runs are solved by analogy:
+#28 from #27 and #25, #37 from #36 and #27, #48 from #27, #9 and #12 from
+earlier one-figure problems (#3, #5, #9), #26 and #81 from #25. Problems in the book rarely share a rule
+with an earlier one PhaeacoX solves, so the total moves by about the noise
+of 2000 runs; the effect is clear only where an analogue exists.
+Per-problem swings of up to 4 runs with no analogy at that problem
+are the context's state diverging.
+
+Not done: episodes are not saved by `save_ltm`, and they are never
+forgotten. Nor is the report's further step, a conscious search for more
+analogous parts once a reminding has happened.

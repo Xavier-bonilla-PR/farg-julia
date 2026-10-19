@@ -1,0 +1,224 @@
+# Bongard's 100 problems in order, one context carried through, 20 seeds: memory off (ext_memory=0) vs on (X14).
+# Per problem: correct / wrong / none / unscored-answered, runs solved by analogy, mean ticks, and the problems recalled.
+
+off: correct 539 wrong 46 none 1230 unscored 185
+on:  correct 544 wrong 38 none 1246 unscored 172  analogy 19
+mean ticks per problem: off 13250 on 13448
+#9   ✓  0→ 0  ✗  0→ 0  —  0→ 0  unsc 20→20 analogy  5  ticks   6676→  7144  {'5': 4, '3': 1}
+#12  ✓ 20→20  ✗  0→ 0  —  0→ 0  unsc  0→ 0 analogy  1  ticks   5866→  6279  {'9': 1}
+#21  ✓ 18→17  ✗  0→ 2  —  2→ 1  unsc  0→ 0 analogy  0  ticks  13557→ 12417  {}
+#23  ✓ 14→18  ✗  6→ 2  —  0→ 0  unsc  0→ 0 analogy  0  ticks   7511→  7447  {}
+#24  ✓  7→ 3  ✗  3→ 1  — 10→16  unsc  0→ 0 analogy  0  ticks  17871→ 15679  {}
+#26  ✓  0→ 0  ✗  0→ 0  —  5→11  unsc 15→ 9 analogy  3  ticks  16364→ 20245  {'25': 3}
+#27  ✓ 17→13  ✗  1→ 2  —  2→ 5  unsc  0→ 0 analogy  0  ticks  19013→ 19174  {}
+#28  ✓  5→ 8  ✗ 13→10  —  2→ 2  unsc  0→ 0 analogy  5  ticks  19986→ 19429  {'27': 4, '25': 1}
+#37  ✓ 18→17  ✗  0→ 0  —  2→ 3  unsc  0→ 0 analogy  2  ticks  13320→ 12782  {'27': 1, '36': 1}
+#48  ✓ 20→20  ✗  0→ 0  —  0→ 0  unsc  0→ 0 analogy  1  ticks  14382→ 14280  {'27': 1}
+#57  ✓  4→ 8  ✗  8→ 8  —  8→ 4  unsc  0→ 0 analogy  0  ticks  12950→ 12635  {}
+#66  ✓  9→ 8  ✗  8→ 6  —  3→ 6  unsc  0→ 0 analogy  0  ticks  17442→ 18444  {}
+#81  ✓  0→ 0  ✗  0→ 0  —  3→ 3  unsc 17→17 analogy  2  ticks  16876→ 18057  {'25': 2}
+
+## memory off
+Sequence 1..100, seeds 1-10 (ext_memory=0.0). ✓ ✗ — unscored-answered, analogy, mean ticks
+#1    20   0   0   0  analogy  0     2992  
+#2    20   0   0   0  analogy  0     5771  
+#3    20   0   0   0  analogy  0     2962  
+#4     3   0  17   0  analogy  0    12904  
+#5    20   0   0   0  analogy  0     7261  
+#6    18   0   2   0  analogy  0     8918  
+#7    20   0   0   0  analogy  0     6884  
+#8    20   0   0   0  analogy  0     7161  
+#9     0   0   0  20  analogy  0     6676  
+#10   20   0   0   0  analogy  0     7575  
+#11   19   0   1   0  analogy  0     8788  
+#12   20   0   0   0  analogy  0     5866  
+#13    0   0  20   0  analogy  0    11282  
+#14    0   0  20   0  analogy  0    19124  
+#15   20   0   0   0  analogy  0     8085  
+#16    0   0  20   0  analogy  0    11362  
+#17    0   0  20   0  analogy  0    12030  
+#18    0   1  19   0  analogy  0    12668  
+#19   20   0   0   0  analogy  0     7858  
+#20    0   0  20   0  analogy  0    11830  
+#21   18   0   2   0  analogy  0    13557  
+#22   10   0  10   0  analogy  0    14596  
+#23   14   6   0   0  analogy  0     7511  
+#24    7   3  10   0  analogy  0    17871  
+#25    0   0   9  11  analogy  0    17953  
+#26    0   0   5  15  analogy  0    16364  
+#27   17   1   2   0  analogy  0    19013  
+#28    5  13   2   0  analogy  0    19986  
+#29    0   1  19   0  analogy  0    22634  
+#30    3   0  17   0  analogy  0    14119  
+#31    0   0  20   0  analogy  0    14866  
+#32    0   0  20   0  analogy  0    13226  
+#33    3   0  17   0  analogy  0    13714  
+#34   20   0   0   0  analogy  0     3432  
+#35    0   0  20   0  analogy  0    14731  
+#36   18   2   0   0  analogy  0    10877  
+#37   18   0   2   0  analogy  0    13320  
+#38    0   0  20   0  analogy  0    14082  
+#39   18   0   2   0  analogy  0     6678  
+#40    0   0  20   0  analogy  0    14172  
+#41    0   1  19   0  analogy  0    16720  
+#42    0   0  20   0  analogy  0    15980  
+#43    0   0   0  20  analogy  0     6141  
+#44    0   0   0  20  analogy  0     6227  
+#45    0   0  20   0  analogy  0    11591  
+#46    0   0  20   0  analogy  0    14839  
+#47    0   0  20   0  analogy  0    14161  
+#48   20   0   0   0  analogy  0    14382  
+#49    0   0  20   0  analogy  0    19594  
+#50    0   0  20   0  analogy  0    14921  
+#51    0   0  19   1  analogy  0    14646  
+#52    0   0  20   0  analogy  0    12790  
+#53    0   0  20   0  analogy  0    13052  
+#54    0   0  18   2  analogy  0    13892  
+#55    0   0  20   0  analogy  0    11874  
+#56   16   0   4   0  analogy  0    12778  
+#57    4   8   8   0  analogy  0    12950  
+#58    0   0  20   0  analogy  0    15514  
+#59    0   0  20   0  analogy  0    14034  
+#60   19   0   1   0  analogy  0    14154  
+#61    0   0  20   0  analogy  0    16244  
+#62    0   0  20   0  analogy  0    12203  
+#63    0   0   0  20  analogy  0     6047  
+#64    0   0  20   0  analogy  0    12804  
+#65    0   0  20   0  analogy  0    22693  
+#66    9   8   3   0  analogy  0    17442  
+#67    0   0  18   2  analogy  0    12688  
+#68    0   0  18   2  analogy  0    12482  
+#69    0   0  20   0  analogy  0    12464  
+#70    0   0  20   0  analogy  0    13165  
+#71   19   0   1   0  analogy  0    16796  
+#72    1   0  19   0  analogy  0    12523  
+#73    0   0   8  12  analogy  0    14392  
+#74    0   0  19   1  analogy  0    11539  
+#75    0   0  19   1  analogy  0    12744  
+#76    0   0   0  20  analogy  0     6370  
+#77    0   0  20   0  analogy  0    12322  
+#78    0   0  20   0  analogy  0    12578  
+#79    0   0  20   0  analogy  0    13218  
+#80    0   0  20   0  analogy  0    14541  
+#81    0   0   3  17  analogy  0    16876  
+#82    0   0  20   0  analogy  0    16088  
+#83    0   0  20   0  analogy  0    15288  
+#84    0   0  20   0  analogy  0    23582  
+#85   20   0   0   0  analogy  0     8381  
+#86   20   0   0   0  analogy  0     5770  
+#87    0   0  20   0  analogy  0    27181  
+#88    1   0  19   0  analogy  0    13816  
+#89   19   1   0   0  analogy  0    14124  
+#90    0   0  20   0  analogy  0    13611  
+#91    0   0  20   0  analogy  0    14596  
+#92    0   1  19   0  analogy  0    25121  
+#93    0   0  20   0  analogy  0    22914  
+#94    0   0  20   0  analogy  0    12368  
+#95    0   0  19   1  analogy  0    14253  
+#96    0   0  20   0  analogy  0    15706  
+#97    0   0  20   0  analogy  0    17536  
+#98    0   0  20   0  analogy  0    16927  
+#99    0   0  20   0  analogy  0    26392  
+#100   0   0   0  20  analogy  0     8274  
+
+## memory on
+#1    20   0   0   0  analogy  0     5982  
+#2    20   0   0   0  analogy  0    11532  
+#3    20   0   0   0  analogy  0     5893  
+#4     3   0  17   0  analogy  0    25024  
+#5    20   0   0   0  analogy  0    17346  
+#6    20   0   0   0  analogy  0    18226  
+#7    20   0   0   0  analogy  0    13984  
+#8    20   0   0   0  analogy  0    13188  
+#9     0   0   0  20  analogy  5    14287  5×4 3×1
+#10   20   0   0   0  analogy  0    14042  
+#11   19   0   1   0  analogy  0    22413  
+#12   20   0   0   0  analogy  1    12558  9×1
+#13    0   0  20   0  analogy  0    23572  
+#14    0   0  19   1  analogy  0    40314  
+#15   19   1   0   0  analogy  0    13790  
+#16    0   0  20   0  analogy  0    22744  
+#17    0   0  20   0  analogy  0    23062  
+#18    0   0  20   0  analogy  0    24886  
+#19   20   0   0   0  analogy  0    14382  
+#20    0   0  20   0  analogy  0    22246  
+#21   17   2   1   0  analogy  0    24834  
+#22    9   0  11   0  analogy  0    29173  
+#23   18   2   0   0  analogy  0    14894  
+#24    3   1  16   0  analogy  0    31358  
+#25    0   0  12   8  analogy  0    34652  
+#26    0   0  11   9  analogy  3    40490  25×3
+#27   13   2   5   0  analogy  0    38348  
+#28    8  10   2   0  analogy  5    38858  27×4 25×1
+#29    0   3  17   0  analogy  0    51438  
+#30    5   0  15   0  analogy  0    27830  
+#31    0   0  20   0  analogy  0    30548  
+#32    0   0  20   0  analogy  0    28028  
+#33    1   0  19   0  analogy  0    29776  
+#34   20   0   0   0  analogy  0     6853  
+#35    0   0  20   0  analogy  0    27011  
+#36   18   1   1   0  analogy  0    21734  
+#37   17   0   3   0  analogy  2    25565  27×1 36×1
+#38    0   0  20   0  analogy  0    29390  
+#39   20   0   0   0  analogy  0    11892  
+#40    0   0  20   0  analogy  0    29332  
+#41    0   0  20   0  analogy  0    30934  
+#42    0   0  20   0  analogy  0    31244  
+#43    0   0   0  20  analogy  0    12398  
+#44    0   0   0  20  analogy  0    13582  
+#45    0   0  20   0  analogy  0    23980  
+#46    0   0  20   0  analogy  0    28722  
+#47    0   0  20   0  analogy  0    28774  
+#48   20   0   0   0  analogy  1    28559  27×1
+#49    0   0  19   1  analogy  0    42645  
+#50    0   0  20   0  analogy  0    29733  
+#51    0   0  19   1  analogy  0    29244  
+#52    0   0  20   0  analogy  0    25000  
+#53    0   0  20   0  analogy  0    24955  
+#54    0   0  20   0  analogy  0    27146  
+#55    0   0  20   0  analogy  0    23552  
+#56   15   0   5   0  analogy  0    28064  
+#57    8   8   4   0  analogy  0    25270  
+#58    0   0  20   0  analogy  0    30466  
+#59    0   0  20   0  analogy  0    29240  
+#60   19   0   1   0  analogy  0    27464  
+#61    0   0  19   1  analogy  0    31144  
+#62    0   0  20   0  analogy  0    25869  
+#63    0   0   0  20  analogy  0    12102  
+#64    0   0  20   0  analogy  0    28543  
+#65    0   0  20   0  analogy  0    45404  
+#66    8   6   6   0  analogy  0    36888  
+#67    0   0  18   2  analogy  0    27324  
+#68    0   0  20   0  analogy  0    25872  
+#69    0   0  20   0  analogy  0    25373  
+#70    0   0  20   0  analogy  0    25578  
+#71   18   0   2   0  analogy  0    32196  
+#72    3   0  17   0  analogy  0    24643  
+#73    0   0  11   9  analogy  0    31616  
+#74    0   0  20   0  analogy  0    23402  
+#75    0   0  19   1  analogy  0    25017  
+#76    0   0   0  20  analogy  0    15064  
+#77    0   0  20   0  analogy  0    28824  
+#78    0   0  20   0  analogy  0    29757  
+#79    0   0  20   0  analogy  0    26264  
+#80    0   0  20   0  analogy  0    28858  
+#81    0   0   3  17  analogy  2    36114  25×2
+#82    0   0  20   0  analogy  0    30024  
+#83    0   0  20   0  analogy  0    33337  
+#84    0   0  20   0  analogy  0    51425  
+#85   20   0   0   0  analogy  0    18960  
+#86   20   0   0   0  analogy  0    12371  
+#87    0   0  20   0  analogy  0    49976  
+#88    3   0  17   0  analogy  0    30552  
+#89   20   0   0   0  analogy  0    28428  
+#90    0   0  20   0  analogy  0    27258  
+#91    0   0  20   0  analogy  0    30269  
+#92    0   2  18   0  analogy  0    53650  
+#93    0   0  20   0  analogy  0    44600  
+#94    0   0  20   0  analogy  0    24826  
+#95    0   0  18   2  analogy  0    29227  
+#96    0   0  20   0  analogy  0    31275  
+#97    0   0  20   0  analogy  0    32800  
+#98    0   0  20   0  analogy  0    31683  
+#99    0   0  20   0  analogy  0    52850  
+#100   0   0   0  20  analogy  0    17844  

@@ -56,6 +56,9 @@ sig_period = 5000
 learn_marks = 10             # a learned concept's activation boost each time it is learned from
 learn_sig_marks = 12         # ... and its significance boost (D41)
 category_margin = 0.08       # the best concept must beat the next by this much (D41)
+gcm = 1                      # categorise by the Generalized Context Model (X13); 0: D41's threshold and margin
+gcm_c = 8.0                  # GCM sensitivity: similarities are raised to this power
+gcm_base = 0.6               # similarity of a concept the object is not an instance of (β = base^c)
 relation_marks = 3           # significance marks at which an association becomes a relation (§9.3.2)
 
 [ws]
@@ -77,6 +80,7 @@ box_done = {mu = 0.15, sigma = 0.02}   # box node activation below which the box
 many = {mu = 5.0, sigma = 0.7}         # count at which process Q notices "many"
 clustering = {mu = 0.83, sigma = 0.01}  # similarity above which exemplars group (§8.3.2, Table 8.1)
 category_match = {mu = 0.60, sigma = 0.01}  # similarity at which an object is seen as an instance of a learned concept (D41)
+category_p = {mu = 0.5, sigma = 0.03}  # GCM probability at which an object is seen as an instance of its best concept (X13)
 
 [match]
 damping = 0.5                # weight factor per level down a structure (§8.2.4)
@@ -111,3 +115,10 @@ core = 1                      # core extraction (X12); 0 leaves it out
 core_prune = 0.2              # a spur extending less than this × the thickness where it joins is pruned (X12)
 core_sim = 0.0                # weight of the cores' difference in X6's shape distance (0: unused; X12)
 core_neck = 0.75              # a core narrower than this × its thick parts has a neck, and a neck has a direction
+memory = 1                    # remember solved problems and be reminded of them (X14); 0 leaves it out
+memory_c = 60.0               # sensitivity of reminding: a core's similarity is exp(-c × distance)
+memory_base = 0.06            # distance of a core that reminds of nothing (β = exp(-c × base), X13)
+memory_p = {mu = 0.2, sigma = 0.02}  # GCM probability at which a problem reminds of a solved one
+memory_recall = 3             # at most this many solved problems come to mind at once
+memory_fit = 10               # boxes of twelve that must bear a remembered idea out before it is verified
+memory_marks = 10             # priming of the remembered answer's concepts

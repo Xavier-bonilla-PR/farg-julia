@@ -113,15 +113,37 @@ function cod_category!(ws::BoxWS, ctx::Ctx, id::Int)
     isempty(sims) && return
     sort!(sims; by=x -> -x[1])
     bests, best = sims[1]
-    second = length(sims) >= 2 ? sims[2][1] : 0.0
-    # a clear best match, not merely a passable one (D41)
-    (bests > sample(thr(ctx.P, :category_match), ctx.rng) && bests - second >= ctx.P[:ltm_category_margin]) || return
+    if ctx.P[:ltm_gcm] > 0
+        gcm_choice(ctx, [s for (s, _) in sims]) || return
+    else
+        second = length(sims) >= 2 ? sims[2][1] : 0.0
+        # a clear best match, not merely a passable one (D41)
+        (bests > sample(thr(ctx.P, :category_match), ctx.rng) && bests - second >= ctx.P[:ltm_category_margin]) || return
+    end
     name = ltm[best.id].name
     _newnode!(ws, ctx, :category, id; tag=name)
     prime!(ltm[best.id].w, ctx.now, 2)
     _associate!(ws, ctx, best.id)
 end
 CODELETS[:category] = cod_category!
+
+"""
+Categorisation by the Generalized Context Model (Nosofsky 1986, as Foundalis
+2013 describes it; X13). Each concept's similarity `s` to the object (a
+pattern, so already the hybrid of exemplar and prototype the report asks
+for) is sharpened to `s^c`, and the best concept J is chosen with the
+probability of Luce's rule, `P(J|i) = s_J / (β + Σ_K s_K)`. β is the
+similarity of a concept the object does not belong to, `ltm_gcm_base^c`:
+without it a lone concept would win every object. One decision, sampled
+against `category_p`, replaces D41's threshold and margin: a weak match and
+a close runner-up both lower P. Takes the similarities, best first.
+"""
+function gcm_choice(ctx::Ctx, sims::Vector{Float64})
+    c = ctx.P[:ltm_gcm_c]
+    ss = sims .^ c
+    p = ss[1] / (ctx.P[:ltm_gcm_base]^c + sum(ss))
+    return p > sample(thr(ctx.P, :category_p), ctx.rng)
+end
 
 """
 Concepts that turn up together become associated (§9.3.2): each

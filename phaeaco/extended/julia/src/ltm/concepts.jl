@@ -65,9 +65,10 @@ mutable struct LTM
     byname::Dict{Symbol,Int}
     learned::Vector{LearnedConcept}
     assoc::Dict{Tuple{Int,Int},Weight}      # anonymous associations between concepts (§9.3.2)
+    episodes::Vector{Any}                   # solved problems (PhaeacoX, solver/memory.jl, X14)
 end
 
-LTM() = LTM(Concept[], Dict{Symbol,Int}(), LearnedConcept[], Dict{Tuple{Int,Int},Weight}())
+LTM() = LTM(Concept[], Dict{Symbol,Int}(), LearnedConcept[], Dict{Tuple{Int,Int},Weight}(), Any[])
 
 Base.getindex(m::LTM, name::Symbol) = m.concepts[m.byname[name]]
 Base.getindex(m::LTM, id::Int) = m.concepts[id]

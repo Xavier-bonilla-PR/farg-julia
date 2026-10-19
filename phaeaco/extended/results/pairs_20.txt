@@ -1,0 +1,13 @@
+A then B, 20 runs. B's correct / wrong / none (unscored answered), mean ticks, solved by analogy.
+#36  → #37  memory off  18 /  0 /  2 ( 0)   12229 ticks  analogy  0
+#36  → #37  memory on   19 /  0 /  1 ( 0)   11647 ticks  analogy 16
+#27  → #28  memory off   7 /  9 /  4 ( 0)   20495 ticks  analogy  0
+#27  → #28  memory on    9 /  6 /  5 ( 0)   19724 ticks  analogy  5
+#37  → #48  memory off  19 /  0 /  1 ( 0)   15584 ticks  analogy  0
+#37  → #48  memory on   20 /  0 /  0 ( 0)   15661 ticks  analogy  1
+#36  → #38  memory off   0 /  0 / 20 ( 0)   14507 ticks  analogy  0
+#36  → #38  memory on    0 /  0 / 20 ( 0)   14170 ticks  analogy  0
+#19  → #20  memory off   0 /  0 / 20 ( 0)   10966 ticks  analogy  0
+#19  → #20  memory on    0 /  0 / 20 ( 0)   11314 ticks  analogy  0
+#2   → #3   memory off  20 /  0 /  0 ( 0)    2938 ticks  analogy  0
+#2   → #3   memory on   20 /  0 /  0 ( 0)    2938 ticks  analogy  0

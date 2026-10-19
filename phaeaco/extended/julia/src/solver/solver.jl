@@ -19,7 +19,7 @@
 
 struct SolveResult
     answer::Union{Nothing,Idea}
-    stage::Symbol               # :hardwired, :holistic, :analytic, or :none
+    stage::Symbol               # :hardwired, :holistic, :analytic, :analogy (X14), or :none
     ticks::Int
     ideas::Int                  # distinct ideas verified
     log::Vector{String}
@@ -36,13 +36,14 @@ mutable struct Solver
     ticks::Int
     nideas::Int
     log::Vector{String}
+    core::Any                   # the problem's core, for the memory of solved problems (X14)
 end
 
 function Solver(bp::BP, ctx::Ctx)
     P = ctx.P
     Solver(ctx, bp, RNode[], zeros(Int, 12), Idea[], Float64[],
            Activation(Int(P[:solve_motivation_steps]), Int(P[:solve_motivation_period])),
-           0, 0, String[])
+           0, 0, String[], nothing)
 end
 
 _note(s::Solver, msg) = (push!(s.log, "$(s.ticks): $msg"); trace(s.ctx.tracer, 1, s.ticks, msg))
@@ -473,9 +474,21 @@ verified idea or loss of motivation.
 """
 function solve(bp::BP, ctx::Ctx)
     s = Solver(bp, ctx)
+    r = _solve!(s)
+    # PhaeacoX: remember the solved problem (X14)
+    if ctx.P[:ext_memory] > 0 && r.answer !== nothing && s.core !== nothing
+        push!(ctx.ltm.episodes, Episode(bp.name, s.core, r.answer))
+    end
+    return r
+end
+
+function _solve!(s::Solver)
+    ctx = s.ctx
+    bp = s.bp
     P = ctx.P
     look_all!(s)
     _note(s, "holistic look done")
+    P[:ext_memory] > 0 && (s.core = problem_core(s))
     # --- hardwired: nothing vs something (BP #1, §11.1.1)
     emptyL = all(b -> isempty(b.children), s.boxpat[1:6])
     emptyR = all(b -> isempty(b.children), s.boxpat[7:12])
@@ -483,6 +496,11 @@ function solve(bp::BP, ctx::Ctx)
         idea = Idea(:exists, Symbol[], :thing, :any, :all, 0.0, emptyR)
         _note(s, "one side empty: $idea")
         return SolveResult(idea, :hardwired, s.ticks, 0, s.log)
+    end
+    # --- PhaeacoX: spontaneous analogy with a solved problem (X14)
+    if P[:ext_memory] > 0
+        idea = analogy!(s)
+        idea === nothing || return SolveResult(idea, :analogy, s.ticks, s.nideas, s.log)
     end
     # --- holistic stage
     cands = pattern_candidates(s)

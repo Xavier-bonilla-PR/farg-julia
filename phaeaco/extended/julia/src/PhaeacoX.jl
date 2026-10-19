@@ -49,6 +49,7 @@ include("ext/extend.jl")
 
 include("solver/ideas.jl")
 include("solver/solver.jl")
+include("solver/memory.jl")
 include("solver/judge.jl")
 
 end

@@ -103,3 +103,35 @@ end
     s = P.Solver(bp, P.Ctx(pr, 1)); P.look_all!(s)
     @test !any(b -> any(n -> occursin('@', string(n.type)), P._alldesc(b)), s.boxpat)
 end
+
+@testset "ext: GCM categorisation (X13)" begin
+    ctx = P.Ctx(P.load_params(), 1)
+    # a clear best match is taken; a weak lone match is not; between two
+    # equally good concepts P is just under ½, so a tie is rarely decided
+    @test count(_ -> P.gcm_choice(ctx, [0.85]), 1:50) == 50
+    @test count(_ -> P.gcm_choice(ctx, [0.55]), 1:50) == 0
+    @test count(_ -> P.gcm_choice(ctx, [0.80, 0.80]), 1:50) < 25
+    @test count(_ -> P.gcm_choice(ctx, [0.85, 0.65]), 1:50) == 50
+end
+
+@testset "ext: memory of solved problems (X14)" begin
+    # the same rule drawn twice: solving the first is remembered, and the
+    # second reminds of it and is solved by analogy
+    bp1, _ = P.synth_bp(:size; seed=1)
+    bp2, _ = P.synth_bp(:size; seed=2)
+    ctx = P.Ctx(P.load_params(), 1)
+    r1 = P.solve(bp1, ctx)
+    @test r1.answer !== nothing && length(ctx.ltm.episodes) == 1
+    s = P.Solver(bp2, ctx); P.look_all!(s)
+    core = P.problem_core(s)
+    @test P.episode_distance(core, ctx.ltm.episodes[1].core) < 0.05
+    @test P.transfer(s, r1.answer) !== nothing
+    # a slipped idea: the old one's place differs only in tags
+    old = P.Idea(:feature, [Symbol("contrast@filledtriangle_outlinedtriangle")], :diff, :none, :all, 0.0, false)
+    i = P.transfer(s, old)
+    @test i === nothing || P.basetype(i.path[1]) == :contrast
+    # off means no episodes
+    ctx0 = P.Ctx(P.load_params(; ext_memory=0), 1)
+    P.solve(bp1, ctx0)
+    @test isempty(ctx0.ltm.episodes)
+end

@@ -1,0 +1,58 @@
+# BP #6 after Mentor lessons: D41's threshold-and-margin (ltm_gcm=0) vs GCM (X13), 20 runs each
+
+BP #6, 20 runs each, two concepts taught (ltm_gcm=0.0): correct / wrong / none, and the commonest answers.
+untaught        19 /   0 /   1
+    ×10  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×7  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×2  ✓ "≤ 3 vertexs in box" vs "> 3 vertexs in box"
+    ×1  —
+after lessons   20 /   0 /   0
+    figures categorised (one look per box): right 193, wrong 17, none 30 of 240  (precision 0.92, recall 0.80)
+    ×11  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×4  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×3  ✓ "some triangle" vs "no triangle"
+    ×2  ✓ "no quadrilateral" vs "some quadrilateral"
+
+BP #6, 20 runs each, two concepts taught (ltm_gcm=1.0): correct / wrong / none, and the commonest answers.
+untaught        19 /   0 /   1
+    ×10  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×7  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×2  ✓ "≤ 3 vertexs in box" vs "> 3 vertexs in box"
+    ×1  —
+after lessons   19 /   0 /   1
+    figures categorised (one look per box): right 204, wrong 20, none 16 of 240  (precision 0.91, recall 0.85)
+    ×7  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×5  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×4  ✓ "some triangle" vs "no triangle"
+    ×3  ✓ "no quadrilateral" vs "some quadrilateral"
+
+BP #6, 20 runs each, four concepts taught (ltm_gcm=0.0): correct / wrong / none, and the commonest answers.
+untaught        19 /   0 /   1
+    ×10  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×7  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×2  ✓ "≤ 3 vertexs in box" vs "> 3 vertexs in box"
+    ×1  —
+after lessons   20 /   0 /   0
+    figures categorised (one look per box): right 161, wrong 22, none 57 of 240  (precision 0.88, recall 0.67)
+    ×10  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×8  ✓ "some triangle" vs "no triangle"
+    ×2  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+
+BP #6, 20 runs each, four concepts taught (ltm_gcm=1.0): correct / wrong / none, and the commonest answers.
+untaught        19 /   0 /   1
+    ×10  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×7  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×2  ✓ "≤ 3 vertexs in box" vs "> 3 vertexs in box"
+    ×1  —
+after lessons   20 /   0 /   0
+    figures categorised (one look per box): right 175, wrong 21, none 44 of 240  (precision 0.89, recall 0.73)
+    ×8  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×6  ✓ "some triangle" vs "no triangle"
+    ×5  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×1  ✓ "no quadrilateral" vs "some quadrilateral"
+
+# GCM sensitivity, four concepts (one setting changed from the defaults c=8, base=0.6)
+ltm_gcm_base=0.55: figures categorised (one look per box): right 182, wrong 21, none 37 of 240  (precision 0.90, recall 0.76)
+ltm_gcm_base=0.65: figures categorised (one look per box): right 157, wrong 15, none 68 of 240  (precision 0.91, recall 0.65)
+ltm_gcm_c=16: figures categorised (one look per box): right 188, wrong 42, none 10 of 240  (precision 0.82, recall 0.78)
+ltm_gcm_c=4: figures categorised (one look per box): right 113, wrong 8, none 119 of 240  (precision 0.93, recall 0.47)

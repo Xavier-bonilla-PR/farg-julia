@@ -20,6 +20,12 @@ What it adds (`julia/src/ext/extend.jl`, decisions in `DECISIONS.md`):
   2013 report on core extraction: the figure thinned to the pixels
   farthest from its border and parsed as a graph — its free ends (one per
   limb or corner), junctions, side branches, and necks (#19, #86)
+- categorisation by the Generalized Context Model (X13), as Foundalis's
+  report describes it, in place of D41's threshold and margin
+- a memory of solved problems (X14): each solved problem's core is kept with
+  its answer, and a new problem whose core falls near an old one is
+  reminded of it and tries that answer first, letting its concepts slip
+  (#37 after #36, #28 after #27)
 
 ## Results
 
@@ -42,6 +48,24 @@ julia --project=phaeaco/extended/julia phaeaco/extended/julia/test/runtests.jl
 julia --project=phaeaco/extended/julia phaeaco/extended/bench/run_survey.jl 20     # the 85, scored
 julia --project=phaeaco/extended/julia phaeaco/extended/bench/run_real.jl 20       # Appendix A
 julia --project=phaeaco/extended/julia phaeaco/extended/bench/run_synth.jl 30      # synthetic set
+```
+
+Learning (`results/mentor_20.txt`): after lessons on triangles and
+quadrilaterals, GCM categorises 85% of BP #6's figures correctly against
+80% for D41's rule, at the same precision (0.91 vs 0.92).
+
+Memory (`results/pairs_20.txt`, `results/sequence_20.txt`): after #36,
+#37 is solved by analogy in 16 of 20 runs; after #27, #28 goes from 7 to 9
+correct and 9 to 6 wrong. Through all 100 problems in order, correct goes
+539 → 544 and wrong 46 → 38 over 20 seeds, which is within the noise:
+few problems in the book have an earlier analogue PhaeacoX solves. A
+single problem solved in a fresh context is not affected (the survey,
+Appendix A and synthetic results above are unchanged).
+
+```bash
+julia --project=phaeaco/extended/julia phaeaco/extended/bench/run_mentor.jl 20 [four]  # BP #6 after lessons
+julia --project=phaeaco/extended/julia phaeaco/extended/bench/run_pairs.jl 20          # A then B
+julia --project=phaeaco/extended/julia phaeaco/extended/bench/run_sequence.jl 1 20     # the book in order
 ```
 
 The BP images are shared with PhaeacoJL in `../data/` (not committed).
