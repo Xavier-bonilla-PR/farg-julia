@@ -1,0 +1,109 @@
+# PhaeacoX parameters. A table {mu, sigma} is a decision threshold sampled
+# at every decision (§7.4.1); a bare number is a plain parameter.
+# Every value here that the thesis does not state is a choice recorded in
+# ../DECISIONS.md.
+
+[retina]
+a_batch = 25                 # pixels A looks at per turn
+a_stop_fraction = 0.9        # A may retire after looking at this much of the box ...
+a_stop_rate = 0.002          # ... once its smoothed hit rate is this low
+a_weight = 4.0               # scheduler weights (relative work per queued item)
+f_weight = 3.0
+d_weight = 1.0
+thick_depth = 3              # B's ring index from which a region counts as thick (width ≳ 5 px)
+f_source_prob = 0.15         # chance a thick skeleton pixel becomes a source for F
+line_tol = 1.2               # px: a point joins a line within this perpendicular distance
+line_tol_per_px = 0.012      # ... plus this much per px of the line's length (D15)
+line_rms_per_px = 0.008      # rms limits (line_rms, merge_rms) grow by this per px (D15)
+line_gap = 3.0               # px: ... and within this distance beyond its ends
+line_rms = 0.75              # px: ... if the fit stays this tight
+seed_radius = 4.0            # px: loose points this close may start a line
+seed_rms = 0.6
+line_act_steps = 10
+line_act_period = 200
+min_line_points = 5
+min_line_length = 3.0
+fragment_length = 12.0       # px: shorter lines whose points lie on other lines are dissolved
+merge_angle = 10.0           # degrees
+merge_offset = 1.6           # px
+merge_gap = 5.0              # px
+merge_bridge = 14.0          # px: a longer gap merges only if ink runs across it
+merge_rms = 0.9              # px
+collinear_angle = 20.0       # degrees: below this, lines meet only end to end
+junction_reach = 6.5         # px (sharp corners leave one side short; the ink test guards)
+junction_end = 7.0           # px
+kpoint_radius = 4.0          # px
+gentle_turn = 15.0           # degrees: joints turning less than this are curve joints
+curve_turn = 60.0            # degrees: joints up to this are curve joints if the segments bow
+bow_min = 0.5                # px
+conic_rms = 0.5              # px: rms of the conic fit for an ellipse (D14)
+conic_coverage = 0.85        # fraction of the way round the points must go
+hole_min_area = 4            # px: enclosed regions smaller than this are not seen
+dot_size = 5                 # px: objects no larger are dots (§10.3.10)
+zoom_gray = 0.4              # gray level kept after fuzzy magnification
+concavity_min = 0.04         # missing fraction below which an object has no concavity (convex figures measure ≈ 0, D39)
+openness_samples = 12
+texture_hole_max = 0.12      # a figure whose interior is this much of its area is outlined (D37)
+circle_ecc = {mu = 0.45, sigma = 0.02}        # Appendix B
+zoom_size = {mu = 18.0, sigma = 2.0}          # px: objects smaller are magnified (§10.3.17)
+filled_fraction = {mu = 0.15, sigma = 0.02}   # thick fraction of ink above which a figure is filled (D43)
+
+[ltm]
+act_steps = 20
+act_period = 30              # ticks per mark at depth 0; deeper concepts decay more slowly
+sig_steps = 200
+sig_period = 5000
+learn_marks = 10             # a learned concept's activation boost each time it is learned from
+learn_sig_marks = 12         # ... and its significance boost (D41)
+category_margin = 0.08       # the best concept must beat the next by this much (D41)
+relation_marks = 3           # significance marks at which an association becomes a relation (§9.3.2)
+
+[ws]
+act_steps = 20               # Workspace node activation: marks ...
+act_period = 8               # ... and box ticks per mark of decay
+p_weight = 2.0               # process P's share of a box's time while detectors wait
+priming_gain = 1.0           # urgency × (1 + gain × LTM weight of the feature)
+many_damping = 0.05          # urgency factor for codelets of a type there are "many" of
+string_damping = 0.3         # a line string damps its lines' codelets (§7.4.4)
+urgency_gamma = 2.0          # a drawn codelet runs with probability (u/100)^γ (D19)
+retina_units_per_tick = 40
+min_ticks = 20
+equality_urgency = 40        # the sameness codelet, at full strength (§7.4.10)
+sameness_widening = 2.0      # the sameness codelet accepts values within this × the "same" tolerance (D34)
+
+[top]
+numerosity_sigma0 = 0.1      # σ₀ of the accumulator (§7.3.2)
+box_done = {mu = 0.15, sigma = 0.02}   # box node activation below which the box is seen
+many = {mu = 5.0, sigma = 0.7}         # count at which process Q notices "many"
+clustering = {mu = 0.83, sigma = 0.01}  # similarity above which exemplars group (§8.3.2, Table 8.1)
+category_match = {mu = 0.60, sigma = 0.01}  # similarity at which an object is seen as an instance of a learned concept (D41)
+
+[match]
+damping = 0.5                # weight factor per level down a structure (§8.2.4)
+maxdepth = 3                 # levels of recursion ("two or three recursive steps")
+sfloor = 0.01                # minimum standard deviation, fraction of a feature's range (D26)
+literal = 0                  # 1: feature difference = P(different) alone, as Eq. 8.2 reads (D27)
+
+
+
+[solve]
+holistic_min = 0.15          # salience an idea needs to be tried in the holistic stage
+holistic_boxes = 5           # boxes per side that must show the compared thing, holistic stage
+idea_gamma = 2.0             # ideas are picked with probability ∝ salience^γ
+max_failing = 2              # verification stops at more failing boxes than this ...
+persistence = 2              # ... and gives the failing boxes this many more looks each
+pattern_prob = 0.3           # in the analytic stage, chance per look of also comparing the side patterns
+picks_per_look = 3           # nodes of one analytic look attended to, until one suggests an untried idea (D43)
+new_idea_marks = 5           # a new idea's boost to the master node's activation (§11.1.3)
+motivation_steps = 20
+motivation_period = 500      # ticks per mark of decay of the master node (give-up time ≈ 5× BP #3, as Appendix A)
+max_ticks = 120000
+bored = {mu = 0.15, sigma = 0.02}   # master-node activation below which Phaeaco gives up
+
+[ext]
+# PhaeacoX's extended percepts (src/ext/extend.jl). enabled = 0 reproduces PhaeacoJL.
+enabled = 1
+tick_cost = 2                 # ticks charged per extended node
+vert_min_elong = 0.25         # a figure has an orientation once it is this elongated
+holistic = 1                  # also in the holistic look (0: analytic and verification looks only)
+pick_prob = 0.5               # chance that an analytic pick attends to an extended percept
