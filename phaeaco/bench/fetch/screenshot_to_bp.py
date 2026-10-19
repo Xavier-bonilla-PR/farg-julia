@@ -1,7 +1,10 @@
 """Convert a screenshot of a Bongard problem page (Foundalis's site renders
 the BP GIF at native size) into the 100x1200 PBM stack PhaeacoJL reads.
 
-    python3 screenshot_to_bp.py SHOT.png OUT.pbm NUMBER
+    python3 screenshot_to_bp.py SHOT.png OUT.pbm NUMBER [LEFT RIGHT]
+
+LEFT and RIGHT label the sides; without them, the built-in labels below are
+used (for the fifteen BPs of Appendix A).
 
 Each box is a 100x100 frame with a one-pixel border and a drop shadow. The
 98x98 interior is padded with one white pixel all round to 100x100. Boxes
@@ -76,5 +79,5 @@ LABELS = {
 
 if __name__ == '__main__':
     shot, out, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
-    l, r = LABELS.get(n, ("", ""))
+    l, r = (sys.argv[4], sys.argv[5]) if len(sys.argv) >= 6 else LABELS.get(n, ("", ""))
     write_pbm(out, boxes(shot), n, l, r)
