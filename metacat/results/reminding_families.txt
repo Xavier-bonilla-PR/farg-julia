@@ -1,0 +1,90 @@
+# Metacat's answer reminding over the demo families of demos.ss (section 5.2.3).
+# metacat/bench/reminding_families.jl 20000 6 OFFSET, offsets 0..6000 (seven replications).
+
+## Replication with offset 0, in full
+
+xyz      abc→abd, xyz→xyd         seed+0    451 codelets  quality  71
+xyz      abc→abd, xyz→wyz         seed+0    973 codelets  quality  87
+xyz      abc→abd, xyz→dyz         seed+0   5715 codelets  quality  68
+xyz      rst→rsu, xyz→xyu         seed+0    943 codelets  quality  58
+xyz      rst→rsu, xyz→wyz         seed+0    632 codelets  quality  84
+xyz      rst→rsu, xyz→uyz         seed+0   3744 codelets  quality  73
+mrrjjj   abc→abd, mrrjjj→mrrkkk   seed+0   2389 codelets  quality  87
+mrrjjj   abc→abd, mrrjjj→mrrjjjj  seed+0   2510 codelets  quality  84
+mrrjjj   xqc→xqd, mrrjjj→mrrkkk   seed+0   1074 codelets  quality  84
+mrrjjj   xqc→xqd, mrrjjj→mrrjjjj  seed+0   4827 codelets  quality  72
+eqe      eqe→qeq, abbba→baaab     seed+0   4728 codelets  quality  52
+eqe      eqe→qeq, abbba→aaabaaa   seed+1  12070 codelets  quality  78
+eqe      eqe→qeq, abbbc→aaabccc   seed+0   7245 codelets  quality  76
+
+Reminding strength between answers (Metacat's `compare`; 100 = the same answer):
+                             1   2   3   4   5   6   7   8   9  10  11  12  13
+ 1 abc→abd, xyz→xyd        100   0   0  80   0   0   0   0   0   0   0   0   0
+ 2 abc→abd, xyz→wyz          0 100   0   0   0   0   0   0   0   0   0   0   0
+ 3 abc→abd, xyz→dyz          0   0 100   0  20   0   0   0   0   0  40   0   0
+ 4 rst→rsu, xyz→xyu         80   0   0 100   0   0   0   0   0   0   0   0   0
+ 5 rst→rsu, xyz→wyz          0   0  20   0 100   0   0   0  60   0   0   0   0
+ 6 rst→rsu, xyz→uyz          0   0   0   0   0 100   0   0   0   0   0   0   0
+ 7 abc→abd, mrrjjj→mrrkkk    0   0   0   0   0   0 100  80   0  20   0   0   0
+ 8 abc→abd, mrrjjj→mrrjjjj   0   0   0   0   0   0  80 100   0  20   0   0   0
+ 9 xqc→xqd, mrrjjj→mrrkkk    0   0   0   0  60   0   0   0 100   0   0   0   0
+10 xqc→xqd, mrrjjj→mrrjjjj   0   0   0   0   0   0  20  20   0 100   0  40  40
+11 eqe→qeq, abbba→baaab      0   0  40   0   0   0   0   0   0   0 100   0   0
+12 eqe→qeq, abbba→aaabaaa    0   0   0   0   0   0   0   0   0  40   0 100  80
+13 eqe→qeq, abbbc→aaabccc    0   0   0   0   0   0   0   0   0  40   0  80 100
+
+within a family: mean 12.5, reminding (> 0) in 6 of 24 pairs
+between families: mean 3.3, reminding (> 0) in 4 of 54 pairs
+
+As met in order, each answer's strongest reminding of an earlier one:
+  abc→abd, xyz→wyz         ← abc→abd, xyz→xyd           0
+  abc→abd, xyz→dyz         ← abc→abd, xyz→xyd           0
+  rst→rsu, xyz→xyu         ← abc→abd, xyz→xyd          80
+  rst→rsu, xyz→wyz         ← abc→abd, xyz→dyz          20
+  rst→rsu, xyz→uyz         ← abc→abd, xyz→xyd           0
+  abc→abd, mrrjjj→mrrkkk   ← abc→abd, xyz→xyd           0  (other family)
+  abc→abd, mrrjjj→mrrjjjj  ← abc→abd, mrrjjj→mrrkkk    80
+  xqc→xqd, mrrjjj→mrrkkk   ← rst→rsu, xyz→wyz          60  (other family)
+  xqc→xqd, mrrjjj→mrrjjjj  ← abc→abd, mrrjjj→mrrkkk    20
+  eqe→qeq, abbba→baaab     ← abc→abd, xyz→dyz          40  (other family)
+  eqe→qeq, abbba→aaabaaa   ← xqc→xqd, mrrjjj→mrrjjjj   40  (other family)
+  eqe→qeq, abbbc→aaabccc   ← eqe→qeq, abbba→aaabaaa    80
+
+## All seven replications
+offset 0: 0 answers not reached, 0 runs hit the get-constituent-objects bug
+    within a family: mean 12.5, reminding (> 0) in 6 of 24 pairs
+    between families: mean 3.3, reminding (> 0) in 4 of 54 pairs
+offset 1000: 0 answers not reached, 0 runs hit the get-constituent-objects bug
+    within a family: mean 15.8, reminding (> 0) in 7 of 24 pairs
+    between families: mean 3.0, reminding (> 0) in 4 of 54 pairs
+offset 2000: 0 answers not reached, 0 runs hit the get-constituent-objects bug
+    within a family: mean 14.2, reminding (> 0) in 5 of 24 pairs
+    between families: mean 5.6, reminding (> 0) in 7 of 54 pairs
+offset 3000: 0 answers not reached, 1 runs hit the get-constituent-objects bug
+    within a family: mean 15.8, reminding (> 0) in 8 of 24 pairs
+    between families: mean 6.7, reminding (> 0) in 10 of 54 pairs
+offset 4000: 0 answers not reached, 0 runs hit the get-constituent-objects bug
+    within a family: mean 12.5, reminding (> 0) in 6 of 24 pairs
+    between families: mean 3.0, reminding (> 0) in 4 of 54 pairs
+offset 5000: 1 answers not reached, 0 runs hit the get-constituent-objects bug
+    within a family: mean 10.9, reminding (> 0) in 5 of 22 pairs
+    between families: mean 2.7, reminding (> 0) in 3 of 44 pairs
+offset 6000: 1 answers not reached, 0 runs hit the get-constituent-objects bug
+    within a family: mean 10.9, reminding (> 0) in 3 of 22 pairs
+    between families: mean 2.7, reminding (> 0) in 4 of 44 pairs
+
+## Pairs that remind in at least 3 of 7 replications
+  abc→abd, xyz→xyd         ~ rst→rsu, xyz→xyu         7/7  mean 80  
+  abc→abd, mrrjjj→mrrkkk   ~ xqc→xqd, mrrjjj→mrrkkk   6/7  mean 69  
+  eqe→qeq, abbba→aaabaaa   ~ eqe→qeq, abbbc→aaabccc   5/7  mean 57  
+  abc→abd, mrrjjj→mrrkkk   ~ eqe→qeq, abbba→baaab     6/7  mean 34  (across families)
+  eqe→qeq, abbba→baaab     ~ xqc→xqd, mrrjjj→mrrkkk   6/7  mean 34  (across families)
+  eqe→qeq, abbbc→aaabccc   ~ xqc→xqd, mrrjjj→mrrjjjj  6/7  mean 34  (across families)
+  abc→abd, mrrjjj→mrrjjjj  ~ xqc→xqd, mrrjjj→mrrjjjj  7/7  mean 29  
+  eqe→qeq, abbba→aaabaaa   ~ xqc→xqd, mrrjjj→mrrjjjj  5/7  mean 29  (across families)
+  abc→abd, xyz→wyz         ~ rst→rsu, xyz→wyz         3/7  mean 23  
+
+## By how alike the problems are (all replications)
+  same problem, different answer             61 pairs: reminding > 0 in  9.8%, >= 40 in  1.6%, mean  3.0
+  same target string, different source       91 pairs: reminding > 0 in 31.9%, >= 40 in 20.9%, mean 17.6
+  different target string                   370 pairs: reminding > 0 in 11.1%, >= 40 in  9.7%, mean  4.9

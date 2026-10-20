@@ -1,0 +1,11 @@
+BP #6, 20 runs each: correct / wrong / none, and the commonest answers.
+untaught        19 /   0 /   1
+    ×9  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×7  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×2  ✓ "≤ 3 vertexs in box" vs "> 3 vertexs in box"
+    ×1  —
+after lessons   20 /   0 /   0
+    ×9  ✓ "≤ 3 lines per object" vs "> 3 lines per object"
+    ×5  ✓ "≤ 3 lines in box" vs "> 3 lines in box"
+    ×3  ✓ "no quadrilateral" vs "some quadrilateral"
+    ×2  ✓ "some triangle" vs "no triangle"

@@ -1,0 +1,37 @@
+# Two kinds of reminding in PhaeacoX (X18): how alike solved problems LOOK (X14's core distance)
+# against how alike their ANSWERS are (Metacat's answer reminding). Bongard's 100 problems in order,
+# memory on, seeds 1-10: phaeaco/extended/bench/run_reminding.jl.
+
+pairs of solved problems: 7397 (10 seeds)
+  look alike (d < 0.06, X14 can recall)      231 pairs: answers alike (≥ 40)  5.2%, same answer (100)  2.6%, mean reminding  3.9
+  somewhat (0.06–0.12)                      1886 pairs: answers alike (≥ 40)  4.2%, same answer (100)  2.7%, mean reminding  3.7
+  look different (d ≥ 0.12)                 5280 pairs: answers alike (≥ 40)  1.8%, same answer (100)  1.1%, mean reminding  1.7
+Spearman correlation, look distance vs answer distance: 0.07
+answers alike (Metacat reminding ≥ 40): 186 pairs; of them X14 could recall (d < 0.06): 6.5%
+
+X14's recalls (before solving), judged by the answer finally found:
+  271 recalls: answer alike (≥ 40) 5.9%, same answer 3.0%, unrelated (0) 93.7%
+
+Answers alike although the problems look different (d ≥ 0.12), most frequent (seeds out of 10):
+  #43  ~ #63  10  strength 100
+  #44  ~ #86  10  strength 60
+  #9   ~ #86   9  strength 100
+  #9   ~ #44   8  strength 60
+  #11  ~ #76   8  strength 100
+  #22  ~ #39   6  strength 40
+  #3   ~ #34   5  strength 100
+  #8   ~ #63   5  strength 100
+  #5   ~ #44   5  strength 100
+  #39  ~ #56   5  strength 40
+  #8   ~ #43   4  strength 100
+  #5   ~ #86   4  strength 60
+
+Look alike (d < 0.06) but answers unrelated (0), most frequent:
+  #2   ~ #3   10
+  #3   ~ #5    9
+  #2   ~ #5    7
+  #5   ~ #12   7
+  #27  ~ #48   7
+  #12  ~ #15   6
+  #25  ~ #27   6
+  #27  ~ #37   6
