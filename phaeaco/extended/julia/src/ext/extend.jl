@@ -22,12 +22,16 @@
 #   box            + depth (nesting of insides), simmin/simmax/identmin
 #                    (shape similarity of figures), nsame
 #   object         + cends, cjunct, corder, neck, neckvert: its core (core.jl, X12)
+#   cluster        a figure made of many pieces (individuate.jl, X15): ccorners,
+#                    cends, and its shape@K
+#   box            + ssimmin/ssimmax: structural similarity of figures (X16)
 
 
 """Features only the extension perceives."""
 const EXT_FEATURES = Set([:vert, :endgap, :endangle, :above, :larger, :inside, :diff,
                           :depth, :simmin, :simmax, :identmin, :nsame, :collinear, :tricol, :gvert, :gelong,
-                          :gcorners, :bcorners, :cends, :cjunct, :corder, :neck, :neckvert])
+                          :gcorners, :bcorners, :cends, :cjunct, :corder, :neck, :neckvert,
+                          :ccorners, :ssimmin, :ssimmax])
 
 """One figure as the extension sees it."""
 struct XItem
@@ -103,7 +107,13 @@ function _kind(r::Retina, o::RetObject)
     return :figure, k
 end
 
-function _items(e::RNode, ws::BoxWS, P::Params)
+"""A figure's core features (X12)."""
+const CORE_FEATURES = (:cends, :cjunct, :corder, :neck, :neckvert)
+
+"""Is an idea about a figure's core? Verifying it looks at cores magnified (X17)."""
+_corefocus(idea) = idea !== nothing && idea.what in CORE_FEATURES
+
+function _items(e::RNode, ws::BoxWS, P::Params; magnified::Bool=false)
     r = ws.retina
     byobj = Dict{Int,RNode}()
     for c in e.children
@@ -124,7 +134,7 @@ function _items(e::RNode, ws::BoxWS, P::Params)
             w = o.bbox[2] - o.bbox[1] + 1; h = o.bbox[4] - o.bbox[3] + 1
             filled = isempty(o.holes) && o.ink / (w * h) > 0.68
         end
-        core = P[:ext_core] > 0 ? object_core(r, o, P) : POINT_CORE
+        core = P[:ext_core] > 0 ? object_core(r, o, P; magnified=magnified) : POINT_CORE
         push!(items, XItem(o.id, byobj[o.id], kind, o.barycenter, o.area, filled, o.elongation,
                            o.missing, length(o.holes), k, core))
     end
@@ -283,7 +293,7 @@ function _shape_distance(a::XItem, b::XItem; size::Bool=false, wcore::Float64=0.
     return d
 end
 
-function _similarity!(e::RNode, items::Vector{XItem}, P::Params)
+function _similarity!(e::RNode, items::Vector{XItem}, r::Retina, P::Params)
     figs = filter(it -> it.kind != :dot, items)
     length(figs) >= 2 || return
     w = P[:ext_core] > 0 ? P[:ext_core_sim] : 0.0
@@ -303,6 +313,29 @@ function _similarity!(e::RNode, items::Vector{XItem}, P::Params)
         best = max(best, count(b -> exp(-_shape_distance(a, b; size=true, wcore=w)) >= 0.5, figs))
     end
     e.feats[:nsame] = Stats(Float64(best))
+    P[:ext_core] > 0 && P[:ext_ssim] > 0 && _structural_similarity!(e, figs)
+end
+
+"""
+Structural similarity (X16; Foundalis 2013, Fig. 7): two figures are alike
+when their structures are — the same kind of outline and matching cores —
+whatever their ink, holes, size or place ("the black pixels are not
+important"). Two cores without junctions (a blob's point, a stroke's line)
+have no limbs to match, and the kind of outline alone decides; otherwise
+their ends, junctions and branch profiles are compared. A box records
+whether all its figures are structurally alike, and, when it has three or
+more, whether some two are.
+"""
+function _structural_similarity!(e::RNode, figs::Vector{XItem})
+    sims = Float64[]
+    for i in eachindex(figs), j in i+1:length(figs)
+        a, b = figs[i].core, figs[j].core
+        dc = a.junctions == 0 && b.junctions == 0 ? 0.0 : core_distance(a, b)
+        push!(sims, exp(-((_samekind(figs[i].kind, figs[j].kind) ? 0.0 : 1.5) + dc)))
+    end
+    e.feats[:ssimmin] = Stats(all(>=(0.5), sims) ? 1.0 : 0.0)
+    # with two figures "some two alike" says no more than "all alike"
+    length(figs) >= 3 && (e.feats[:ssimmax] = Stats(any(>=(0.5), sims) ? 1.0 : 0.0))
 end
 
 # --- groups of like figures (Gestalt grouping, §11.2.6) ----------------------------------------------
@@ -362,19 +395,23 @@ function _groups!(e::RNode, items::Vector{XItem}, r::Retina)
     end
 end
 
-"""Add the extended percepts of one look to its exemplar. Returns the number of nodes added."""
-function extend!(e::RNode, ws::BoxWS, ctx::Ctx)
+"""
+Add the extended percepts of one look to its exemplar. Returns the number of
+nodes added. A look focused on an idea about cores sees them magnified (X17).
+"""
+function extend!(e::RNode, ws::BoxWS, ctx::Ctx; focus=nothing)
     r = ws.retina
     before = nnodes(e)
-    items = _items(e, ws, ctx.P)
+    items = _items(e, ws, ctx.P; magnified=ctx.P[:ext_core_focus] > 0 && _corefocus(focus))
     for it in items
         it.rnode === nothing || _figure_features!(it, r, ctx.P)
     end
     _relations!(e, items, r)
     d = _depth(items, r)
     length(items) >= 2 && (e.feats[:depth] = Stats(Float64(d)))
-    _similarity!(e, items, ctx.P)
+    _similarity!(e, items, r, ctx.P)
     _groups!(e, items, r)
+    ctx.P[:ext_individuate] > 0 && _individuate!(e, r, ctx.P)
     # a box drawn in many parts (hatching, dots) may make one figure: the
     # corners of the outline of all its ink (BP #96)
     if length(items) >= 4

@@ -99,7 +99,11 @@ function look_box!(s::Solver, i::Int; focus::Union{Nothing,Idea}=nothing)
     s.ticks += ws.ticks
     e = exemplar(ws)
     if ctx.P[:ext_enabled] > 0
-        s.ticks += Int(ctx.P[:ext_tick_cost]) * extend!(e, ws, ctx)
+        s.ticks += Int(ctx.P[:ext_tick_cost]) * extend!(e, ws, ctx; focus=focus)
+        # a closer look at cores corrects the glance rather than averaging with it (X17)
+        if ctx.P[:ext_core_focus] > 0 && _corefocus(focus) && s.nlooks[i] > 0
+            foreach(n -> foreach(f -> delete!(n.feats, f), CORE_FEATURES), _alldesc(s.boxpat[i]))
+        end
     end
     _absorb!(s, i, e)
     return e
@@ -380,6 +384,20 @@ function box_ideas(s::Solver, e::RNode; ext::Bool=false)
             # one box can suggest an idea; verification will look at them all
             idea = _split_all(:feature, path, what, L, R, nl, nr; minboxes=1)
             idea === nothing && (idea = _split_some(path, what, perbox; minboxes=1))
+            # PhaeacoX: an idea about cores may be formed despite one box that
+            # contradicts it; verification looks at cores closely and may see
+            # that box otherwise (X17)
+            if idea === nothing && ext && ctx.P[:ext_core_focus] > 0 && what in CORE_FEATURES
+                for k in 1:12
+                    isempty(perbox[k]) && continue
+                    pb = copy(perbox); pb[k] = Float64[]
+                    L2 = reduce(vcat, pb[1:6]); R2 = reduce(vcat, pb[7:12])
+                    (isempty(L2) || isempty(R2)) && continue
+                    idea = _split_all(:feature, path, what, L2, R2, count(!isempty, pb[1:6]),
+                                      count(!isempty, pb[7:12]); minboxes=1)
+                    idea === nothing || break
+                end
+            end
             idea === nothing || push!(out, idea)
         end
     elseif kind == :count

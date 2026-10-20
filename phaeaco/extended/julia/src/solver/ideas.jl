@@ -132,7 +132,7 @@ end
 
 # --- describing ideas, as Phaeaco printed them ------------------------------------------
 
-const _NOUN = Dict(:thing => "thing", :object => "object", :line => "line", :dot => "dot", :circle => "circle",
+const _NOUN = Dict(:thing => "thing", :object => "object", :cluster => "figure made of parts", :line => "line", :dot => "dot", :circle => "circle",
                    :ellipse => "ellipse", :curve => "curve", :interior => "interior", :vertex => "vertex",
                    :barycenter => "center", :deep => "box", :box => "box")
 
@@ -151,7 +151,9 @@ const _XROOT = Dict(:depth => ("figures nested less deeply", "figures nested mor
                     :simmax => ("no two figures similar", "some two figures similar"),
                     :identmin => ("not all figures identical", "all figures identical"),
                     :nsame => ("fewer identical figures", "more identical figures"),
-                    :bcorners => ("the whole drawing has fewer corners", "the whole drawing has more corners"))
+                    :bcorners => ("the whole drawing has fewer corners", "the whole drawing has more corners"),
+                    :ssimmin => ("some figures unlike the others in structure", "all figures alike in structure"),
+                    :ssimmax => ("no two figures alike in structure", "some two figures alike in structure"))
 const _XADJ = Dict(:vert => ("horizontal", "vertical"),
                    :endgap => ("ends close together", "ends far apart"),
                    :endangle => ("ends parallel", "ends perpendicular"),
@@ -159,7 +161,8 @@ const _XADJ = Dict(:vert => ("horizontal", "vertical"),
                    :cjunct => ("core with fewer branchings", "core with more branchings"),
                    :corder => ("core without side branches of higher order", "core with side branches of higher order"),
                    :neck => ("with a neck", "without a neck"),
-                   :neckvert => ("neck horizontal", "neck vertical"))
+                   :neckvert => ("neck horizontal", "neck vertical"),
+                   :ccorners => ("outline with fewer corners", "outline with more corners"))
 
 """Phrases for PhaeacoX's extended percepts, or nothing."""
 function _xphrases(idea::Idea)

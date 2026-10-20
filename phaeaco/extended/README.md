@@ -26,15 +26,19 @@ What it adds (`julia/src/ext/extend.jl`, decisions in `DECISIONS.md`):
   its answer, and a new problem whose core falls near an old one is
   reminded of it and tries that answer first, letting its concepts slip
   (#37 after #36, #28 after #27)
+- individuation of figures drawn in many pieces (X15): nearby pieces of ink
+  are joined into one figure with its own outline and core
+- structural similarity (X16): figures alike in kind and core, whatever
+  their ink or size (#59)
 
 ## Results
 
 On Bongard's 85 problems outside Appendix A (`results/survey_scored.md`,
-20 runs each), PhaeacoX solves 21, 14 of them in at least 15 of 20 runs.
+20 runs each), PhaeacoX solves 22, 15 of them in at least 15 of 20 runs.
 Scored the same way, PhaeacoJL solves 6 (3 reliably). New among the
-reliable ones: #7, #10, #19, #27, #36, #37, #48, #60, #66, #71, #86. Core
-extraction accounts for #19 and #86; with `ext_core = 0` the count is 19
-(12 reliably).
+reliable ones: #7, #10, #19, #27, #36, #37, #48, #59, #60, #66, #71, #86.
+Core extraction accounts for #19 and #86 (with `ext_core = 0` the count
+was 19, 12 reliably), structural similarity for #59.
 
 On the fifteen of Appendix A (`results/real_20.txt`) it gives no new wrong
 answers. On the slow synthetic problems it loses some success, because the

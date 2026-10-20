@@ -115,6 +115,12 @@ core = 1                      # core extraction (X12); 0 leaves it out
 core_prune = 0.2              # a spur extending less than this × the thickness where it joins is pruned (X12)
 core_sim = 0.0                # weight of the cores' difference in X6's shape distance (0: unused; X12)
 core_neck = 0.75              # a core narrower than this × its thick parts has a neck, and a neck has a direction
+core_scale = 48               # pixels across at which a focused look sees a figure's core (X17)
+core_focus = 0                # a look verifying an idea about cores sees them magnified (X17; off: no measured gain)
+ssim = 1                      # structural similarity of figures (X16)
+individuate = 1               # individuate figures made of many pieces (X15)
+ind_gap = 3                   # pieces of ink this close are joined (X15)
+ind_parts = 4                 # a joined region uniting this many pieces is a figure (X15)
 memory = 1                    # remember solved problems and be reminded of them (X14); 0 leaves it out
 memory_c = 60.0               # sensitivity of reminding: a core's similarity is exp(-c × distance)
 memory_base = 0.06            # distance of a core that reminds of nothing (β = exp(-c × base), X13)

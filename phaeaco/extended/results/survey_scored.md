@@ -17,7 +17,8 @@ scored, as in PhaeacoJL's survey (`../../results/survey_judged.md`).
 | #37 | the same, with distracting squares | 0 | **19** | the same | relations keyed by kind (X3) |
 | #48 | filled figures above outlined / below | 0 | **20** | "the filled figures higher than the outlined figures" | relations (X3) |
 | #60 | some similar figures / none | 0 | **20** | "some two figures similar" | similarity (X6) |
-| #66 | loose circles in a horizontal / vertical line | 0 | **17** | "the circles in a horizontal row" | groups (X7) |
+| #66 | loose circles in a horizontal / vertical line | 0 | **19** | "the circles in a horizontal row" | groups (X7) |
+| #59 | figures similar / not similar | 0 | **19** | "all figures alike in structure" | structural similarity (X16) |
 | #19 | neck horizontal / vertical | 0 | **20** | "object neck horizontal" | core: neck direction (X12) |
 | #86 | three parts / five parts | 0 | **19** | "object core with fewer ends" | core: free ends (X12) |
 | #89 | three parts / five parts | 19 | 19 | "≤ 4 objects per box" | — |
@@ -32,7 +33,8 @@ scored, as in PhaeacoJL's survey (`../../results/survey_judged.md`).
 | #88 | three parts / five parts | 1 | 1 | "≤ 10 lines in box" | — |
 
 Scored the same way, PhaeacoJL solved 6 of these problems (3 reliably);
-PhaeacoX solves 21, 14 of them in at least 15 of 20 runs. With core
+PhaeacoX solves 22, 15 of them in at least 15 of 20 runs (21 and 14
+before structural similarity, X16, added #59). With core
 extraction off (`ext_core = 0`, `survey_20_nocore.txt`, the same images)
 it solves 19, 12 reliably: X12 adds #19 and #86 and moves no other
 problem by more than 3 runs in 20.
@@ -42,7 +44,7 @@ problem by more than 3 runs in 20.
 - #28: half the runs answer "the filled figures larger than the outlined
   figures", true of these boxes but not the rule.
 - #57: four runs answer "more identical figures", as one did before X12.
-- #27, #66: two stray runs each; #65, #86: one each.
+- #27: two stray runs; #65, #66, #86: one each.
 
 ## A different rule true of the boxes (unscored)
 
@@ -56,17 +58,21 @@ figures" and #28's "the filled figures larger than the outlined figures".
 The percept exists but is too noisy to separate the sides:
 
 - #47 (inside): a figure touching the one it sits in merges with it (X11).
-- #59 (similar): the shape distance is too crude. Adding the cores'
-  difference to it (`ext_core_sim`) did not help #59 and, from a weight of
-  0.2, broke #57 and #60: the cores of small drawn figures are too noisy
-  (X12).
 - #18 (neck), #70 (side branches of the second order): the core measures
   the rule in five boxes of six on each side, which is not enough for an
-  "all" idea to verify (X12).
+  "all" idea to verify (X12). A closer look at cores during verification
+  (X17) brings #18 as far as verifying the neck idea, which then fails on
+  the same box: no magnification measures its neck below the split.
 - #29 (more inside than outside) and #41, #40, #65 (lines of figures):
   missing figures in some boxes.
 - #62, #72 (curve ends): too few strokes with exactly two free ends.
-- #96, #98: the hatching or the patterned background breaks the outline.
+- #96: individuation (X15) joins the hatching into one figure and reads
+  its outline: triangles in all six left boxes, quadrangles in four of
+  six right ones (II-E is a kite whose fourth corner is nearly straight), so
+  no rule covers all twelve boxes.
+- #98: the figure is a region of different texture in a patterned
+  background; that is figure–ground segregation, not clustering of pieces,
+  and is not attempted.
 
 No percept at all: spirals, symmetry, "three-ness"
 (#91), arrows, Kanizsa completion (#46), occlusion ("on top", #45), and

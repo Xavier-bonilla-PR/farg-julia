@@ -254,6 +254,32 @@ function _contract(kinds::Vector{Symbol}, br::Vector{_Branch}, D::Matrix{Float64
     return nk, nb
 end
 
+"""
+Splice branches through nodes where exactly two meet: such a node is not an
+end or a junction, only a place where pruning or merging left the path cut
+in two, and it would make one limb read as two in the branch profile.
+"""
+function _splice(nn::Int, br::Vector{_Branch})
+    br = copy(br)
+    while true
+        deg = zeros(Int, nn)
+        for b in br
+            deg[b.a] += 1; deg[b.b] += 1
+        end
+        u = findfirst(k -> deg[k] == 2 && count(b -> b.a == k && b.b == k, br) == 0, 1:nn)
+        u === nothing && return br
+        i, j = findall(b -> b.a == u || b.b == u, br)
+        bi, bj = br[i], br[j]
+        # orient both away from u, join them end to end through u
+        pi = bi.b == u ? bi.px : reverse(bi.px); ai = bi.b == u ? bi.a : bi.b
+        pj = bj.a == u ? bj.px : reverse(bj.px); aj = bj.a == u ? bj.b : bj.a
+        ai == aj && ai == u && return br
+        nb = _Branch(ai, aj, vcat(pi, pj[2:end]), bi.len + bj.len)
+        deleteat!(br, sort([i, j]))
+        push!(br, nb)
+    end
+end
+
 """Longest path through a tree of branches (by length): its branch indices, in order."""
 function _main_path(nn::Int, br::Vector{_Branch})
     adj = [Int[] for _ in 1:nn]
@@ -391,6 +417,7 @@ function extract_core(m::BitMatrix; prune::Float64=0.2)
     _prune!(s, D, prune)
     _, kinds, br = _graph(s)
     kinds, br = _contract(kinds, br, D)
+    br = _splice(length(kinds), br)
     isempty(br) && return POINT_CORE
     start, path, adj = _main_path(length(kinds), br)
     total = sum(b.len for b in br)
@@ -438,8 +465,48 @@ function silhouette(r::Retina, o::RetObject)
     return m
 end
 
-object_core(r::Retina, o::RetObject, P::Params) =
-    o.isdot ? POINT_CORE : extract_core(silhouette(r, o); prune=P[:ext_core_prune])
+"""
+A silhouette magnified `f` times: each pixel becomes an f × f block, and a
+3 × 3 majority vote rounds the blocks' corners. (Bilinear interpolation,
+which smooths slanted borders fully, was tried: it turned the 1–2 pixel
+bumps of drawn outlines into limbs, giving circles 5–15 core ends; X17.)
+"""
+function magnify(m::BitMatrix, f::Int)
+    f <= 1 && return m
+    h, w = size(m)
+    b = falses(h * f, w * f)
+    for y in 1:h, x in 1:w
+        m[y, x] && (b[(y-1)*f+1:y*f, (x-1)*f+1:x*f] .= true)
+    end
+    out = similar(b)
+    H, W = size(b)
+    for y in 1:H, x in 1:W
+        n = 0
+        for dy in -1:1, dx in -1:1
+            _on(b, y + dy, x + dx) && (n += 1)
+        end
+        out[y, x] = n >= 5
+    end
+    return out
+end
+
+"""
+The magnification that brings a silhouette to about `target` pixels across:
+an integer from 1 to 4. Small figures are seen larger, as process Z zooms
+small objects (§10.3.17), so that their cores do not depend on single pixels.
+"""
+scale_for(m::BitMatrix, target::Real) = clamp(ceil(Int, target / max(size(m)...)), 1, 4)
+
+"""
+The core of a retina object. With `magnified`, the silhouette is first
+magnified to about `ext_core_scale` pixels across (a focused look, X17).
+"""
+function object_core(r::Retina, o::RetObject, P::Params; magnified::Bool=false)
+    o.isdot && return POINT_CORE
+    m = silhouette(r, o)
+    magnified && (m = magnify(m, scale_for(m, P[:ext_core_scale])))
+    return extract_core(m; prune=P[:ext_core_prune])
+end
 
 """How different two cores are: their ends, junctions, and the profile of their branch lengths."""
 function core_distance(a::FigCore, b::FigCore)

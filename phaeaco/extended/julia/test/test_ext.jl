@@ -135,3 +135,33 @@ end
     P.solve(bp1, ctx0)
     @test isempty(ctx0.ltm.episodes)
 end
+
+@testset "ext: individuation of figures made of pieces (X15)" begin
+    # a triangle drawn as horizontal hatching: each stroke is its own object
+    hatch = [P.segment((50.0 - 0.6 * (y - 20), y), (50.0 + 0.6 * (y - 20), y); width=1.2) for y in 24.0:3.0:78.0]
+    e, ws = xlook(hatch)
+    cl = [c for c in e.children if c.type == :cluster]
+    @test length(cl) == 1
+    @test cl[1].children[1].type == Symbol("shape@triangle") && cl[1].feats[:ccorners].mean == 3
+    # separate figures far apart are not joined
+    e, _ = xlook([P.circle((20.0, 20.0), 6), P.circle((80.0, 20.0), 6), P.circle((20.0, 80.0), 6), P.circle((80.0, 80.0), 6)])
+    @test !any(c -> c.type == :cluster, e.children)
+end
+
+@testset "ext: structural similarity (X16)" begin
+    # the same structure whatever the ink and size
+    e, _ = xlook([tri((28.0, 35.0), 12; filled=true), tri((65.0, 62.0), 26)])
+    @test e.feats[:ssimmin].mean == 1
+    e, _ = xlook([tri((28.0, 35.0), 14), P.circle((68.0, 64.0), 18)])
+    @test e.feats[:ssimmin].mean == 0
+    @test !haskey(e.feats, :ssimmax)                 # two figures: "some two" would say no more
+end
+
+@testset "ext: magnified cores and spliced paths (X17)" begin
+    m = falses(5, 5); m[2:4, 2:4] .= true
+    @test size(P.magnify(m, 3)) == (15, 15) && count(P.magnify(m, 3)) > 9 * 6
+    # a path cut in two by a degree-2 node reads as one limb
+    br = [P._Branch(1, 2, [(1, 1), (1, 2)], 1.0), P._Branch(2, 3, [(1, 2), (1, 3)], 1.0)]
+    sp = P._splice(3, br)
+    @test length(sp) == 1 && sp[1].len == 2.0
+end

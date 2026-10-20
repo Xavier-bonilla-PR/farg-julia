@@ -260,3 +260,70 @@ are the context's state diverging.
 Not done: episodes are not saved by `save_ltm`, and they are never
 forgotten. Nor is the report's further step, a conscious search for more
 analogous parts once a reminding has happened.
+
+**X15. Object individuation as clustering.** The report begins its chain
+with object individuation. Dots dense enough make a region: "we can make
+the dots so dense that their in-between spaces are hard to discern. In that
+case the observer has no choice but see two contiguous dark regions." The
+retina's objects are connected pieces of ink, so a triangle drawn as
+hatching is twenty separate lines (BP #96). `src/ext/individuate.jl`
+closes the gaps between nearby pieces in any box with at least
+`ext_ind_parts` (4) objects. The closing joins ink within `ext_ind_gap`
+(3) pixels by dilating, then eroding, by a disc of that radius. A joined
+region uniting at least 4 pieces, its holes filled, becomes a `cluster`
+node. Its kind (`shape@K`) comes from its outline by X2's rule: hull
+corners, with round when the hull fills the inscribed ellipse. It also gets
+`ccorners` and `cends`, the free ends of its core (X12). Figures more than
+6 px apart are never joined, so ordinary boxes are left alone (a test
+checks four separate circles).
+
+Measured on #96 (one look per box): the hatched figures are triangles with
+3 outline corners in all six left boxes, and quadrangles in four of six
+right ones. II-B and II-E read as triangles; II-E is a kite whose fourth
+corner deviates less than X2's 18% tolerance. No rule then covers all twelve boxes, and #96 stays
+unsolved. #98's triangle is a region of different texture in a patterned
+grid: figure–ground segregation, which closing gaps does not address. Over
+the 85 problems the only change is #66, 17 → 19 correct.
+
+**X16. Structural similarity.** The report's Fig. 7 matches two figures
+by their structure: the core "parsed as lines", with homologous parts. The
+"black pixels" do not matter, and neither do fill, holes, size or place.
+X6's shape distance charges for fill, holes, elongation and missing area,
+and adding the cores to it (`ext_core_sim`, X12) did not help. So
+structural similarity is a percept of its own (`_structural_similarity!`).
+Two figures are alike when their kinds agree (as in X6) and their cores do
+(`core_distance`). Two cores without junctions are compared as equal: a
+blob's point and a stroke's line have no limbs to match, and the kind
+already tells a circle from an ellipse. A box records `ssimmin` (all
+figures alike), and, when it has three or more figures, `ssimmax` (some
+two alike); with two figures "some two" would only repeat "all". The
+first version recorded both and answered #59 with "some two figures alike"
+in 10 runs of 20, which the judge scored wrong.
+
+The core graph also changed: branches are now spliced through nodes where
+only two meet (`_splice`). Pruning and merging left such nodes, and they
+made one limb read as two in the branch profile (two circles, both with
+2 ends, measured unlike). On #59 structural similarity holds in all six
+left boxes and in no right box (one look). The survey's #59 goes 0 → 19
+("all figures alike in structure"). No other problem's answers change,
+and #57 and #60 keep their X6 answers.
+
+**X17. A closer look at cores.** When an idea about a figure's core is
+verified, each box is looked at again (D31). With `ext_core_focus = 1`,
+that look sees cores magnified to about `ext_core_scale` (48) pixels
+across, and its core values replace the box's earlier ones instead of
+being merged with them. An analytic idea about cores may also be formed
+despite one contradicting box, since the closer look may see that box
+otherwise. Magnification is by f × f blocks rounded by a 3 × 3 majority.
+Bilinear interpolation was tried: it turned the 1–2 pixel bumps of drawn
+outlines into limbs, giving circles 5–15 core ends.
+
+Result: no gain, so the default is `ext_core_focus = 0`. On BP #18 the
+neck idea is now formed and verified in every run, and fails on box I-F
+every time: its neck ratio is 0.96, 0.83, 0.93 and 0.84 at magnifications
+1–4, against a split near 0.74. BP #70's errors come from which path is
+taken as the main one, not from resolution. The 85-problem survey is
+identical with the closer look on and off.
+
+`results/mentor_20.txt`, `pairs_20.txt` and `sequence_20.txt` were measured
+before X15–X17; the survey, Appendix A and synthetic files after them.

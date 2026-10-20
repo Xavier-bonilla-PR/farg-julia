@@ -192,7 +192,7 @@ function build_primitives(P::Params; now::Int=0)
     feat(:eccentricity, F(1.0, 0.08))
     add_concept!(m, :numerosity, :numerosity; depth=35, now=now, P=P)
     # PhaeacoX's extended percepts (src/ext/extend.jl)
-    for n in (:shape, :mark, :pair, :contrast, :group)
+    for n in (:shape, :mark, :pair, :contrast, :group, :cluster)
         obj(n)
     end
     feat(:vert, F(1.0, 0.1))
@@ -205,6 +205,8 @@ function build_primitives(P::Params; now::Int=0)
     feat(:gcorners, F(10.0, 0.5; discrete=true)); feat(:bcorners, F(10.0, 0.5; discrete=true))
     feat(:cends, F(10.0, 0.5; discrete=true)); feat(:cjunct, F(10.0, 0.5; discrete=true))
     feat(:corder, F(5.0, 0.5; discrete=true)); feat(:neck, F(1.0, 0.1)); feat(:neckvert, F(1.0, 0.1))
+    feat(:ccorners, F(10.0, 0.5; discrete=true))
+    feat(:ssimmin, F(1.0, 0.5; discrete=true)); feat(:ssimmax, F(1.0, 0.5; discrete=true))
     # relations, quantifiers, and abstract notions
     for n in (:inside, :contains, :outside, :equality)
         add_concept!(m, n, :relation; depth=50, now=now, P=P)
@@ -253,7 +255,8 @@ function build_primitives(P::Params; now::Int=0)
                    (:endgap, 30), (:endangle, 30), (:above, 40), (:larger, 35), (:inside, 45),
                    (:diff, 35), (:depth, 30), (:simmin, 35), (:simmax, 35), (:identmin, 35), (:nsame, 30),
                    (:collinear, 35), (:tricol, 30), (:gvert, 35), (:gelong, 25), (:gcorners, 35), (:bcorners, 35),
-                   (:cends, 35), (:cjunct, 30), (:corder, 30), (:neck, 35), (:neckvert, 30))
+                   (:cends, 35), (:cjunct, 30), (:corder, 30), (:neck, 35), (:neckvert, 30),
+                   (:cluster, 40), (:ccorners, 35), (:ssimmin, 35), (:ssimmax, 35))
         m[n].w.sig.pos = s
     end
     return m

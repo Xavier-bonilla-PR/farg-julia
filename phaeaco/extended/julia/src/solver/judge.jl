@@ -92,7 +92,8 @@ _xexists(i, t) = i.kind == :exists && (i.what == t || i.what == Symbol("shape@",
 _tri_quad(i) = ((_count(i, :line) || _count(i, :vertex)) && i.leftlow) ||
                (_xexists(i, :triangle) && i.leftlow) || (_xexists(i, :quadrangle) && !i.leftlow) ||
                (i.kind == :feature && i.what in (:gcorners, :bcorners) && i.leftlow) ||
-               (_xfeat(i, :object, :cends) && i.leftlow)
+               (_xfeat(i, :object, :cends) && i.leftlow) ||
+               ((_xfeat(i, :cluster, :ccorners) || _xfeat(i, :cluster, :cends)) && i.leftlow)
 _parts(i) = (_count(i, :object) || _count(i, :line) || _count(i, :curve) || _xfeat(i, :object, :cends)) && i.leftlow
 
 const SURVEY_RULES = Dict{Int,Function}(
@@ -116,8 +117,8 @@ const SURVEY_RULES = Dict{Int,Function}(
     47 => i -> _xfeat(i, Symbol("pair@circle_triangle"), :inside) && i.leftlow,
     48 => i -> _xfeat(i, Symbol("pair@filled_outlined"), :above) && !i.leftlow,
     57 => i -> i.kind == :feature && isempty(i.path) && i.what == :identmin && !i.leftlow,
-    59 => i -> i.kind == :feature && isempty(i.path) && i.what == :simmin && !i.leftlow,
-    60 => i -> i.kind == :feature && isempty(i.path) && i.what == :simmax && !i.leftlow,
+    59 => i -> i.kind == :feature && isempty(i.path) && i.what in (:simmin, :ssimmin) && !i.leftlow,
+    60 => i -> i.kind == :feature && isempty(i.path) && i.what in (:simmax, :ssimmax) && !i.leftlow,
     62 => i -> _xfeat(i, :object, :endgap) && !i.leftlow,
     65 => i -> _xfeat(i, Symbol("group@triangle"), :gvert) && i.leftlow,
     66 => i -> _xfeat(i, Symbol("group@circle"), :gvert) && i.leftlow,

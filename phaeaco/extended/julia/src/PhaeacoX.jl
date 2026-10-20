@@ -45,6 +45,7 @@ include("patterns/numerosity.jl")
 
 include("ltm/learned.jl")
 include("ext/core.jl")
+include("ext/individuate.jl")
 include("ext/extend.jl")
 
 include("solver/ideas.jl")
