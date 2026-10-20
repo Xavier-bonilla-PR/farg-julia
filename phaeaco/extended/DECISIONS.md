@@ -327,3 +327,24 @@ identical with the closer look on and off.
 
 `results/mentor_20.txt`, `pairs_20.txt` and `sequence_20.txt` were measured
 before X15–X17; the survey, Appendix A and synthetic files after them.
+
+**X18. Answers compared as Metacat compares them.** To compare PhaeacoX's
+reminding with Metacat's (`results/reminding_vs_metacat.md`), PhaeacoX also
+recalls by answers, after solving, as Metacat does (Marshall 1999, §5.2.3).
+`answer_distance` is Metacat's `calculate-answer-distance`.
+
+- 0 for the same idea; otherwise 1.
+- Plus 1 when the answers hold one dimension with different relations.
+- Plus 2 for each theme only one answer has.
+- Plus 2 when their rules differ.
+
+An answer's single theme has a dimension (the kind of idea, the kind of
+node it is about, its feature's concept) and a relation (quantifier and
+direction). Its rule is its tags. The reminding strength is
+100 − 100 · min(1, d / 5). A first version charged only 1 for a different
+feature, so any two answers about features of objects reminded each other
+at 60. Metacat charges 2 per unshared theme, so answers on different
+dimensions never remind. The version kept is Metacat's. When a solved
+problem is stored, the strongest earlier answer it recalls is written to
+the log in Metacat's words ("this answer reminds me somewhat of the answer
+to 27"). This changes no result; it is an observation, as in Metacat.

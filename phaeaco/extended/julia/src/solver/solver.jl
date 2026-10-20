@@ -495,6 +495,13 @@ function solve(bp::BP, ctx::Ctx)
     r = _solve!(s)
     # PhaeacoX: remember the solved problem (X14)
     if ctx.P[:ext_memory] > 0 && r.answer !== nothing && s.core !== nothing
+        # and, as Metacat does, notice which earlier answer this one recalls (X18)
+        rem = answer_reminded(ctx, r.answer)
+        if rem !== nothing
+            x = rem[2]
+            _note(s, string("this answer ", x > 70 ? "strongly reminds me" : x > 30 ? "reminds me somewhat" : "vaguely reminds me",
+                            " of the answer to ", rem[1].name, " (strength $x)"))
+        end
         push!(ctx.ltm.episodes, Episode(bp.name, s.core, r.answer))
     end
     return r

@@ -30,6 +30,8 @@ What it adds (`julia/src/ext/extend.jl`, decisions in `DECISIONS.md`):
   are joined into one figure with its own outline and core
 - structural similarity (X16): figures alike in kind and core, whatever
   their ink or size (#59)
+- answers compared as Metacat compares them (X18), for a study of the two
+  kinds of reminding: `results/reminding_vs_metacat.md`
 
 ## Results
 

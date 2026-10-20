@@ -165,3 +165,22 @@ end
     sp = P._splice(3, br)
     @test length(sp) == 1 && sp[1].len == 2.0
 end
+
+@testset "ext: answers compared as Metacat compares them (X18)" begin
+    I(k, p, w, q, ll) = P.Idea(k, p, w, :none, q, 0.0, ll)
+    a27 = I(:feature, [Symbol("contrast@filled_outlined")], :diff, :all, false)
+    a28 = I(:feature, [Symbol("contrast@filledcircle_outlinedcircle")], :diff, :all, false)
+    a36 = I(:feature, [Symbol("pair@circle_triangle")], :above, :all, true)
+    a48 = I(:feature, [Symbol("pair@filled_outlined")], :above, :all, false)
+    a2 = I(:feature, [:object], :area, :all, false)
+    a86 = I(:feature, [:object], :cends, :all, true)
+    @test P.answer_reminding(a27, a27) == 100
+    @test P.answer_distance(a27, a28) == 3 && P.answer_reminding(a27, a28) == 40     # the same theme, other things
+    @test P.answer_reminding(a36, a48) == 20                                         # and the opposite way round
+    @test P.answer_reminding(a2, a86) == 0                                           # another dimension: no reminding
+    # solving records which earlier answer the new one recalls
+    bp1, _ = P.synth_bp(:size; seed=1); bp2, _ = P.synth_bp(:size; seed=2)
+    ctx = P.Ctx(P.load_params(), 1)
+    P.solve(bp1, ctx); r = P.solve(bp2, ctx)
+    @test r.answer === nothing || any(l -> occursin("reminds me", l), r.log)
+end

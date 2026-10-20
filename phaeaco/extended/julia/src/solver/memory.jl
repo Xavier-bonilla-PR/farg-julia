@@ -170,3 +170,54 @@ function analogy!(s::Solver)
     end
     return nothing
 end
+
+# --- answer comparison, as Metacat does it (X18) -------------------------------------------
+#
+# Metacat (Marshall 1999, §5.2.3; ../../../metacat/julia/src/memory.jl) is
+# reminded AFTER it finds an answer, and by the answer, not by the problem:
+# each stored answer is compared with the new one by the themes the two rest
+# on and the rules that state them, and the reminding strength is
+# 100 − 100 · min(1, distance / 5). A theme there is a dimension with a
+# relation on it (alphabetic position: opposite). Two identical answers are
+# 0 apart; otherwise the distance is 1, plus 1 for a dimension both answers
+# hold with different relations, plus 2 for each theme only one of them has,
+# plus 2 when their rules differ. Here an answer's one theme has as its
+# dimension the kind of idea, the kind of node it is about and its feature's
+# concept (an object's area, a pair's `above`), and as its relation the
+# quantifier and direction; its "rule" is the specific tags
+# (`pair@circle_triangle`, `shape@triangle`) that say which things. Answers
+# about different dimensions are therefore 5 apart: no reminding, as in
+# Metacat.
+
+"""An idea's theme: its dimension and the relation on it."""
+answer_theme(i::Idea) = ((i.kind, isempty(i.path) ? :box : basetype(i.path[end]), basetype(i.what)),
+                         (i.quant, i.leftlow))
+
+"""An idea's specifics: the tags that name which things it is about."""
+answer_tags(i::Idea) = (tagof.(i.path)..., tagof(i.what), i.tag)
+
+"""Metacat's answer distance (`calculate-answer-distance`), for PhaeacoX's ideas."""
+function answer_distance(a::Idea, b::Idea)
+    same_idea(a, b) && return 0
+    (da, ra), (db, rb) = answer_theme(a), answer_theme(b)
+    themes = da == db ? (ra == rb ? 0 : 1) : 2 + 2
+    rule = answer_tags(a) == answer_tags(b) ? 0 : 2
+    return 1 + themes + rule
+end
+
+"""How strongly one answer reminds of another, as Metacat's `compare` puts it (0–100)."""
+answer_reminding(a::Idea, b::Idea) = 100 - round(Int, 100 * min(1, answer_distance(a, b) / 5))
+
+"""
+After an answer is found: the earlier answer it most strongly reminds of, as
+Metacat's commentary has it ("This answer strongly reminds me of …"), or
+nothing. Returns `(episode, strength)`.
+"""
+function answer_reminded(ctx::Ctx, answer::Idea)
+    best = nothing
+    for e in ctx.ltm.episodes
+        x = answer_reminding(e.answer, answer)
+        x > 0 && (best === nothing || x > best[2]) && (best = (e, x))
+    end
+    return best
+end

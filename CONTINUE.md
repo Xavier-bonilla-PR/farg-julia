@@ -1156,6 +1156,20 @@ for the tower's sake, not because anything can see it.
 
 ---
 
+### A bug of the original Metacat, reproduced on purpose
+
+`get-intrinsic-transforms` (rules.ss) sends `get-constituent-objects` to every
+reference object of a clause with a `subobjects` change. Only groups and
+strings answer that message, so when the reference object is a LETTER the
+original stops with `Ooops: bad message "get-constituent-objects" sent to
+object of type letter`. The port raises a `MethodError` at the same point,
+which is correct for an identical port: do not "fix" one side. Found by the
+reminding study (`metacat/bench/reminding_families.jl`), on a justify run:
+`eqe qeq abbba`, answer `aaabaaa`, seed 2062194226, in both implementations
+(`scheme --quiet --script metacat/bench/run_metacat_scm.ss eqe qeq abbba
+2062194226 20000 --answer aaabaaa`). The study counts such a run as a failed
+try; it came up once in its seven replications.
+
 ### Load order of `metacat/julia/src/`
 
 The files are plain `include`s, so a probe has to load everything a source
